@@ -10,7 +10,9 @@ declare(strict_types=1);
 namespace PressQueue\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Planning\ConditionEvaluator;
+use PressQueue\Planning\EventCollector;
 use PressQueue\Planning\NormalizedEvent;
 use PressQueue\Planning\TemplateRenderer;
 use PressQueue\Storage\ValidationException;
@@ -37,6 +39,55 @@ final class PlanningContractsTest extends TestCase {
 
 		self::assertSame( $first->revision_fingerprint, $second->revision_fingerprint );
 		self::assertSame( $first->event_key, $second->event_key );
+	}
+
+	public function test_control_only_change_keeps_trigger_fingerprint_and_changes_delivery_revision(): void {
+		$inherit = $this->event();
+		$exclude = $this->event(
+			'editor',
+			'2026-08-24 12:05:00',
+			array(
+				'schema_version' => 1,
+				'policy'         => 'exclude',
+				'channels'       => array(
+					'mode' => 'inherit',
+				),
+			)
+		);
+
+		self::assertSame( $inherit->trigger_fingerprint, $exclude->trigger_fingerprint );
+		self::assertNotSame( $inherit->revision_fingerprint, $exclude->revision_fingerprint );
+		self::assertNotSame( $inherit->event_key, $exclude->event_key );
+	}
+
+	public function test_update_suppression_accepts_matching_legacy_runtime_fingerprint(): void {
+		$base  = $this->event();
+		$event = $this->event( 'editor', '2026-08-24 12:05:00', null, 'update', null, $base->legacy_runtime_fingerprint );
+		$check = new \ReflectionMethod( EventCollector::class, 'update_matches_recorded_facts' );
+		$check->setAccessible( true );
+
+		self::assertTrue( $check->invoke( null, $event ) );
+
+		$control_change = $this->event(
+			'editor',
+			'2026-08-24 12:05:00',
+			array(
+				'schema_version' => 1,
+				'policy'         => 'exclude',
+				'channels'       => array(
+					'mode' => 'inherit',
+				),
+			),
+			'update',
+			null,
+			$base->legacy_runtime_fingerprint
+		);
+
+		self::assertTrue( $check->invoke( null, $control_change ) );
+
+		$changed = $this->event( 'editor', '2026-08-24 12:05:00', null, 'update', null, str_repeat( 'a', 64 ) );
+
+		self::assertFalse( $check->invoke( null, $changed ) );
 	}
 
 	public function test_nested_conditions_collect_named_reasons_without_short_circuiting(): void {
@@ -144,6 +195,39 @@ final class PlanningContractsTest extends TestCase {
 		self::assertSame( '01K8Z8D0PKH2N8J7S3K5A9C6DE', $result->reasons[0]['expected'] );
 	}
 
+	public function test_post_policy_condition_reads_canonical_control_bundle(): void {
+		$tree = array(
+			'schema_version' => 1,
+			'type'           => 'group',
+			'mode'           => 'ALL',
+			'children'       => array(
+				array(
+					'type'      => 'condition',
+					'condition' => 'post_policy',
+					'operator'  => 'equals',
+					'value'     => 'exclude',
+				),
+			),
+		);
+
+		$result = ( new ConditionEvaluator() )->evaluate(
+			$tree,
+			$this->event(
+				'editor',
+				'2026-08-24 12:05:00',
+				array(
+					'schema_version' => 1,
+					'policy'         => 'exclude',
+					'channels'       => array(
+						'mode' => 'inherit',
+					),
+				)
+			)
+		);
+
+		self::assertSame( 'matched', $result->condition_result );
+	}
+
 	public function test_invalid_taxonomy_term_configuration_is_an_error(): void {
 		$tree = array(
 			'schema_version' => 1,
@@ -225,7 +309,14 @@ final class PlanningContractsTest extends TestCase {
 	 * @param string $source Source.
 	 * @return NormalizedEvent
 	 */
-	private function event( string $source = 'editor', string $modified_at_gmt = '2026-08-24 12:05:00' ): NormalizedEvent {
+	private function event(
+		string $source = 'editor',
+		string $modified_at_gmt = '2026-08-24 12:05:00',
+		?array $control_bundle = null,
+		string $trigger = 'first_publish',
+		?string $previous_trigger_fingerprint = null,
+		?string $previous_runtime_fingerprint = null
+	): NormalizedEvent {
 		$terms = array(
 			array(
 				'ancestor_ids' => array( 10 ),
@@ -248,7 +339,7 @@ final class PlanningContractsTest extends TestCase {
 		return new NormalizedEvent(
 			'preview',
 			$source,
-			'first_publish',
+			$trigger,
 			42,
 			'post',
 			'publish',
@@ -268,7 +359,13 @@ final class PlanningContractsTest extends TestCase {
 				'published_at'     => '2026-08-24T12:00:00+00:00 UTC',
 				'terms'            => $terms,
 				'title'            => 'Café Society',
-			)
+			),
+			$previous_trigger_fingerprint,
+			null,
+			$control_bundle ?? PostControlMetadata::default_bundle(),
+			null,
+			$previous_runtime_fingerprint
 		);
 	}
+
 }

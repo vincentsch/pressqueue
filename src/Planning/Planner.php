@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Planning;
 
+use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\HashKeys;
@@ -138,7 +139,7 @@ final class Planner {
 		$decisions  = array();
 		$deliveries = array();
 
-		if ( 'exclude' === ( $event->metadata['_pressqueue_policy'] ?? null ) ) {
+		if ( 'exclude' === ( $event->control_bundle['policy'] ?? null ) ) {
 			$decisions[] = $this->decision_summary(
 				$event,
 				$settings,
@@ -147,7 +148,7 @@ final class Planner {
 				null,
 				null,
 				array(
-					ReasonFactory::make( 'explicit_post_exclusion', 'Post is explicitly excluded from social publishing.', 'matched', '_pressqueue_policy', 'equals', 'exclude', 'exclude' ),
+					ReasonFactory::make( 'explicit_post_exclusion', 'Post is explicitly excluded from social publishing.', 'matched', PostControlMetadata::LEGACY_META_KEY, 'equals', 'exclude', 'exclude' ),
 				),
 				null,
 				$durable
@@ -203,6 +204,8 @@ final class Planner {
 			}
 		}
 
+		$skipped_rule_decisions = $this->skipped_rule_decisions( $event, $settings, $evaluated, $durable );
+
 		if ( array() !== $exclusion_errors ) {
 			foreach ( $exclusion_errors as $entry ) {
 				$decisions[] = $this->decision_summary(
@@ -237,6 +240,8 @@ final class Planner {
 				);
 			}
 
+			$decisions = array_merge( $decisions, $skipped_rule_decisions );
+
 			return new PlanningResult( $event, $decisions, array(), $durable );
 		}
 
@@ -255,11 +260,15 @@ final class Planner {
 				);
 			}
 
+			$decisions = array_merge( $decisions, $skipped_rule_decisions );
+
 			return new PlanningResult( $event, $decisions, array(), $durable );
 		}
 
-		$candidates           = array();
-		$blocked_destinations = array();
+		$candidates               = array();
+		$blocked_destinations     = array();
+		$override_public_ids      = $this->channel_override_public_ids( $event );
+		$matching_destination_ids = array();
 
 		foreach ( $include_errors as $entry ) {
 			$destination_public_ids = $this->destination_public_ids( $entry['rule'] );
@@ -301,6 +310,28 @@ final class Planner {
 			}
 
 			foreach ( $destination_public_ids as $channel_public_id ) {
+				$matching_destination_ids[ $channel_public_id ] = true;
+
+				if ( null !== $override_public_ids && ! in_array( $channel_public_id, $override_public_ids, true ) ) {
+					$decisions[] = $this->decision_summary(
+						$event,
+						$settings,
+						'skipped',
+						'channel',
+						$channel_public_id,
+						$rule,
+						array_merge(
+							$entry['reasons'],
+							array(
+								ReasonFactory::make( 'omitted_by_channel_override', 'Destination was omitted by the post channel override.', 'not_matched', 'channel_override', 'contains', $override_public_ids, $channel_public_id ),
+							)
+						),
+						$this->destination_snapshot_if_available( $channel_public_id ),
+						$durable
+					);
+					continue;
+				}
+
 				$destination = $this->resolve_destination( $channel_public_id );
 
 				if ( ! $destination['ok'] ) {
@@ -347,6 +378,35 @@ final class Planner {
 					'payload_preview' => $payload_preview,
 					'reasons'         => $entry['reasons'],
 					'rule'            => $rule,
+				);
+			}
+		}
+
+		if ( null !== $override_public_ids ) {
+			foreach ( $override_public_ids as $requested_public_id ) {
+				if ( isset( $matching_destination_ids[ $requested_public_id ] ) ) {
+					continue;
+				}
+
+				$destination = $this->resolve_destination( $requested_public_id );
+				$reasons     = array(
+					ReasonFactory::make( 'requested_channel_not_selected_by_rules', 'Requested channel was not selected by any matching inclusion rule.', 'not_matched', 'channel_override', 'selected_by_rule', $requested_public_id, false ),
+				);
+
+				if ( ! $destination['ok'] ) {
+					$reasons[] = $destination['reason'];
+				}
+
+				$decisions[] = $this->decision_summary(
+					$event,
+					$settings,
+					'skipped',
+					'channel',
+					$requested_public_id,
+					null,
+					$reasons,
+					$destination['destination'],
+					$durable
 				);
 			}
 		}
@@ -448,7 +508,42 @@ final class Planner {
 			);
 		}
 
+		$decisions = array_merge( $decisions, $skipped_rule_decisions );
+
 		return new PlanningResult( $event, $decisions, $deliveries, $durable );
+	}
+
+	/**
+	 * Build rule-level skipped decisions for evaluated rules that did not match.
+	 *
+	 * @param NormalizedEvent                $event Event.
+	 * @param PolicySettings                 $settings Settings.
+	 * @param array<int,array<string,mixed>> $evaluated Evaluated rules.
+	 * @param bool                           $durable Whether to write rows.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function skipped_rule_decisions( NormalizedEvent $event, PolicySettings $settings, array $evaluated, bool $durable ): array {
+		$decisions = array();
+
+		foreach ( $evaluated as $entry ) {
+			if ( 'not_matched' !== $entry['condition_result'] ) {
+				continue;
+			}
+
+			$decisions[] = $this->decision_summary(
+				$event,
+				$settings,
+				'skipped',
+				'global',
+				null,
+				$entry['rule'],
+				$entry['reasons'],
+				null,
+				$durable
+			);
+		}
+
+		return $decisions;
 	}
 
 	/**
@@ -533,6 +628,53 @@ final class Planner {
 		}
 
 		return array_values( array_unique( $public_ids ) );
+	}
+
+	/**
+	 * Return restrictive override channel IDs, or null when controls inherit.
+	 *
+	 * @param NormalizedEvent $event Event.
+	 * @return array<int,string>|null
+	 */
+	private function channel_override_public_ids( NormalizedEvent $event ): ?array {
+		$channels = $event->control_bundle['channels'] ?? array();
+
+		if ( ! is_array( $channels ) || ( $channels['mode'] ?? null ) !== 'override' ) {
+			return null;
+		}
+
+		$ids = $channels['channel_public_ids'] ?? array();
+
+		if ( ! is_array( $ids ) || ! array_is_list( $ids ) ) {
+			return array();
+		}
+
+		return array_values(
+			array_filter(
+				$ids,
+				static function ( $id ): bool {
+					return is_string( $id );
+				}
+			)
+		);
+	}
+
+	/**
+	 * Return a destination snapshot when the channel exists.
+	 *
+	 * @param string $channel_public_id Channel public ID.
+	 * @return array<string,mixed>|null
+	 */
+	private function destination_snapshot_if_available( string $channel_public_id ): ?array {
+		$channel = $this->channels->find_by_public_id( $channel_public_id );
+
+		if ( null === $channel ) {
+			return null;
+		}
+
+		$connection = $this->connections->find_by_public_id( $channel->connection_public_id );
+
+		return $this->destination_snapshot( $channel, $connection );
 	}
 
 	/**
@@ -851,6 +993,7 @@ final class Planner {
 				'message'              => $payload_preview['message'],
 				'provider'             => $destination['provider'],
 				'remote_channel_id'    => $destination['remote_channel_id'],
+				'revision_fingerprint' => $event->revision_fingerprint,
 				'rule_public_id'       => $decision['rule_public_id'],
 				'rule_version'         => $decision['rule_version'],
 				'schedule_slot'        => 'immediate',

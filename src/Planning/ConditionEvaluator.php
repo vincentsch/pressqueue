@@ -60,7 +60,7 @@ final class ConditionEvaluator {
 	 * @return ConditionEvaluation
 	 */
 	private function evaluate_group( array $node, NormalizedEvent $event ): ConditionEvaluation {
-		$operator = (string) ( $node['operator'] ?? '' );
+		$operator = (string) ( $node['mode'] ?? ( $node['operator'] ?? '' ) );
 		$children = $node['children'] ?? null;
 
 		if ( ! in_array( $operator, array( 'ALL', 'ANY' ), true ) || ! is_array( $children ) || ! array_is_list( $children ) || array() === $children ) {
@@ -445,10 +445,10 @@ final class ConditionEvaluator {
 		}
 
 		if ( ! $exists ) {
-			return $this->single_reason( false, 'metadata:' . $key, 'Metadata condition evaluated.', $operator, $expected['value'], null );
+			return $this->single_reason( false, 'metadata:' . $key, 'Metadata condition evaluated.', $operator, $this->metadata_expected_scalar( $expected['value'] ), null );
 		}
 
-		$matched = $this->scalar_equals( $value, $expected['value'] );
+		$matched = $this->scalar_equals( $value, $this->metadata_expected_scalar( $expected['value'] ) );
 
 		if ( 'not_equals' === $operator ) {
 			$matched = ! $matched;
@@ -461,7 +461,7 @@ final class ConditionEvaluator {
 			);
 		}
 
-		return $this->single_reason( $matched, 'metadata:' . $key, 'Metadata condition evaluated.', $operator, $expected['value'], $value );
+		return $this->single_reason( $matched, 'metadata:' . $key, 'Metadata condition evaluated.', $operator, $this->metadata_expected_scalar( $expected['value'] ), $value );
 	}
 
 	/**
@@ -471,13 +471,31 @@ final class ConditionEvaluator {
 	 * @return string
 	 */
 	private function post_policy( NormalizedEvent $event ): string {
-		$value = $event->metadata['_pressqueue_policy'] ?? null;
+		$value = $event->control_bundle['policy'] ?? ( $event->metadata['_pressqueue_policy'] ?? null );
 
 		if ( in_array( $value, array( 'include', 'exclude' ), true ) ) {
 			return (string) $value;
 		}
 
 		return 'inherit';
+	}
+
+	/**
+	 * Unwrap a typed metadata comparison value.
+	 *
+	 * @param mixed $value Expected value document or legacy scalar.
+	 * @return mixed
+	 */
+	private function metadata_expected_scalar( $value ) {
+		if ( ! is_array( $value ) ) {
+			return $value;
+		}
+
+		if ( ! array_key_exists( 'type', $value ) || ! array_key_exists( 'value', $value ) ) {
+			throw new ValidationException( 'Metadata comparison value is invalid.' );
+		}
+
+		return $value['value'];
 	}
 
 	/**

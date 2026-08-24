@@ -20,8 +20,9 @@ final class Capabilities {
 	public const MANAGE_CONNECTIONS = 'manage_pressqueue_connections';
 	public const VIEW_DELIVERIES    = 'view_pressqueue_deliveries';
 	public const OPERATE_DELIVERIES = 'operate_pressqueue_deliveries';
+	public const EDIT_POST_CONTROLS = 'edit_pressqueue_post_controls';
 	public const VERSION_OPTION     = 'pressqueue_capability_schema_version';
-	public const TARGET_VERSION     = 2;
+	public const TARGET_VERSION     = 3;
 
 	/**
 	 * Return the initial capability names.
@@ -36,6 +37,7 @@ final class Capabilities {
 			self::MANAGE_CONNECTIONS,
 			self::VIEW_DELIVERIES,
 			self::OPERATE_DELIVERIES,
+			self::EDIT_POST_CONTROLS,
 		);
 	}
 

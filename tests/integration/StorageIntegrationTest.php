@@ -26,6 +26,7 @@ use PressQueue\Storage\SchemaStatus;
 use PressQueue\Storage\SettingsRepository;
 use PressQueue\Storage\StaleRecordException;
 use PressQueue\Storage\StorageException;
+use PressQueue\Storage\ValidationException;
 use WP_UnitTestCase;
 
 /**
@@ -708,7 +709,27 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( 1, $rule->version );
 		self::assertSame( 1, $rule->lock_version );
 
-		$enabled_rule = $rules->update( $rule->public_id, $rule->lock_version, array( 'enabled' => true ) );
+		$requested_enabled = $rules->create(
+			array_merge(
+				$this->ruleInput( $channel->public_id ),
+				array(
+					'enabled' => true,
+					'name'    => 'Requested enabled',
+				)
+			)
+		);
+
+		self::assertFalse( $requested_enabled->enabled );
+
+		try {
+			$rules->update( $rule->public_id, $rule->lock_version, array( 'enabled' => true ) );
+			self::fail( 'Unpreviewed rule enable should fail.' );
+		} catch ( ValidationException $exception ) {
+			self::assertSame( 'Rule must be previewed before it can be enabled.', $exception->getMessage() );
+		}
+
+		$previewed    = $rules->mark_version_previewed( $rule->public_id, $rule->lock_version, $rule->version );
+		$enabled_rule = $rules->enable_after_preview( $previewed->public_id, $previewed->lock_version );
 		self::assertTrue( $enabled_rule->enabled );
 		self::assertSame( 1, $enabled_rule->version );
 		self::assertSame( 2, $enabled_rule->lock_version );

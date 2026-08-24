@@ -13,6 +13,7 @@ namespace PressQueue\Storage;
  * Validates and canonicalizes rule JSON documents.
  */
 final class RuleDocuments {
+	private const SCHEMA_VERSION           = 1;
 	private const MAX_CONDITION_TREE_BYTES = 65536;
 	private const MAX_DESTINATION_BYTES    = 16384;
 	private const MAX_TEMPLATE_BYTES       = 16384;
@@ -58,9 +59,7 @@ final class RuleDocuments {
 		}
 
 		$count = 0;
-		self::assert_condition_node( $tree, $custom_field_allowlist, 1, $count );
-
-		return $tree;
+		return self::normalize_condition_node( $tree, $custom_field_allowlist, 1, $count, true );
 	}
 
 	/**
@@ -212,14 +211,16 @@ final class RuleDocuments {
 	}
 
 	/**
-	 * Validate a condition tree node.
+	 * Normalize and validate a condition tree node.
 	 *
 	 * @param array<string,mixed> $node Condition node.
 	 * @param array<int,string>   $custom_field_allowlist Custom field allowlist.
 	 * @param int                 $depth Current depth.
 	 * @param int                 $count Current node count.
+	 * @param bool                $root Whether this node is the root.
+	 * @return array<string,mixed>
 	 */
-	private static function assert_condition_node( array $node, array $custom_field_allowlist, int $depth, int &$count ): void {
+	private static function normalize_condition_node( array $node, array $custom_field_allowlist, int $depth, int &$count, bool $root = false ): array {
 		++$count;
 
 		if ( $depth > self::MAX_TREE_DEPTH || $count > self::MAX_TREE_NODES ) {
@@ -229,28 +230,32 @@ final class RuleDocuments {
 		$type = $node['type'] ?? null;
 
 		if ( 'group' === $type ) {
-			self::assert_group_node( $node, $custom_field_allowlist, $depth, $count );
-			return;
+			return self::normalize_group_node( $node, $custom_field_allowlist, $depth, $count, $root );
 		}
 
 		if ( 'condition' === $type ) {
-			self::assert_leaf_node( $node, $custom_field_allowlist );
-			return;
+			return self::normalize_leaf_node( $node, $custom_field_allowlist );
 		}
 
 		throw new ValidationException( 'Condition tree node type is unsupported.' );
 	}
 
 	/**
-	 * Validate a group node.
+	 * Normalize and validate a group node.
 	 *
 	 * @param array<string,mixed> $node Group node.
 	 * @param array<int,string>   $custom_field_allowlist Custom field allowlist.
 	 * @param int                 $depth Current depth.
 	 * @param int                 $count Current node count.
+	 * @param bool                $root Whether this node is the root.
+	 * @return array<string,mixed>
 	 */
-	private static function assert_group_node( array $node, array $custom_field_allowlist, int $depth, int &$count ): void {
-		if ( ! in_array( $node['operator'] ?? null, array( 'ALL', 'ANY' ), true ) ) {
+	private static function normalize_group_node( array $node, array $custom_field_allowlist, int $depth, int &$count, bool $root ): array {
+		$allowed = $root ? array( 'schema_version', 'type', 'mode', 'operator', 'children' ) : array( 'type', 'mode', 'operator', 'children' );
+		self::assert_no_unknown_keys( $node, $allowed, 'Condition group' );
+
+		$mode = $node['mode'] ?? ( $node['operator'] ?? null );
+		if ( ! in_array( $mode, array( 'ALL', 'ANY' ), true ) ) {
 			throw new ValidationException( 'Condition group operator is unsupported.' );
 		}
 
@@ -258,22 +263,38 @@ final class RuleDocuments {
 			throw new ValidationException( 'Condition groups need children.' );
 		}
 
+		$children = array();
 		foreach ( $node['children'] as $child ) {
 			if ( ! is_array( $child ) ) {
 				throw new ValidationException( 'Condition group child is invalid.' );
 			}
 
-			self::assert_condition_node( $child, $custom_field_allowlist, $depth + 1, $count );
+			$children[] = self::normalize_condition_node( $child, $custom_field_allowlist, $depth + 1, $count );
 		}
+
+		$normalized = array(
+			'children' => $children,
+			'mode'     => $mode,
+			'type'     => 'group',
+		);
+
+		if ( $root ) {
+			$normalized['schema_version'] = self::SCHEMA_VERSION;
+		}
+
+		return $normalized;
 	}
 
 	/**
-	 * Validate a leaf condition node.
+	 * Normalize and validate a leaf condition node.
 	 *
 	 * @param array<string,mixed> $node Condition node.
 	 * @param array<int,string>   $custom_field_allowlist Custom field allowlist.
+	 * @return array<string,mixed>
 	 */
-	private static function assert_leaf_node( array $node, array $custom_field_allowlist ): void {
+	private static function normalize_leaf_node( array $node, array $custom_field_allowlist ): array {
+		self::assert_no_unknown_keys( $node, array( 'type', 'condition', 'operator', 'value' ), 'Condition node' );
+
 		$condition = $node['condition'] ?? null;
 		$operator  = $node['operator'] ?? null;
 
@@ -281,99 +302,154 @@ final class RuleDocuments {
 			throw new ValidationException( 'Condition nodes need condition and operator values.' );
 		}
 
+		$value = $node['value'] ?? null;
 		switch ( $condition ) {
 			case 'post_type':
+				$value = self::normalize_slug_comparison( 'Post type', $operator, $value, 'post_type_exists' );
+				break;
 			case 'post_status':
-				self::assert_string_comparison( $operator, $node['value'] ?? null );
-				return;
+				$value = self::normalize_slug_comparison( 'Post status', $operator, $value, 'post_status_exists' );
+				break;
 			case 'author':
-				self::assert_author_comparison( $operator, $node['value'] ?? null );
-				return;
+				$value = self::normalize_author_comparison( $operator, $value );
+				break;
 			case 'taxonomy':
-				self::assert_taxonomy_comparison( $operator, $node['value'] ?? null );
-				return;
+				$value = self::normalize_taxonomy_comparison( $operator, $value );
+				break;
 			case 'metadata':
-				self::assert_metadata_comparison( $operator, $node['value'] ?? null, $custom_field_allowlist );
-				return;
+				$value = self::normalize_metadata_comparison( $operator, $value, $custom_field_allowlist );
+				break;
 			case 'post_policy':
-				self::assert_post_policy_comparison( $operator, $node['value'] ?? null );
-				return;
+				$value = self::normalize_post_policy_comparison( $operator, $value );
+				break;
+			default:
+				throw new ValidationException( 'Condition type is unsupported.' );
 		}
 
-		throw new ValidationException( 'Condition type is unsupported.' );
+		return array(
+			'condition' => $condition,
+			'operator'  => $operator,
+			'type'      => 'condition',
+			'value'     => $value,
+		);
 	}
 
 	/**
-	 * Validate post type and status comparisons.
+	 * Normalize post type and status comparisons.
 	 *
+	 * @param string $label Value label.
 	 * @param string $operator Operator.
 	 * @param mixed  $value Value.
+	 * @param string $existence_check Existence check.
+	 * @return string|array<int,string>
 	 */
-	private static function assert_string_comparison( string $operator, $value ): void {
+	private static function normalize_slug_comparison( string $label, string $operator, $value, string $existence_check ) {
 		if ( 'equals' === $operator && is_string( $value ) && '' !== $value ) {
-			return;
+			return self::normalize_condition_slug_value( $label, $value, $existence_check );
 		}
 
 		if ( 'in' === $operator && is_array( $value ) && array_is_list( $value ) && array() !== $value ) {
+			$values = array();
 			foreach ( $value as $item ) {
 				if ( ! is_string( $item ) || '' === $item ) {
 					throw new ValidationException( 'String condition list contains an invalid value.' );
 				}
+
+				$values[] = self::normalize_condition_slug_value( $label, $item, $existence_check );
 			}
 
-			return;
+			$values = array_values( array_unique( $values ) );
+			sort( $values, SORT_STRING );
+
+			return $values;
 		}
 
 		throw new ValidationException( 'String condition comparison is invalid.' );
 	}
 
 	/**
-	 * Validate author comparisons.
+	 * Normalize a condition slug value.
+	 *
+	 * @param string $label Label.
+	 * @param string $value Value.
+	 * @param string $existence_check Existence check.
+	 * @return string
+	 */
+	private static function normalize_condition_slug_value( string $label, string $value, string $existence_check ): string {
+		$value = strtolower( $value );
+		StorageValidator::assert_wordpress_slug( $label, $value );
+
+		if ( 'post_type_exists' === $existence_check && function_exists( 'post_type_exists' ) && ! post_type_exists( $value ) ) {
+			throw new ValidationException( 'Condition post type does not exist.' );
+		}
+
+		if ( 'post_status_exists' === $existence_check && function_exists( 'get_post_stati' ) ) {
+			$statuses = get_post_stati();
+			if ( is_array( $statuses ) && ! in_array( $value, $statuses, true ) ) {
+				throw new ValidationException( 'Condition post status does not exist.' );
+			}
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Normalize author comparisons.
 	 *
 	 * @param string $operator Operator.
 	 * @param mixed  $value Value.
+	 * @return int|array<int,int>
 	 */
-	private static function assert_author_comparison( string $operator, $value ): void {
+	private static function normalize_author_comparison( string $operator, $value ) {
 		if ( 'equals' === $operator ) {
-			self::assert_author_value( $value );
-			return;
+			return self::normalize_author_value( $value );
 		}
 
 		if ( 'in' === $operator && is_array( $value ) && array_is_list( $value ) && array() !== $value ) {
+			$values = array();
 			foreach ( $value as $item ) {
-				self::assert_author_value( $item );
+				$values[] = self::normalize_author_value( $item );
 			}
 
-			return;
+			$values = array_values( array_unique( $values ) );
+			sort( $values, SORT_NUMERIC );
+
+			return $values;
 		}
 
 		throw new ValidationException( 'Author condition comparison is invalid.' );
 	}
 
 	/**
-	 * Validate one author value.
+	 * Normalize one author value.
 	 *
 	 * @param mixed $value Value.
+	 * @return int
 	 */
-	private static function assert_author_value( $value ): void {
-		if ( is_int( $value ) && $value > 0 ) {
-			return;
+	private static function normalize_author_value( $value ): int {
+		if ( is_string( $value ) && ctype_digit( $value ) ) {
+			$value = (int) $value;
 		}
 
-		if ( is_string( $value ) && ( PublicIds::is_valid( $value ) || ctype_digit( $value ) ) ) {
-			return;
+		if ( ! is_int( $value ) || $value <= 0 ) {
+			throw new ValidationException( 'Author condition value is invalid.' );
 		}
 
-		throw new ValidationException( 'Author condition value is invalid.' );
+		if ( function_exists( 'get_user_by' ) && false === get_user_by( 'id', $value ) ) {
+			throw new ValidationException( 'Author condition user does not exist.' );
+		}
+
+		return $value;
 	}
 
 	/**
-	 * Validate taxonomy comparisons.
+	 * Normalize taxonomy comparisons.
 	 *
 	 * @param string $operator Operator.
 	 * @param mixed  $value Value.
+	 * @return array<string,mixed>
 	 */
-	private static function assert_taxonomy_comparison( string $operator, $value ): void {
+	private static function normalize_taxonomy_comparison( string $operator, $value ): array {
 		if ( ! in_array( $operator, array( 'has_any', 'has_all', 'has_none' ), true ) ) {
 			throw new ValidationException( 'Taxonomy condition operator is unsupported.' );
 		}
@@ -390,21 +466,52 @@ final class RuleDocuments {
 			throw new ValidationException( 'Taxonomy condition terms are invalid.' );
 		}
 
+		$taxonomy = strtolower( $value['taxonomy'] );
+		StorageValidator::assert_wordpress_slug( 'Taxonomy', $taxonomy );
+
+		if ( function_exists( 'taxonomy_exists' ) && ! taxonomy_exists( $taxonomy ) ) {
+			throw new ValidationException( 'Taxonomy condition taxonomy does not exist.' );
+		}
+
+		$terms = array();
 		foreach ( $value['terms'] as $term ) {
-			if ( ! is_string( $term ) && ! is_int( $term ) ) {
+			if ( is_string( $term ) && ctype_digit( $term ) ) {
+				$term = (int) $term;
+			}
+
+			if ( ! is_int( $term ) || $term <= 0 ) {
 				throw new ValidationException( 'Taxonomy condition term is invalid.' );
 			}
+
+			if ( function_exists( 'get_term' ) && function_exists( 'is_wp_error' ) ) {
+				$found = get_term( $term, $taxonomy );
+				if ( null === $found || is_wp_error( $found ) ) {
+					throw new ValidationException( 'Taxonomy condition term does not exist.' );
+				}
+			}
+
+			$terms[] = $term;
 		}
+
+		$terms = array_values( array_unique( $terms ) );
+		sort( $terms, SORT_NUMERIC );
+
+		return array(
+			'include_ancestors' => $value['include_ancestors'],
+			'taxonomy'          => $taxonomy,
+			'terms'             => $terms,
+		);
 	}
 
 	/**
-	 * Validate metadata comparisons.
+	 * Normalize metadata comparisons.
 	 *
 	 * @param string            $operator Operator.
 	 * @param mixed             $value Value.
 	 * @param array<int,string> $custom_field_allowlist Custom field allowlist.
+	 * @return array<string,mixed>
 	 */
-	private static function assert_metadata_comparison( string $operator, $value, array $custom_field_allowlist ): void {
+	private static function normalize_metadata_comparison( string $operator, $value, array $custom_field_allowlist ): array {
 		if ( ! in_array( $operator, array( 'equals', 'not_equals', 'exists', 'not_exists' ), true ) ) {
 			throw new ValidationException( 'Metadata condition operator is unsupported.' );
 		}
@@ -418,23 +525,134 @@ final class RuleDocuments {
 		}
 
 		if ( in_array( $operator, array( 'exists', 'not_exists' ), true ) ) {
-			return;
+			self::assert_no_unknown_keys( $value, array( 'key' ), 'Metadata condition value' );
+			return array( 'key' => $value['key'] );
 		}
 
-		if ( ! array_key_exists( 'value', $value ) || is_array( $value['value'] ) || is_object( $value['value'] ) ) {
+		self::assert_no_unknown_keys( $value, array( 'key', 'value' ), 'Metadata condition value' );
+
+		if ( ! array_key_exists( 'value', $value ) ) {
 			throw new ValidationException( 'Metadata condition comparison value is invalid.' );
 		}
+
+		return array(
+			'key'   => $value['key'],
+			'value' => self::normalize_metadata_value_document( $value['value'] ),
+		);
 	}
 
 	/**
-	 * Validate post policy comparisons.
+	 * Normalize a metadata typed scalar value.
+	 *
+	 * @param mixed $value Candidate value.
+	 * @return array<string,mixed>
+	 */
+	private static function normalize_metadata_value_document( $value ): array {
+		if ( is_array( $value ) && ! array_is_list( $value ) && isset( $value['type'] ) && array_key_exists( 'value', $value ) ) {
+			self::assert_no_unknown_keys( $value, array( 'type', 'value' ), 'Metadata scalar value' );
+
+			if ( ! is_string( $value['type'] ) ) {
+				throw new ValidationException( 'Metadata scalar value type is invalid.' );
+			}
+
+			$type = $value['type'];
+			$raw  = $value['value'];
+		} else {
+			$type = self::metadata_scalar_type( $value );
+			$raw  = $value;
+		}
+
+		switch ( $type ) {
+			case 'string':
+				if ( ! is_string( $raw ) ) {
+					throw new ValidationException( 'Metadata string value is invalid.' );
+				}
+				break;
+			case 'number':
+				if ( ! is_int( $raw ) && ! is_float( $raw ) ) {
+					throw new ValidationException( 'Metadata number value is invalid.' );
+				}
+				break;
+			case 'boolean':
+				if ( ! is_bool( $raw ) ) {
+					throw new ValidationException( 'Metadata boolean value is invalid.' );
+				}
+				break;
+			case 'null':
+				if ( null !== $raw ) {
+					throw new ValidationException( 'Metadata null value is invalid.' );
+				}
+				break;
+			default:
+				throw new ValidationException( 'Metadata scalar value type is unsupported.' );
+		}
+
+		return array(
+			'type'  => $type,
+			'value' => $raw,
+		);
+	}
+
+	/**
+	 * Infer a metadata scalar type from a legacy scalar.
+	 *
+	 * @param mixed $value Value.
+	 * @return string
+	 */
+	private static function metadata_scalar_type( $value ): string {
+		if ( is_string( $value ) ) {
+			return 'string';
+		}
+
+		if ( is_int( $value ) || is_float( $value ) ) {
+			return 'number';
+		}
+
+		if ( is_bool( $value ) ) {
+			return 'boolean';
+		}
+
+		if ( null === $value ) {
+			return 'null';
+		}
+
+		throw new ValidationException( 'Metadata condition comparison value is invalid.' );
+	}
+
+	/**
+	 * Normalize post policy comparisons.
 	 *
 	 * @param string $operator Operator.
 	 * @param mixed  $value Value.
+	 * @return string
 	 */
-	private static function assert_post_policy_comparison( string $operator, $value ): void {
+	private static function normalize_post_policy_comparison( string $operator, $value ): string {
+		if ( ! is_string( $value ) ) {
+			throw new ValidationException( 'Post policy condition comparison is invalid.' );
+		}
+
+		$value = strtolower( $value );
 		if ( 'equals' !== $operator || ! in_array( $value, array( 'inherit', 'include', 'exclude' ), true ) ) {
 			throw new ValidationException( 'Post policy condition comparison is invalid.' );
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Assert exact object keys.
+	 *
+	 * @param array<string,mixed> $value Object value.
+	 * @param array<int,string>   $allowed Allowed keys.
+	 * @param string              $label Label.
+	 */
+	private static function assert_no_unknown_keys( array $value, array $allowed, string $label ): void {
+		unset( $label );
+
+		foreach ( array_keys( $value ) as $key ) {
+			if ( ! in_array( $key, $allowed, true ) ) {
+				throw new ValidationException( 'Condition document contains an unsupported field.' );
+			}
 		}
 	}
 }

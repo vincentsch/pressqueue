@@ -25,6 +25,12 @@ $GLOBALS['pressqueue_test_valid_nonces']       = array();
 $GLOBALS['pressqueue_test_as_next_action_id']  = 1000;
 $GLOBALS['pressqueue_test_as_supports']        = array();
 $GLOBALS['pressqueue_test_as_actions']         = array();
+$GLOBALS['pressqueue_test_posts']              = array();
+$GLOBALS['pressqueue_test_post_meta']          = array();
+$GLOBALS['pressqueue_test_registered_meta']    = array();
+$GLOBALS['pressqueue_test_rest_routes']        = array();
+$GLOBALS['pressqueue_test_meta_boxes']         = array();
+$GLOBALS['pressqueue_test_logged_in']          = true;
 
 /**
  * Reset test hook state.
@@ -48,6 +54,12 @@ function pressqueue_test_reset_wordpress_stubs(): void {
 	$GLOBALS['pressqueue_test_as_next_action_id']  = 1000;
 	$GLOBALS['pressqueue_test_as_supports']        = array();
 	$GLOBALS['pressqueue_test_as_actions']         = array();
+	$GLOBALS['pressqueue_test_posts']              = array();
+	$GLOBALS['pressqueue_test_post_meta']          = array();
+	$GLOBALS['pressqueue_test_registered_meta']    = array();
+	$GLOBALS['pressqueue_test_rest_routes']        = array();
+	$GLOBALS['pressqueue_test_meta_boxes']         = array();
+	$GLOBALS['pressqueue_test_logged_in']          = true;
 	$GLOBALS['pressqueue_runtime_notice']          = null;
 	$GLOBALS['wp_version']                         = '6.8.8';
 }
@@ -276,6 +288,15 @@ function current_user_can( $capability, ...$args ): bool {
 }
 
 /**
+ * Return the test login state.
+ *
+ * @return bool
+ */
+function is_user_logged_in(): bool {
+	return (bool) $GLOBALS['pressqueue_test_logged_in'];
+}
+
+/**
  * Check a test nonce for administrator mutations.
  *
  * @param int|string $action Nonce action.
@@ -314,6 +335,69 @@ function deactivate_plugins( $plugin ): void {
  */
 function wp_die( $message ): void {
 	throw new RuntimeException( $message );
+}
+
+/**
+ * Escape textarea content.
+ *
+ * @param string $text Text.
+ * @return string
+ */
+function esc_textarea( $text ): string {
+	return esc_html( $text );
+}
+
+/**
+ * Escaped attribute translation stub.
+ *
+ * @param string $text Text.
+ * @param string $domain Text domain.
+ * @return string
+ */
+function esc_attr__( $text, $domain = 'default' ): string {
+	return esc_attr( __( $text, $domain ) );
+}
+
+/**
+ * Return selected attribute markup.
+ *
+ * @param mixed $selected Selected value.
+ * @param mixed $current Current value.
+ * @param bool  $display Whether to echo.
+ * @return string
+ */
+function selected( $selected, $current = true, $display = true ): string {
+	$result = $selected === $current ? 'selected="selected"' : '';
+	if ( $display ) {
+		echo $result;
+	}
+	return $result;
+}
+
+/**
+ * Return checked attribute markup.
+ *
+ * @param mixed $checked Checked value.
+ * @param mixed $current Current value.
+ * @param bool  $display Whether to echo.
+ * @return string
+ */
+function checked( $checked, $current = true, $display = true ): string {
+	$result = $checked === $current ? 'checked="checked"' : '';
+	if ( $display ) {
+		echo $result;
+	}
+	return $result;
+}
+
+/**
+ * Emit a nonce field in tests.
+ *
+ * @param string $action Action.
+ * @param string $name Field name.
+ */
+function wp_nonce_field( $action = -1, $name = '_wpnonce' ): void {
+	echo '<input type="hidden" name="' . esc_attr( $name ) . '" value="' . esc_attr( (string) $action ) . '" />';
 }
 
 /**
@@ -403,6 +487,251 @@ function delete_option( $option ): bool {
 }
 
 /**
+ * Minimal WordPress post object.
+ */
+class WP_Post {
+	public int $ID = 0;
+	public string $post_type = 'post';
+	public string $post_status = 'publish';
+	public int $post_author = 1;
+	public string $post_title = '';
+	public string $post_excerpt = '';
+	public string $post_content = '';
+	public string $post_date = '2026-08-24 12:00:00';
+	public string $post_date_gmt = '2026-08-24 12:00:00';
+	public string $post_modified = '2026-08-24 12:00:00';
+	public string $post_modified_gmt = '2026-08-24 12:00:00';
+
+	/**
+	 * Constructor.
+	 *
+	 * @param array<string,mixed>|object $data Post data.
+	 */
+	public function __construct( $data = array() ) {
+		foreach ( (array) $data as $key => $value ) {
+			if ( property_exists( $this, (string) $key ) ) {
+				$this->{$key} = $value;
+			}
+		}
+	}
+}
+
+/**
+ * Minimal WordPress user object.
+ */
+class WP_User {
+	public string $display_name = '';
+
+	/**
+	 * Constructor.
+	 *
+	 * @param string $display_name Display name.
+	 */
+	public function __construct( string $display_name = 'Test User' ) {
+		$this->display_name = $display_name;
+	}
+}
+
+/**
+ * Return a test post.
+ *
+ * @param int $post_id Post ID.
+ * @return WP_Post|null
+ */
+function get_post( $post_id ): ?WP_Post {
+	return $GLOBALS['pressqueue_test_posts'][ (int) $post_id ] ?? null;
+}
+
+/**
+ * Read test post meta.
+ *
+ * @param int    $post_id Post ID.
+ * @param string $key Meta key.
+ * @param bool   $single Whether to return one value.
+ * @return mixed
+ */
+function get_post_meta( $post_id, $key = '', $single = false ) {
+	$meta = $GLOBALS['pressqueue_test_post_meta'][ (int) $post_id ] ?? array();
+
+	if ( '' === $key ) {
+		return $meta;
+	}
+
+	if ( ! array_key_exists( $key, $meta ) ) {
+		return $single ? '' : array();
+	}
+
+	return $single ? end( $meta[ $key ] ) : $meta[ $key ];
+}
+
+/**
+ * Update test post meta.
+ *
+ * @param int    $post_id Post ID.
+ * @param string $key Meta key.
+ * @param mixed  $value Value.
+ * @return bool
+ */
+function update_post_meta( $post_id, $key, $value ): bool {
+	$GLOBALS['pressqueue_test_post_meta'][ (int) $post_id ][ (string) $key ] = array( $value );
+
+	return true;
+}
+
+/**
+ * Check test metadata existence.
+ *
+ * @param string $type Object type.
+ * @param int    $object_id Object ID.
+ * @param string $key Meta key.
+ * @return bool
+ */
+function metadata_exists( $type, $object_id, $key ): bool {
+	return 'post' === $type && array_key_exists( (string) $key, $GLOBALS['pressqueue_test_post_meta'][ (int) $object_id ] ?? array() );
+}
+
+/**
+ * Return a permalink for a test post.
+ *
+ * @param WP_Post $post Post.
+ * @return string
+ */
+function get_permalink( $post ): string {
+	return 'https://example.test/?p=' . (int) $post->ID;
+}
+
+/**
+ * Return test taxonomies.
+ *
+ * @param string $post_type Post type.
+ * @return array<int,string>
+ */
+function get_object_taxonomies( $post_type ): array {
+	unset( $post_type );
+	return array();
+}
+
+/**
+ * Return no test terms.
+ *
+ * @param int               $post_id Post ID.
+ * @param array<int,string> $taxonomies Taxonomies.
+ * @param array<string,mixed> $args Args.
+ * @return array<int,mixed>
+ */
+function wp_get_object_terms( $post_id, $taxonomies, $args = array() ): array {
+	unset( $post_id, $taxonomies, $args );
+	return array();
+}
+
+/**
+ * Return no ancestors.
+ *
+ * @param int    $object_id Object ID.
+ * @param string $object_type Object type.
+ * @param string $resource_type Resource type.
+ * @return array<int,int>
+ */
+function get_ancestors( $object_id, $object_type = '', $resource_type = '' ): array {
+	unset( $object_id, $object_type, $resource_type );
+	return array();
+}
+
+/**
+ * Return a user object.
+ *
+ * @param int $user_id User ID.
+ * @return WP_User|false
+ */
+function get_userdata( $user_id ) {
+	return $user_id > 0 ? new WP_User( 'Test User' ) : false;
+}
+
+/**
+ * Return test user meta.
+ *
+ * @param int    $user_id User ID.
+ * @param string $key Meta key.
+ * @param bool   $single Whether single.
+ * @return mixed
+ */
+function get_user_meta( $user_id, $key = '', $single = false ) {
+	unset( $user_id, $key );
+	return $single ? '' : array();
+}
+
+/**
+ * Return a test post type object.
+ *
+ * @param string $post_type Post type.
+ * @return object|null
+ */
+function get_post_type_object( $post_type ): ?object {
+	if ( in_array( $post_type, array( 'post', 'page' ), true ) ) {
+		return (object) array(
+			'public'  => true,
+			'show_ui' => true,
+		);
+	}
+
+	if ( 'internal' === $post_type ) {
+		return (object) array(
+			'public'  => false,
+			'show_ui' => true,
+		);
+	}
+
+	return null;
+}
+
+/**
+ * Check post type existence.
+ *
+ * @param string $post_type Post type.
+ * @return bool
+ */
+function post_type_exists( $post_type ): bool {
+	return null !== get_post_type_object( $post_type );
+}
+
+/**
+ * Return post statuses.
+ *
+ * @return array<string,string>
+ */
+function get_post_stati(): array {
+	return array(
+		'draft'   => 'draft',
+		'future'  => 'future',
+		'pending' => 'pending',
+		'private' => 'private',
+		'publish' => 'publish',
+	);
+}
+
+/**
+ * Autosave check.
+ *
+ * @param int $post_id Post ID.
+ * @return false|int
+ */
+function wp_is_post_autosave( $post_id ) {
+	unset( $post_id );
+	return false;
+}
+
+/**
+ * Revision check.
+ *
+ * @param int $post_id Post ID.
+ * @return false|int
+ */
+function wp_is_post_revision( $post_id ) {
+	unset( $post_id );
+	return false;
+}
+
+/**
  * Return a test role.
  *
  * @param string $role Role name.
@@ -410,6 +739,147 @@ function delete_option( $option ): bool {
  */
 function get_role( $role ): ?PressQueue_Test_Role {
 	return $GLOBALS['pressqueue_test_roles'][ $role ] ?? null;
+}
+
+/**
+ * Register metadata in tests.
+ *
+ * @param string              $object_type Object type.
+ * @param string              $meta_key Meta key.
+ * @param array<string,mixed> $args Args.
+ * @return bool
+ */
+function register_meta( $object_type, $meta_key, $args ): bool {
+	$GLOBALS['pressqueue_test_registered_meta'][ $object_type ][ $meta_key ] = $args;
+
+	return true;
+}
+
+/**
+ * Register a REST route in tests.
+ *
+ * @param string              $namespace Namespace.
+ * @param string              $route Route.
+ * @param array<string,mixed> $args Args.
+ * @return bool
+ */
+function register_rest_route( $namespace, $route, $args ): bool {
+	$GLOBALS['pressqueue_test_rest_routes'][ $namespace . $route ] = $args;
+
+	return true;
+}
+
+/**
+ * Register a meta box in tests.
+ *
+ * @param string          $id ID.
+ * @param string          $title Title.
+ * @param callable|string $callback Callback.
+ * @param string          $screen Screen.
+ * @param string          $context Context.
+ * @param string          $priority Priority.
+ */
+function add_meta_box( $id, $title, $callback, $screen = null, $context = 'advanced', $priority = 'default' ): void {
+	$GLOBALS['pressqueue_test_meta_boxes'][] = array(
+		'callback' => $callback,
+		'context'  => $context,
+		'id'       => $id,
+		'priority' => $priority,
+		'screen'   => $screen,
+		'title'    => $title,
+	);
+}
+
+/**
+ * Minimal REST request object.
+ */
+class WP_REST_Request implements ArrayAccess {
+	/**
+	 * Route params.
+	 *
+	 * @var array<string,mixed>
+	 */
+	private array $params;
+
+	/**
+	 * JSON params.
+	 *
+	 * @var mixed
+	 */
+	private $json_params;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param array<string,mixed> $params Params.
+	 * @param mixed               $json_params JSON params.
+	 */
+	public function __construct( array $params = array(), $json_params = array() ) {
+		$this->params      = $params;
+		$this->json_params = $json_params;
+	}
+
+	/**
+	 * Return JSON params.
+	 *
+	 * @return mixed
+	 */
+	public function get_json_params() {
+		return $this->json_params;
+	}
+
+	public function offsetExists( $offset ): bool {
+		return array_key_exists( (string) $offset, $this->params );
+	}
+
+	public function offsetGet( $offset ) {
+		return $this->params[ (string) $offset ] ?? null;
+	}
+
+	public function offsetSet( $offset, $value ): void {
+		$this->params[ (string) $offset ] = $value;
+	}
+
+	public function offsetUnset( $offset ): void {
+		unset( $this->params[ (string) $offset ] );
+	}
+}
+
+/**
+ * Minimal REST response object.
+ */
+class WP_REST_Response {
+	private $data;
+	private int $status;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param mixed $data Data.
+	 * @param int   $status Status.
+	 */
+	public function __construct( $data = null, int $status = 200 ) {
+		$this->data   = $data;
+		$this->status = $status;
+	}
+
+	/**
+	 * Return response data.
+	 *
+	 * @return mixed
+	 */
+	public function get_data() {
+		return $this->data;
+	}
+
+	/**
+	 * Return status.
+	 *
+	 * @return int
+	 */
+	public function get_status(): int {
+		return $this->status;
+	}
 }
 
 /**

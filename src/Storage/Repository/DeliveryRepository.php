@@ -383,6 +383,7 @@ final class DeliveryRepository extends AbstractRepository {
 				'message'              => $payload_preview['message'],
 				'provider'             => $provider,
 				'remote_channel_id'    => $remote_channel_id,
+				'revision_fingerprint' => $decision->revision_fingerprint,
 				'rule_public_id'       => $decision->rule_public_id,
 				'rule_version'         => $decision->rule_version,
 				'schedule_slot'        => $schedule_slot,

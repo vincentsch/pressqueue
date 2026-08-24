@@ -99,7 +99,7 @@ final class StorageContractsTest extends TestCase {
 			)
 		);
 		self::assertSame(
-			'5edb165fb1ce901dc66f9e2126bd20533e39b688581e5f07571d0d195a5fa235',
+			'9343e7e4775677400869240f6a27a0a1411aa5f5f91723c713921c4a0d69f74b',
 			HashKeys::payload_hash(
 				array(
 					'canonical_url'        => 'https://example.test/post',
@@ -108,6 +108,39 @@ final class StorageContractsTest extends TestCase {
 					'message'              => 'Hello',
 					'provider'             => 'buffer',
 					'remote_channel_id'    => 'remote-1',
+					'revision_fingerprint' => $revision,
+					'rule_public_id'       => $rule_public_id,
+					'rule_version'         => 3,
+					'schedule_slot'        => 'immediate',
+					'trigger'              => 'first_publish',
+				)
+			)
+		);
+		self::assertNotSame(
+			HashKeys::payload_hash(
+				array(
+					'canonical_url'        => 'https://example.test/post',
+					'channel_public_id'    => $channel_public_id,
+					'connection_public_id' => $connection_public_id,
+					'message'              => 'Hello',
+					'provider'             => 'buffer',
+					'remote_channel_id'    => 'remote-1',
+					'revision_fingerprint' => $revision,
+					'rule_public_id'       => $rule_public_id,
+					'rule_version'         => 3,
+					'schedule_slot'        => 'immediate',
+					'trigger'              => 'first_publish',
+				)
+			),
+			HashKeys::payload_hash(
+				array(
+					'canonical_url'        => 'https://example.test/post',
+					'channel_public_id'    => $channel_public_id,
+					'connection_public_id' => $connection_public_id,
+					'message'              => 'Hello',
+					'provider'             => 'buffer',
+					'remote_channel_id'    => 'remote-1',
+					'revision_fingerprint' => str_repeat( 'b', 64 ),
 					'rule_public_id'       => $rule_public_id,
 					'rule_version'         => 3,
 					'schedule_slot'        => 'immediate',
@@ -133,17 +166,17 @@ final class StorageContractsTest extends TestCase {
 
 	public function test_rule_documents_validate_and_canonicalize_storage_shapes(): void {
 		$condition_tree = array(
-			'schema_version' => 1,
-			'type'           => 'group',
-			'operator'       => 'ALL',
 			'children'       => array(
 				array(
-					'type'      => 'condition',
 					'condition' => 'post_type',
 					'operator'  => 'equals',
+					'type'      => 'condition',
 					'value'     => 'post',
 				),
 			),
+			'mode'           => 'ALL',
+			'type'           => 'group',
+			'schema_version' => 1,
 		);
 
 		$destination_set = RuleDocuments::destination_set(
@@ -168,6 +201,38 @@ final class StorageContractsTest extends TestCase {
 				array( 'channel_public_id' => '01K8Z8D0PKH2N8J7S3K5A9C6DG' ),
 			),
 			$destination_set['destinations']
+		);
+	}
+
+	public function test_condition_tree_aliases_are_canonicalized_and_metadata_values_are_typed(): void {
+		$tree = RuleDocuments::condition_tree(
+			array(
+				'schema_version' => 1,
+				'type'           => 'group',
+				'operator'       => 'ALL',
+				'children'       => array(
+					array(
+						'type'      => 'condition',
+						'condition' => 'metadata',
+						'operator'  => 'equals',
+						'value'     => array(
+							'key'   => 'pressqueue_rating',
+							'value' => 5,
+						),
+					),
+				),
+			),
+			array( 'pressqueue_rating' )
+		);
+
+		self::assertArrayNotHasKey( 'operator', $tree );
+		self::assertSame( 'ALL', $tree['mode'] );
+		self::assertSame(
+			array(
+				'type'  => 'number',
+				'value' => 5,
+			),
+			$tree['children'][0]['value']['value']
 		);
 	}
 

@@ -54,6 +54,9 @@ final class AdminScreens {
 		ConnectionController::register_hooks();
 		ChannelController::register_hooks();
 		DeliveryActionController::register_hooks();
+		PostControlsController::register_hooks();
+		PostPreviewController::register_hooks();
+		ConditionBuilderController::register_hooks();
 	}
 
 	/**
@@ -514,7 +517,7 @@ final class AdminScreens {
 			echo '<label><input type="checkbox" name="triggers[]" value="' . esc_attr( $trigger ) . '" ' . checked( in_array( $trigger, $selected_triggers, true ), true, false ) . ' /> ' . esc_html( $trigger ) . '</label><br />';
 		}
 		echo '</td></tr>';
-		self::render_json_textarea( 'condition_tree_json', __( 'Condition Tree JSON', 'pressqueue' ), null === $rule ? self::default_condition_tree() : $rule->condition_tree, $rule );
+		self::render_condition_tree_field( 'condition_tree_json', __( 'Condition Tree JSON', 'pressqueue' ), null === $rule ? self::default_condition_tree() : $rule->condition_tree, $rule );
 		self::render_json_textarea(
 			'destination_set_json',
 			__( 'Destination Set JSON', 'pressqueue' ),
@@ -555,6 +558,18 @@ final class AdminScreens {
 		echo '<tr><th scope="row"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label></th><td>';
 		echo '<textarea id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '" class="large-text code" rows="8">' . esc_textarea( self::pretty_json( $example ) ) . '</textarea>';
 		echo '</td></tr>';
+	}
+
+	/**
+	 * Render the visual condition builder and canonical raw JSON fallback.
+	 *
+	 * @param string                  $name Field name.
+	 * @param string                  $label Label.
+	 * @param array<int|string,mixed> $example Example value.
+	 * @param RuleRecord|null         $rule Rule.
+	 */
+	private static function render_condition_tree_field( string $name, string $label, array $example, ?RuleRecord $rule ): void {
+		ConditionBuilderController::render_field( self::field_id( $name, $rule ), $name, $label, self::pretty_json( $example ) );
 	}
 
 	/**
@@ -1048,7 +1063,7 @@ final class AdminScreens {
 					'value'     => 'post',
 				),
 			),
-			'operator'       => 'ALL',
+			'mode'           => 'ALL',
 			'schema_version' => 1,
 			'type'           => 'group',
 		);

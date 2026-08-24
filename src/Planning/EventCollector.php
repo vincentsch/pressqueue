@@ -170,7 +170,8 @@ final class EventCollector {
 					continue;
 				}
 
-				if ( 'update' === $trigger && $event->previous_runtime_fingerprint === $event->revision_fingerprint ) {
+				if ( 'update' === $trigger && self::update_matches_recorded_facts( $event ) ) {
+					self::record_runtime_metadata( $event );
 					continue;
 				}
 
@@ -235,6 +236,21 @@ final class EventCollector {
 	}
 
 	/**
+	 * Check whether an update already matches recorded trigger facts.
+	 *
+	 * @param NormalizedEvent $event Event.
+	 * @return bool
+	 */
+	private static function update_matches_recorded_facts( NormalizedEvent $event ): bool {
+		if ( $event->previous_trigger_fingerprint === $event->trigger_fingerprint ) {
+			return true;
+		}
+
+		return null === $event->previous_trigger_fingerprint
+			&& $event->previous_runtime_fingerprint === $event->legacy_runtime_fingerprint;
+	}
+
+	/**
 	 * Record runtime fingerprints and first-publish metadata.
 	 *
 	 * @param NormalizedEvent $event Event.
@@ -248,7 +264,8 @@ final class EventCollector {
 			update_post_meta( $event->post_id, EventNormalizer::META_FIRST_PUBLISH_SEEN_AT, gmdate( 'Y-m-d H:i:s' ) );
 		}
 
-		update_post_meta( $event->post_id, EventNormalizer::META_LAST_RUNTIME_FINGERPRINT, $event->revision_fingerprint );
+		update_post_meta( $event->post_id, EventNormalizer::META_LAST_TRIGGER_FINGERPRINT, $event->trigger_fingerprint );
+		update_post_meta( $event->post_id, EventNormalizer::META_LAST_DELIVERY_REVISION_FINGERPRINT, $event->revision_fingerprint );
 	}
 
 	/**

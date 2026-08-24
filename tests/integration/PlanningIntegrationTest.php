@@ -9,12 +9,14 @@ declare(strict_types=1);
 
 namespace PressQueue\Tests\Integration;
 
+use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Planning\EventCollector;
 use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\Planner;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
+use PressQueue\Storage\Record\RuleRecord;
 use PressQueue\Storage\Repository\ChannelRepository;
 use PressQueue\Storage\Repository\ConnectionRepository;
 use PressQueue\Storage\Repository\DecisionRepository;
@@ -67,12 +69,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		wp_set_post_terms( $post_id, array( $child_id ), 'category' );
 		update_post_meta( $post_id, '_pressqueue_fixture_lane', 'evergreen' );
 
-		$rule = ( new RuleRepository() )->create(
-			array_merge(
-				$this->excludeRuleInput( (int) $parent_id ),
-				array( 'enabled' => true )
-			)
-		);
+		$rule = $this->createEnabledRule( $this->excludeRuleInput( (int) $parent_id ) );
 
 		$result = $this->planPost( $post_id, array( $rule ) );
 		$fields = array_column( $result->decisions[0]['reasons'], 'field' );
@@ -85,14 +82,28 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
 	}
 
+	public function test_matching_preview_includes_skipped_nonmatching_rule_explanation(): void {
+		$matching = $this->createEnabledRule( $this->excludePostTypeRuleInput( 'post', 5, 'Exclude posts' ) );
+		$skipped  = $this->createEnabledRule( $this->excludePostTypeRuleInput( 'page', 10, 'Exclude pages' ) );
+		$post_id  = $this->publishedPost();
+		$rules    = array( $matching, $skipped );
+		$normalizer = new EventNormalizer();
+		$event      = $normalizer->from_post_id( $post_id, 'preview', 'integration', 'first_publish', $normalizer->metadata_allowlist_for_rules( $rules ) );
+
+		self::assertNotNull( $event );
+
+		$result = ( new Planner() )->preview( $event, $rules );
+
+		self::assertSame( array( 'excluded', 'skipped' ), array_column( $result->decisions, 'result' ) );
+		self::assertSame( $skipped->public_id, $result->decisions[1]['rule_public_id'] );
+		self::assertSame( 'not_matched', $result->decisions[1]['reasons'][0]['result'] );
+		self::assertSame( 0, $this->rowCount( Schema::DECISIONS ) );
+		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
 	public function test_include_planning_creates_idempotent_dry_run_delivery_and_live_identity_separately(): void {
 		$destination = $this->enabledDestination();
-		$rule        = ( new RuleRepository() )->create(
-			array_merge(
-				$this->includeRuleInput( $destination['channel_public_id'] ),
-				array( 'enabled' => true )
-			)
-		);
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
 		$post_id     = $this->publishedPost( 'Launch Post' );
 		$result      = $this->planPost( $post_id, array( $rule ) );
 
@@ -120,12 +131,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 	public function test_kill_switch_creates_held_live_rows_when_dry_run_is_off(): void {
 		$destination = $this->enabledDestination();
-		$rule        = ( new RuleRepository() )->create(
-			array_merge(
-				$this->includeRuleInput( $destination['channel_public_id'] ),
-				array( 'enabled' => true )
-			)
-		);
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
 		$settings    = new SettingsRepository();
 		$settings->set_dry_run_enabled( false );
 		$settings->set_kill_switch_enabled( true );
@@ -139,24 +145,17 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 	public function test_inclusion_policy_error_blocks_same_destination_delivery(): void {
 		$destination = $this->enabledDestination();
-		$rules       = new RuleRepository();
-		$error_rule  = $rules->create(
+		$error_rule  = $this->createEnabledRule(
 			array_merge(
 				$this->includeRuleInput( $destination['channel_public_id'], 5 ),
 				array(
 					'condition_tree'         => $this->metadataExistsCondition( '_pressqueue_non_scalar' ),
 					'custom_field_allowlist' => array( '_pressqueue_non_scalar' ),
-					'enabled'                => true,
 					'name'                   => 'Broken include',
 				)
 			)
 		);
-		$valid_rule  = $rules->create(
-			array_merge(
-				$this->includeRuleInput( $destination['channel_public_id'], 10 ),
-				array( 'enabled' => true )
-			)
-		);
+		$valid_rule  = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'], 10 ) );
 		$post_id     = $this->publishedPost();
 		update_post_meta( $post_id, '_pressqueue_non_scalar', array( 'bad' ) );
 
@@ -176,12 +175,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 	public function test_explicit_post_exclusion_wins_before_invalid_template_rendering(): void {
 		$destination = $this->enabledDestination();
-		$rule        = ( new RuleRepository() )->create(
-			array_merge(
-				$this->includeRuleInput( $destination['channel_public_id'], 100, '{{ unknown_tag }}' ),
-				array( 'enabled' => true )
-			)
-		);
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'], 100, '{{ unknown_tag }}' ) );
 		$post_id     = $this->publishedPost();
 		update_post_meta( $post_id, '_pressqueue_policy', 'exclude' );
 
@@ -196,12 +190,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 	public function test_explicit_post_exclusion_wins_before_malformed_stored_rule(): void {
 		$destination = $this->enabledDestination();
-		$rule        = ( new RuleRepository() )->create(
-			array_merge(
-				$this->includeRuleInput( $destination['channel_public_id'] ),
-				array( 'enabled' => true )
-			)
-		);
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
 		$post_id     = $this->publishedPost();
 		update_post_meta( $post_id, '_pressqueue_policy', 'exclude' );
 		$this->corruptRuleDocument( $rule->public_id, 'condition_tree_json', '{bad json' );
@@ -217,12 +206,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 	public function test_malformed_stored_rule_records_policy_error_and_first_publish_metadata(): void {
 		$destination = $this->enabledDestination();
-		$rule        = ( new RuleRepository() )->create(
-			array_merge(
-				$this->includeRuleInput( $destination['channel_public_id'] ),
-				array( 'enabled' => true )
-			)
-		);
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
 		$post_id     = $this->publishedPost();
 		$this->corruptRuleDocument( $rule->public_id, 'condition_tree_json', '{bad json' );
 
@@ -240,19 +224,8 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 	public function test_matching_include_rules_select_one_winner_per_destination(): void {
 		$destination = $this->enabledDestination();
-		$rules       = new RuleRepository();
-		$slow_rule   = $rules->create(
-			array_merge(
-				$this->includeRuleInput( $destination['channel_public_id'], 20, 'Slow {{ title }}' ),
-				array( 'enabled' => true )
-			)
-		);
-		$fast_rule   = $rules->create(
-			array_merge(
-				$this->includeRuleInput( $destination['channel_public_id'], 10, 'Fast {{ title }}' ),
-				array( 'enabled' => true )
-			)
-		);
+		$slow_rule   = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'], 20, 'Slow {{ title }}' ) );
+		$fast_rule   = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'], 10, 'Fast {{ title }}' ) );
 
 		$result  = $this->planPost( $this->publishedPost(), array( $slow_rule, $fast_rule ) );
 		$results = array_column( $result->decisions, 'result' );
@@ -270,16 +243,10 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 	public function test_disabled_channel_is_skipped_and_disabled_connection_is_policy_error(): void {
 		$connections = new ConnectionRepository();
 		$channels    = new ChannelRepository();
-		$rules       = new RuleRepository();
 
 		$enabled_connection = $connections->create( 'buffer', 'Enabled account', array(), true );
 		$disabled_channel   = $channels->create( $enabled_connection->public_id, 'buffer', 'disabled-channel', 'mastodon', array( 'name' => 'Disabled' ), $this->channelCapabilities(), false, '2026-08-24 12:00:00', 'org_1', 'available' );
-		$disabled_rule      = $rules->create(
-			array_merge(
-				$this->includeRuleInput( $disabled_channel->public_id ),
-				array( 'enabled' => true )
-			)
-		);
+		$disabled_rule      = $this->createEnabledRule( $this->includeRuleInput( $disabled_channel->public_id ) );
 
 		$disabled_result = $this->planPost( $this->publishedPost(), array( $disabled_rule ) );
 		self::assertSame( 'skipped', $disabled_result->decisions[0]['result'] );
@@ -287,12 +254,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 		$disabled_connection = $connections->create( 'buffer', 'Disabled account', array(), false );
 		$enabled_channel     = $channels->create( $disabled_connection->public_id, 'buffer', 'enabled-channel', 'mastodon', array( 'name' => 'Enabled' ), $this->channelCapabilities(), true, '2026-08-24 12:00:00', 'org_1', 'available' );
-		$connection_rule     = $rules->create(
-			array_merge(
-				$this->includeRuleInput( $enabled_channel->public_id ),
-				array( 'enabled' => true )
-			)
-		);
+		$connection_rule     = $this->createEnabledRule( $this->includeRuleInput( $enabled_channel->public_id ) );
 
 		$connection_result = $this->planPost( $this->publishedPost(), array( $connection_rule ) );
 		self::assertSame( 'policy_error', $connection_result->decisions[0]['result'] );
@@ -302,7 +264,6 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 	public function test_unsupported_channel_capability_is_explainable_policy_error(): void {
 		$destination = $this->enabledDestination();
 		$channels    = new ChannelRepository();
-		$rules       = new RuleRepository();
 		$channel     = $channels->create(
 			$destination['connection_public_id'],
 			'buffer',
@@ -322,12 +283,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 			'org_1',
 			'available'
 		);
-		$rule        = $rules->create(
-			array_merge(
-				$this->includeRuleInput( $channel->public_id ),
-				array( 'enabled' => true )
-			)
-		);
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $channel->public_id ) );
 
 		$result = $this->planPost( $this->publishedPost(), array( $rule ) );
 		$reason = $result->decisions[0]['reasons'][ count( $result->decisions[0]['reasons'] ) - 1 ];
@@ -343,12 +299,11 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 	public function test_invalid_taxonomy_configuration_is_policy_error(): void {
 		$destination = $this->enabledDestination();
-		$rule        = ( new RuleRepository() )->create(
+		$rule        = $this->createEnabledRule(
 			array_merge(
 				$this->includeRuleInput( $destination['channel_public_id'] ),
 				array(
 					'condition_tree' => $this->taxonomyCondition( 'pressqueue_missing_taxonomy', array( 'missing-term' ) ),
-					'enabled'        => true,
 				)
 			)
 		);
@@ -374,12 +329,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 	public function test_irrelevant_publish_update_is_ignored_after_fingerprint_recorded(): void {
 		$destination = $this->enabledDestination();
-		$rule        = ( new RuleRepository() )->create(
-			array_merge(
-				$this->includeRuleInput( $destination['channel_public_id'] ),
-				array( 'enabled' => true )
-			)
-		);
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
 		$post_id     = $this->publishedPost();
 
 		EventCollector::capture_status_transition( 'publish', 'draft', get_post( $post_id ) );
@@ -394,6 +344,77 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 		self::assertSame( 1, $this->rowCount( Schema::DECISIONS ) );
 		self::assertSame( 1, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
+	public function test_upgraded_control_only_update_initializes_split_fingerprints_without_planning(): void {
+		$user_id = self::factory()->user->create( array( 'role' => 'administrator' ) );
+		wp_set_current_user( $user_id );
+		Capabilities::grant_to_administrators( false );
+
+		$destination = $this->enabledDestination();
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
+		$post_id     = $this->publishedPost();
+		$normalizer  = new EventNormalizer();
+		$before      = $normalizer->from_post_id( $post_id, 'runtime', 'integration', 'update', $normalizer->metadata_allowlist_for_rules( array( $rule ) ) );
+
+		self::assertNotNull( $before );
+
+		update_post_meta( $post_id, EventNormalizer::META_LAST_RUNTIME_FINGERPRINT, $before->legacy_runtime_fingerprint );
+		update_post_meta(
+			$post_id,
+			PostControlMetadata::META_KEY,
+			PostControlMetadata::encoded(
+				array(
+					'channels'       => array(
+						'channel_public_ids' => array( $destination['channel_public_id'] ),
+						'mode'               => 'override',
+					),
+					'policy'         => 'inherit',
+					'schema_version' => 1,
+				)
+			)
+		);
+
+		EventCollector::capture_save( $post_id, get_post( $post_id ), true );
+		EventCollector::finalize();
+
+		self::assertSame( 0, $this->rowCount( Schema::DECISIONS ) );
+		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+		self::assertNotSame( '', get_post_meta( $post_id, EventNormalizer::META_LAST_TRIGGER_FINGERPRINT, true ) );
+		self::assertNotSame( '', get_post_meta( $post_id, EventNormalizer::META_LAST_DELIVERY_REVISION_FINGERPRINT, true ) );
+	}
+
+	public function test_channel_override_restricts_matching_rule_destinations(): void {
+		$allowed  = $this->enabledDestination( 'remote-channel-allowed' );
+		$channels = new ChannelRepository();
+		$omitted  = $channels->create( $allowed['connection_public_id'], 'buffer', 'remote-channel-omitted', 'mastodon', array( 'name' => 'Omitted Social' ), $this->channelCapabilities(), false, '2026-08-24 12:00:00', 'org_1', 'available' );
+		$omitted  = $channels->set_enabled_if_current( $omitted->public_id, true, $omitted->updated_at->format( 'Y-m-d H:i:s' ) );
+		$rule     = $this->createEnabledRule( $this->includeRuleInput( $omitted->public_id ) );
+		$post_id  = $this->publishedPost();
+
+		update_post_meta(
+			$post_id,
+			PostControlMetadata::META_KEY,
+			PostControlMetadata::encoded(
+				array(
+					'channels'       => array(
+						'channel_public_ids' => array( $allowed['channel_public_id'] ),
+						'mode'               => 'override',
+					),
+					'policy'         => 'inherit',
+					'schema_version' => 1,
+				)
+			)
+		);
+
+		$result = $this->planPost( $post_id, array( $rule ) );
+		$codes  = array_merge( $result->decisions[0]['reasons'], $result->decisions[1]['reasons'] );
+		$codes  = array_column( $codes, 'code' );
+
+		self::assertSame( array(), $result->deliveries );
+		self::assertSame( array( 'skipped', 'skipped' ), array_column( $result->decisions, 'result' ) );
+		self::assertContains( 'omitted_by_channel_override', $codes );
+		self::assertContains( 'requested_channel_not_selected_by_rules', $codes );
 	}
 
 	public function test_preview_confirmation_rejects_stale_rule_version(): void {
@@ -425,11 +446,25 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Create a rule and enable the exact previewed version.
+	 *
+	 * @param array<string,mixed> $input Rule input.
+	 * @return RuleRecord
+	 */
+	private function createEnabledRule( array $input ): RuleRecord {
+		$rules     = new RuleRepository();
+		$rule      = $rules->create( $input );
+		$previewed = $rules->mark_version_previewed( $rule->public_id, $rule->lock_version, $rule->version );
+
+		return $rules->enable_after_preview( $previewed->public_id, $previewed->lock_version );
+	}
+
+	/**
 	 * Create an enabled local destination.
 	 *
 	 * @return array{connection_public_id:string,channel_public_id:string}
 	 */
-	private function enabledDestination(): array {
+	private function enabledDestination( string $remote_channel_id = 'remote-channel-1' ): array {
 		$connections = new ConnectionRepository();
 		$channels    = new ChannelRepository();
 		$envelope    = CanonicalJson::encode_object( array( 'fixture' => 'encrypted' ) );
@@ -443,7 +478,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 		$connection = $connections->complete_sync_success( $connection->public_id, $lease, 'acct_1', 'org_1', $account );
 		$connection = $connections->enable( $connection->public_id );
-		$channel    = $channels->create( $connection->public_id, 'buffer', 'remote-channel-1', 'mastodon', array( 'name' => 'Example Social' ), $this->channelCapabilities(), false, '2026-08-24 12:00:00', 'org_1', 'available' );
+		$channel    = $channels->create( $connection->public_id, 'buffer', $remote_channel_id, 'mastodon', array( 'name' => 'Example Social' ), $this->channelCapabilities(), false, '2026-08-24 12:00:00', 'org_1', 'available' );
 		$channel    = $channels->set_enabled_if_current( $channel->public_id, true, $channel->updated_at->format( 'Y-m-d H:i:s' ) );
 
 		return array(
@@ -641,18 +676,48 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Return post type condition tree.
+	 * Return a post-type exclusion rule input.
 	 *
+	 * @param string $post_type Post type.
+	 * @param int    $priority Priority.
+	 * @param string $name Rule name.
 	 * @return array<string,mixed>
 	 */
-	private function postTypeCondition(): array {
+	private function excludePostTypeRuleInput( string $post_type, int $priority, string $name ): array {
+		return array(
+			'condition_tree'         => $this->postTypeCondition( $post_type ),
+			'custom_field_allowlist' => array(),
+			'destination_set'        => array(
+				'schema_version' => 1,
+				'scope'          => 'all',
+			),
+			'effect'                 => 'exclude',
+			'inline_template'        => array(
+				'custom_field_allowlist' => array(),
+				'message'                => '{{ title }}',
+				'schema_version'         => 1,
+			),
+			'name'                   => $name,
+			'priority'               => $priority,
+			'schedule_policy'        => 'immediate',
+			'triggers'               => array( 'first_publish' ),
+		);
+	}
+
+	/**
+	 * Return post type condition tree.
+	 *
+	 * @param string $post_type Post type.
+	 * @return array<string,mixed>
+	 */
+	private function postTypeCondition( string $post_type = 'post' ): array {
 		return array(
 			'children'       => array(
 				array(
 					'condition' => 'post_type',
 					'operator'  => 'equals',
 					'type'      => 'condition',
-					'value'     => 'post',
+					'value'     => $post_type,
 				),
 			),
 			'operator'       => 'ALL',

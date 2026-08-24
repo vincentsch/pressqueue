@@ -52,7 +52,6 @@ final class RuleRepository extends AbstractRepository {
 	 */
 	public function create( array $input ): RuleRecord {
 		$documents = $this->prepare_documents( $input );
-		$enabled   = (bool) ( $input['enabled'] ?? false );
 		$now       = StorageValidator::now();
 		$table     = $this->rules_table();
 
@@ -73,7 +72,7 @@ final class RuleRepository extends AbstractRepository {
 						'destination_set_json'        => $documents['destination_set_json'],
 						'custom_field_allowlist_json' => $documents['custom_field_allowlist_json'],
 						'schedule_policy'             => $documents['schedule_policy'],
-						'enabled'                     => $enabled ? 1 : 0,
+						'enabled'                     => 0,
 						'last_previewed_version'      => null,
 						'version'                     => 1,
 						'lock_version'                => 1,
@@ -136,7 +135,6 @@ final class RuleRepository extends AbstractRepository {
 		);
 
 		$documents = $this->prepare_documents( $merged );
-		$enabled   = array_key_exists( 'enabled', $changes ) ? (bool) $changes['enabled'] : $current->enabled;
 
 		$current_documents = $this->prepare_documents(
 			array(
@@ -153,8 +151,13 @@ final class RuleRepository extends AbstractRepository {
 		);
 
 		$behavior_changed = $this->behavior_changed( $current_documents, $documents );
+		$enabled          = $behavior_changed ? false : ( array_key_exists( 'enabled', $changes ) ? (bool) $changes['enabled'] : $current->enabled );
 		$display_changed  = $current->name !== $documents['name'];
 		$enabled_changed  = $current->enabled !== $enabled;
+
+		if ( $enabled && ! $current->enabled && $current->last_previewed_version !== $current->version ) {
+			throw new ValidationException( 'Rule must be previewed before it can be enabled.' );
+		}
 
 		if ( ! $behavior_changed && ! $display_changed && ! $enabled_changed ) {
 			return $current;
@@ -532,7 +535,7 @@ final class RuleRepository extends AbstractRepository {
 						'value'     => 'post',
 					),
 				),
-				'operator'       => 'ALL',
+				'mode'           => 'ALL',
 				'schema_version' => 1,
 				'type'           => 'group',
 			),
