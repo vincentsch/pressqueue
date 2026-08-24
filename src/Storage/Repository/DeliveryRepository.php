@@ -143,6 +143,23 @@ final class DeliveryRepository extends AbstractRepository {
 	}
 
 	/**
+	 * Return deliveries for an event.
+	 *
+	 * @param string $event_key Event key.
+	 * @return array<int,DeliveryRecord>
+	 */
+	public function find_by_event_key( string $event_key ): array {
+		StorageValidator::assert_hash( $event_key );
+
+		$rows = $this->database->get_results(
+			'SELECT * FROM `' . $this->deliveries_table() . '` WHERE event_key = %s ORDER BY id ASC',
+			array( $event_key )
+		);
+
+		return array_map( array( $this, 'hydrate' ), $rows );
+	}
+
+	/**
 	 * Prepare delivery fields.
 	 *
 	 * @param array<string,mixed> $input Delivery values.

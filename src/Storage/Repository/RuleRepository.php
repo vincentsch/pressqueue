@@ -176,6 +176,7 @@ final class RuleRepository extends AbstractRepository {
 				'custom_field_allowlist_json' => $documents['custom_field_allowlist_json'],
 				'schedule_policy'             => $documents['schedule_policy'],
 				'enabled'                     => $enabled ? 1 : 0,
+				'last_previewed_version'      => $behavior_changed ? null : $current->last_previewed_version,
 				'version'                     => $new_version,
 				'lock_version'                => $new_lock_version,
 				'updated_at'                  => StorageValidator::now(),
@@ -214,7 +215,20 @@ final class RuleRepository extends AbstractRepository {
 			array( $public_id )
 		);
 
-		return $row ? $this->hydrate( $row ) : null;
+		return $row ? $this->safe_hydrate( $row ) : null;
+	}
+
+	/**
+	 * Return all rules ordered for administration.
+	 *
+	 * @return array<int,RuleRecord>
+	 */
+	public function find_all(): array {
+		$rows = $this->database->get_results(
+			'SELECT * FROM `' . $this->rules_table() . '` ORDER BY priority ASC, public_id ASC'
+		);
+
+		return array_map( array( $this, 'safe_hydrate' ), $rows );
 	}
 
 	/**
@@ -227,7 +241,125 @@ final class RuleRepository extends AbstractRepository {
 			'SELECT * FROM `' . $this->rules_table() . '` WHERE enabled = 1 ORDER BY priority ASC, public_id ASC'
 		);
 
-		return array_map( array( $this, 'hydrate' ), $rows );
+		return array_map( array( $this, 'safe_hydrate' ), $rows );
+	}
+
+	/**
+	 * Return enabled rules that include a trigger.
+	 *
+	 * @param string $trigger Trigger.
+	 * @return array<int,RuleRecord>
+	 */
+	public function find_enabled_for_trigger( string $trigger ): array {
+		StorageEnums::assert_rule_trigger( $trigger );
+
+		return array_values(
+			array_filter(
+				$this->find_enabled(),
+				static function ( RuleRecord $rule ) use ( $trigger ): bool {
+					return in_array( $trigger, $rule->triggers['triggers'] ?? array(), true );
+				}
+			)
+		);
+	}
+
+	/**
+	 * Mark one exact rule version as previewed.
+	 *
+	 * @param string $public_id Rule public ID.
+	 * @param int    $expected_lock_version Expected lock version.
+	 * @param int    $expected_version Expected rule version.
+	 * @return RuleRecord
+	 */
+	public function mark_version_previewed( string $public_id, int $expected_lock_version, int $expected_version ): RuleRecord {
+		$current = $this->find_by_public_id( $public_id );
+
+		if ( null === $current ) {
+			throw new StorageException( 'Rule does not exist.' );
+		}
+
+		if ( $current->lock_version !== $expected_lock_version || $current->version !== $expected_version ) {
+			throw new StaleRecordException( 'Rule version is stale.' );
+		}
+
+		$updated = $this->database->update_rows(
+			$this->rules_table(),
+			array(
+				'last_previewed_version' => $expected_version,
+				'updated_at'             => StorageValidator::now(),
+			),
+			array(
+				'public_id'    => $current->public_id,
+				'lock_version' => $expected_lock_version,
+				'version'      => $expected_version,
+			),
+			self::FORMATS
+		);
+
+		if ( 0 === $updated ) {
+			throw new StaleRecordException( 'Rule version is stale.' );
+		}
+
+		$record = $this->find_by_public_id( $public_id );
+
+		if ( null === $record ) {
+			throw new StorageException( 'Previewed rule could not be loaded.' );
+		}
+
+		return $record;
+	}
+
+	/**
+	 * Enable a rule only after the current version has been previewed.
+	 *
+	 * @param string $public_id Rule public ID.
+	 * @param int    $expected_lock_version Expected lock version.
+	 * @return RuleRecord
+	 */
+	public function enable_after_preview( string $public_id, int $expected_lock_version ): RuleRecord {
+		$current = $this->find_by_public_id( $public_id );
+
+		if ( null === $current ) {
+			throw new StorageException( 'Rule does not exist.' );
+		}
+
+		if ( $current->lock_version !== $expected_lock_version ) {
+			throw new StaleRecordException( 'Rule lock version is stale.' );
+		}
+
+		if ( $current->last_previewed_version !== $current->version ) {
+			throw new ValidationException( 'Rule must be previewed before it can be enabled.' );
+		}
+
+		if ( $current->enabled ) {
+			return $current;
+		}
+
+		$updated = $this->database->update_rows(
+			$this->rules_table(),
+			array(
+				'enabled'      => 1,
+				'lock_version' => $current->lock_version + 1,
+				'updated_at'   => StorageValidator::now(),
+			),
+			array(
+				'public_id'    => $current->public_id,
+				'lock_version' => $expected_lock_version,
+			),
+			self::FORMATS
+		);
+
+		if ( 0 === $updated ) {
+			throw new StaleRecordException( 'Rule lock version is stale.' );
+		}
+
+		$record = $this->find_by_public_id( $public_id );
+
+		if ( null === $record ) {
+			throw new StorageException( 'Enabled rule could not be loaded.' );
+		}
+
+		return $record;
 	}
 
 	/**
@@ -350,5 +482,136 @@ final class RuleRepository extends AbstractRepository {
 			StorageValidator::parse_required_date_time( (string) $row->created_at ),
 			StorageValidator::parse_required_date_time( (string) $row->updated_at )
 		);
+	}
+
+	/**
+	 * Hydrate a rule while preserving malformed stored rows for fail-closed planning.
+	 *
+	 * @param object $row Database row.
+	 * @return RuleRecord
+	 */
+	private function safe_hydrate( object $row ): RuleRecord {
+		try {
+			return $this->hydrate( $row );
+		} catch ( ValidationException $exception ) {
+			return $this->hydrate_malformed( $row, $exception->getMessage() );
+		}
+	}
+
+	/**
+	 * Hydrate a malformed stored rule with valid placeholders and an error marker.
+	 *
+	 * @param object $row Database row.
+	 * @param string $reason Validation failure.
+	 * @return RuleRecord
+	 */
+	private function hydrate_malformed( object $row, string $reason ): RuleRecord {
+		$triggers  = $this->safe_triggers( (string) $row->triggers_json );
+		$effect    = (string) $row->effect;
+		$allowlist = $this->safe_custom_field_allowlist( (string) $row->custom_field_allowlist_json );
+
+		if ( ! in_array( $effect, StorageEnums::RULE_EFFECTS, true ) ) {
+			$effect = 'include';
+		}
+
+		$destination_set = $this->safe_destination_set( $effect, (string) $row->destination_set_json );
+
+		return new RuleRecord(
+			(int) $row->id,
+			(string) $row->public_id,
+			'' === (string) $row->name ? 'Malformed rule' : (string) $row->name,
+			$effect,
+			(int) $row->priority,
+			$triggers,
+			array(
+				'children'       => array(
+					array(
+						'condition' => 'post_type',
+						'operator'  => 'equals',
+						'type'      => 'condition',
+						'value'     => 'post',
+					),
+				),
+				'operator'       => 'ALL',
+				'schema_version' => 1,
+				'type'           => 'group',
+			),
+			array(
+				'custom_field_allowlist' => $allowlist,
+				'message'                => '{{ title }}',
+				'schema_version'         => 1,
+			),
+			$destination_set,
+			$allowlist,
+			'immediate',
+			'1' === (string) $row->enabled,
+			null === $row->last_previewed_version ? null : (int) $row->last_previewed_version,
+			(int) $row->version,
+			(int) $row->lock_version,
+			StorageValidator::parse_required_date_time( (string) $row->created_at ),
+			StorageValidator::parse_required_date_time( (string) $row->updated_at ),
+			$reason
+		);
+	}
+
+	/**
+	 * Decode triggers or match every runtime trigger when the trigger document is malformed.
+	 *
+	 * @param string $json Stored triggers JSON.
+	 * @return array<string,mixed>
+	 */
+	private function safe_triggers( string $json ): array {
+		try {
+			$triggers = CanonicalJson::decode_object( $json );
+			RuleDocuments::triggers( $triggers['triggers'] ?? array() );
+
+			return $triggers;
+		} catch ( ValidationException $exception ) {
+			unset( $exception );
+
+			return array(
+				'schema_version' => 1,
+				'triggers'       => StorageEnums::RULE_TRIGGERS,
+			);
+		}
+	}
+
+	/**
+	 * Decode a custom field allowlist or fall back to no custom fields.
+	 *
+	 * @param string $json Stored allowlist JSON.
+	 * @return array<int,string>
+	 */
+	private function safe_custom_field_allowlist( string $json ): array {
+		try {
+			return RuleDocuments::custom_field_allowlist( CanonicalJson::decode_list( $json ) );
+		} catch ( ValidationException $exception ) {
+			unset( $exception );
+
+			return array();
+		}
+	}
+
+	/**
+	 * Decode a destination set or fall back to the closed shape for the rule effect.
+	 *
+	 * @param string $effect Rule effect.
+	 * @param string $json Stored destination set JSON.
+	 * @return array<string,mixed>
+	 */
+	private function safe_destination_set( string $effect, string $json ): array {
+		try {
+			return RuleDocuments::destination_set( $effect, CanonicalJson::decode_object( $json ) );
+		} catch ( ValidationException $exception ) {
+			unset( $exception );
+
+			return 'include' === $effect ? array(
+				'destinations'   => array(),
+				'schema_version' => 1,
+			) : array(
+				'schema_version' => 1,
+				'scope'          => 'all',
+			);
+		}
 	}
 }

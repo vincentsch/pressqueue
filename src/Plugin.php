@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace PressQueue;
 
+use PressQueue\Admin\AdminScreens;
+use PressQueue\Planning\EventCollector;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\SchemaMigrator;
@@ -73,6 +75,9 @@ final class Plugin {
 		if ( ! function_exists( 'add_action' ) ) {
 			return;
 		}
+
+		EventCollector::register_hooks();
+		AdminScreens::register_hooks();
 
 		if ( Database::has_global_database() ) {
 			add_action( 'pressqueue_schema_upgrade', array( SchemaMigrator::class, 'migrate_current_site' ), 10, 1 );

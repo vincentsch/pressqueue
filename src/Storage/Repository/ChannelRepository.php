@@ -148,6 +148,19 @@ final class ChannelRepository extends AbstractRepository {
 	}
 
 	/**
+	 * Return all local channels ordered for administration.
+	 *
+	 * @return array<int,ChannelRecord>
+	 */
+	public function find_all(): array {
+		$rows = $this->database->get_results(
+			'SELECT * FROM `' . $this->channels_table() . '` ORDER BY provider ASC, service ASC, public_id ASC'
+		);
+
+		return array_map( array( $this, 'hydrate' ), $rows );
+	}
+
+	/**
 	 * Find existence and enabled status for a destination.
 	 *
 	 * @param string $channel_public_id Channel public ID.

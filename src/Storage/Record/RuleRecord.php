@@ -39,6 +39,7 @@ final class RuleRecord {
 	public int $lock_version;
 	public DateTimeImmutable $created_at;
 	public DateTimeImmutable $updated_at;
+	public ?string $invalid_reason;
 
 	/**
 	 * Constructor.
@@ -60,6 +61,7 @@ final class RuleRecord {
 	 * @param int                 $lock_version Optimistic lock version.
 	 * @param DateTimeImmutable   $created_at Creation timestamp.
 	 * @param DateTimeImmutable   $updated_at Update timestamp.
+	 * @param string|null         $invalid_reason Stored validation failure.
 	 */
 	public function __construct(
 		int $id,
@@ -78,7 +80,8 @@ final class RuleRecord {
 		int $version,
 		int $lock_version,
 		DateTimeImmutable $created_at,
-		DateTimeImmutable $updated_at
+		DateTimeImmutable $updated_at,
+		?string $invalid_reason = null
 	) {
 		$this->id                     = $id;
 		$this->public_id              = $public_id;
@@ -97,5 +100,6 @@ final class RuleRecord {
 		$this->lock_version           = $lock_version;
 		$this->created_at             = $created_at;
 		$this->updated_at             = $updated_at;
+		$this->invalid_reason         = $invalid_reason;
 	}
 }

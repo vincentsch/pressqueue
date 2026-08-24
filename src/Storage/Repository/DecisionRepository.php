@@ -142,6 +142,33 @@ final class DecisionRepository extends AbstractRepository {
 	}
 
 	/**
+	 * Return recent decisions ordered by creation.
+	 *
+	 * @param int $limit Limit.
+	 * @param int $offset Offset.
+	 * @return array<int,DecisionRecord>
+	 */
+	public function find_recent( int $limit = 50, int $offset = 0 ): array {
+		$limit  = max( 1, min( 100, $limit ) );
+		$offset = max( 0, $offset );
+		$rows   = $this->database->get_results(
+			'SELECT * FROM `' . $this->decisions_table() . '` ORDER BY created_at DESC, id DESC LIMIT %d OFFSET %d',
+			array( $limit, $offset )
+		);
+
+		return array_map( array( $this, 'hydrate' ), $rows );
+	}
+
+	/**
+	 * Count stored decisions.
+	 *
+	 * @return int
+	 */
+	public function count_all(): int {
+		return (int) $this->database->get_var( 'SELECT COUNT(*) FROM `' . $this->decisions_table() . '`' );
+	}
+
+	/**
 	 * Prepare decision fields.
 	 *
 	 * @param array<string,mixed> $input Decision values.
