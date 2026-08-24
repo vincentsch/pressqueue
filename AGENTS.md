@@ -19,6 +19,17 @@ Product and implementation planning lives in `.vroni/wip/`.
 - `notes/vision.md`
 - `notes/user-stories.md`
 - `notes/architecture.md`
+- `notes/agents.md`
+- `notes/delivery-governance.md`
+- `notes/provider-and-delivery-contracts.md`
+- `notes/state-machines.md`
+- `notes/security-and-privacy.md`
+- `notes/qa.md`
+- `notes/tools.md`
+- `notes/releases.md`
+- `notes/operations.md`
+- `notes/tickets.md`
+- `notes/strategy.md`
 - `projects/`
 - `tickets/inbox/`
 
