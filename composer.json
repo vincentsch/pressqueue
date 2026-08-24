@@ -1,0 +1,66 @@
+{
+  "name": "vincentsch/pressqueue",
+  "description": "Conditional social publishing control plane for WordPress.",
+  "type": "wordpress-plugin",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Vincent Schmalbach"
+    }
+  ],
+  "require": {
+    "php": ">=8.1"
+  },
+  "require-dev": {
+    "php-stubs/wordpress-stubs": "^6.8 || ^7.0",
+    "phpstan/phpstan": "^2.0",
+    "phpunit/phpunit": "^9.6",
+    "szepeviktor/phpstan-wordpress": "^2.0",
+    "wp-cli/wp-cli-bundle": "^2.11",
+    "wp-coding-standards/wpcs": "^3.4",
+    "yoast/phpunit-polyfills": "^3.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "PressQueue\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "PressQueue\\Tests\\Integration\\": "tests/integration/",
+      "PressQueue\\Tests\\Unit\\": "tests/unit/"
+    }
+  },
+  "scripts": {
+    "test:unit": "phpunit --configuration phpunit.unit.xml.dist",
+    "test:integration": "phpunit --configuration phpunit.integration.xml.dist",
+    "lint:phpcs": "phpcs --standard=phpcs.xml.dist",
+    "analyse": "phpstan analyse --configuration=phpstan.neon.dist",
+    "plugin-check": "php tools/run-plugin-check.php",
+    "audit": "composer audit --locked",
+    "smoke:runtime": "php tools/runtime-guard-smoke.php wordpress && php tools/runtime-guard-smoke.php network && php tools/runtime-guard-smoke.php package",
+    "package:smoke": "php tools/package-smoke.php",
+    "ci": [
+      "@test:unit",
+      "@test:integration",
+      "@lint:phpcs",
+      "@analyse",
+      "@audit",
+      "@smoke:runtime",
+      "@package:smoke",
+      "@plugin-check"
+    ]
+  },
+  "config": {
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    },
+    "optimize-autoloader": true,
+    "platform": {
+      "php": "8.1.0"
+    },
+    "sort-packages": true
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

@@ -1,6 +1,6 @@
 # PressQueue
 
-PressQueue is a planned open-source WordPress plugin for conditionally
+PressQueue is an open-source WordPress plugin skeleton for conditionally
 publishing and scheduling WordPress content through social publishing
 providers.
 
@@ -17,8 +17,9 @@ The first provider will be Buffer. The intended product combines:
 
 ## Status
 
-PressQueue is in planning. This repository does not contain an installable
-WordPress plugin yet.
+PressQueue has an installable guarded plugin skeleton and local quality gate.
+It does not yet contain provider connections, rules, previews, storage,
+background delivery, or live social publishing.
 
 The project will begin privately and be made public when its first release is
 tested, documented, license-clean, and useful.
@@ -43,3 +44,32 @@ assets may be copied into this project.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Development
+
+Run the default local gate with:
+
+```bash
+composer install
+composer run ci
+```
+
+Prerequisites:
+
+- PHP 8.1 or newer with `bcmath`, `curl`, `dom`, `intl`, `json`, `mbstring`,
+  `mysqli`, and `zip`.
+- Composer 2.
+- MySQL or MariaDB for WordPress integration tests.
+- The WordPress core test suite. Install it with
+  `bash tools/install-wp-tests.sh pressqueue_tests root '' 127.0.0.1 6.8.8`,
+  then set `WP_TESTS_DIR` if you install it somewhere other than `/tmp`.
+- A disposable WordPress install for `composer run package:smoke`. Set
+  `PACKAGE_SMOKE_WP_PATH` or `WP_PATH` to that WordPress path.
+- Plugin Check 2.1.0 for `composer run plugin-check`. Set `WP_PATH` to the
+  disposable WordPress path and `PLUGIN_CHECK_PATH` when `plugin-check/cli.php`
+  is not under `wp-content/plugins/plugin-check/`.
+  Run `composer run package:smoke` first so the private package is installed as
+  the `pressqueue` plugin slug.
+
+The package smoke artifact is private local evidence and is not a release
+package.

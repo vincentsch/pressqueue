@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+	bootstrap="tests/unit/bootstrap.php"
+	colors="true"
+	verbose="true"
+	failOnWarning="true"
+	failOnRisky="true"
+>
+	<testsuites>
+		<testsuite name="PressQueue unit tests">
+			<directory>tests/unit</directory>
+		</testsuite>
+	</testsuites>
+	<coverage processUncoveredFiles="true">
+		<include>
+			<directory suffix=".php">src</directory>
+			<file>pressqueue.php</file>
+		</include>
+	</coverage>
+</phpunit>

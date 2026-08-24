@@ -2,10 +2,10 @@
 /.phpunit.cache/
 /.phpunit.result.cache
 /.vscode/
-/build/
+/build/*
+!/build/.gitkeep
 /coverage/
 /vendor/
-composer.lock
 node_modules/
 npm-debug.log*
 phpcs.xml

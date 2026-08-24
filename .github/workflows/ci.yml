@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  unit-static:
+    name: Unit and static checks on PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php:
+          - '8.1'
+          - '8.2'
+          - '8.3'
+          - '8.4'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: bcmath, curl, dom, intl, json, mbstring, mysqli, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Run unit tests
+        run: composer run test:unit
+
+      - name: Run PHPCS
+        run: composer run lint:phpcs
+
+      - name: Run PHPStan
+        run: composer run analyse
+
+      - name: Audit dependencies
+        run: composer run audit
+
+      - name: Run runtime guard smoke
+        run: composer run smoke:runtime
+
+  integration:
+    name: WordPress ${{ matrix.wordpress }} integration on PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php:
+          - '8.1'
+          - '8.4'
+        wordpress:
+          - '6.8.8'
+          - '7.1'
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: pressqueue_tests
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: bcmath, curl, dom, intl, json, mbstring, mysqli, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Install WordPress test suite
+        run: bash tools/install-wp-tests.sh pressqueue_tests root '' 127.0.0.1 ${{ matrix.wordpress }}
+
+      - name: Run integration tests
+        env:
+          WP_TESTS_DIR: /tmp/wordpress-tests-lib-${{ matrix.wordpress }}
+        run: composer run test:integration
+
+  boundary-negative:
+    name: Unsupported runtime boundary checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.0'
+            scenario: php
+          - php: '8.1'
+            scenario: wordpress
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: json, mbstring
+          coverage: none
+
+      - name: Run boundary smoke
+        run: php tools/runtime-guard-smoke.php ${{ matrix.scenario }}
+
+  package-and-plugin-check:
+    name: Package smoke and Plugin Check
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: pressqueue_plugin_check
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: bcmath, curl, dom, intl, json, mbstring, mysqli, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Install disposable WordPress
+        run: |
+          vendor/bin/wp core download --version=6.8.8 --path=/tmp/pressqueue-wp
+          vendor/bin/wp config create --dbname=pressqueue_plugin_check --dbuser=root --dbpass='' --dbhost=127.0.0.1 --path=/tmp/pressqueue-wp
+          vendor/bin/wp core install --url=http://example.test --title=PressQueue --admin_user=admin --admin_password=password --admin_email=admin@example.test --path=/tmp/pressqueue-wp
+
+      - name: Run package smoke
+        env:
+          PACKAGE_SMOKE_WP_PATH: /tmp/pressqueue-wp
+        run: composer run package:smoke
+
+      - name: Install Plugin Check 2.1.0
+        run: |
+          mkdir -p /tmp/pressqueue-wp/wp-content/plugins
+          mkdir -p .vroni/wip/scratch/plugin-check
+          curl -fsSL https://downloads.wordpress.org/plugin/plugin-check.2.1.0.zip -o .vroni/wip/scratch/plugin-check/plugin-check.2.1.0.zip
+          unzip -q .vroni/wip/scratch/plugin-check/plugin-check.2.1.0.zip -d /tmp/pressqueue-wp/wp-content/plugins
+
+      - name: Run Plugin Check
+        env:
+          WP_PATH: /tmp/pressqueue-wp
+        run: composer run plugin-check

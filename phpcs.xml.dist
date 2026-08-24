@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<ruleset name="PressQueue">
+	<description>PressQueue WordPress coding standards.</description>
+
+	<arg name="basepath" value="."/>
+	<arg name="colors"/>
+	<arg name="extensions" value="php"/>
+	<arg value="sp"/>
+
+	<file>pressqueue.php</file>
+	<file>src</file>
+
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/build/*</exclude-pattern>
+	<exclude-pattern>*/.vroni/*</exclude-pattern>
+
+	<config name="minimum_supported_wp_version" value="6.8"/>
+	<config name="testVersion" value="8.1-"/>
+
+	<rule ref="WordPress"/>
+	<rule ref="WordPress-Extra"/>
+	<rule ref="WordPress-Docs"/>
+
+	<rule ref="WordPress.Files.FileName">
+		<exclude name="WordPress.Files.FileName.NotHyphenatedLowercase"/>
+		<exclude name="WordPress.Files.FileName.InvalidClassFileName"/>
+	</rule>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="pressqueue"/>
+				<element value="PressQueue"/>
+			</property>
+		</properties>
+	</rule>
+
+</ruleset>
