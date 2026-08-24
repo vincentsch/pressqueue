@@ -124,4 +124,23 @@ final class HashKeys {
 	public static function payload_hash( array $payload_fields ): string {
 		return CanonicalJson::hash( 'payload_preview', $payload_fields );
 	}
+
+	/**
+	 * Calculate a verified provider account and organization identity hash.
+	 *
+	 * @param string $provider Provider key.
+	 * @param string $remote_account_id Provider account ID.
+	 * @param string $remote_organization_id Provider organization ID.
+	 * @return string
+	 */
+	public static function verified_identity_hash( string $provider, string $remote_account_id, string $remote_organization_id ): string {
+		return CanonicalJson::hash(
+			'verified_connection_identity',
+			array(
+				'provider'               => $provider,
+				'remote_account_id'      => $remote_account_id,
+				'remote_organization_id' => $remote_organization_id,
+			)
+		);
+	}
 }

@@ -13,6 +13,7 @@ use PressQueue\Planning\EventCollector;
 use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\Planner;
 use PressQueue\Security\Capabilities;
+use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\Repository\ChannelRepository;
 use PressQueue\Storage\Repository\ConnectionRepository;
@@ -272,7 +273,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		$rules       = new RuleRepository();
 
 		$enabled_connection = $connections->create( 'buffer', 'Enabled account', array(), true );
-		$disabled_channel   = $channels->create( $enabled_connection->public_id, 'buffer', 'disabled-channel', 'mastodon', array( 'name' => 'Disabled' ), array(), false );
+		$disabled_channel   = $channels->create( $enabled_connection->public_id, 'buffer', 'disabled-channel', 'mastodon', array( 'name' => 'Disabled' ), $this->channelCapabilities(), false, '2026-08-24 12:00:00', 'org_1', 'available' );
 		$disabled_rule      = $rules->create(
 			array_merge(
 				$this->includeRuleInput( $disabled_channel->public_id ),
@@ -285,7 +286,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( 'disabled_channel', $disabled_result->decisions[0]['reasons'][ count( $disabled_result->decisions[0]['reasons'] ) - 1 ]['code'] );
 
 		$disabled_connection = $connections->create( 'buffer', 'Disabled account', array(), false );
-		$enabled_channel     = $channels->create( $disabled_connection->public_id, 'buffer', 'enabled-channel', 'mastodon', array( 'name' => 'Enabled' ), array(), true );
+		$enabled_channel     = $channels->create( $disabled_connection->public_id, 'buffer', 'enabled-channel', 'mastodon', array( 'name' => 'Enabled' ), $this->channelCapabilities(), true, '2026-08-24 12:00:00', 'org_1', 'available' );
 		$connection_rule     = $rules->create(
 			array_merge(
 				$this->includeRuleInput( $enabled_channel->public_id ),
@@ -387,12 +388,47 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 	 * @return array{connection_public_id:string,channel_public_id:string}
 	 */
 	private function enabledDestination(): array {
-		$connection = ( new ConnectionRepository() )->create( 'buffer', 'Local account', array( 'profile' => 'Example' ), true );
-		$channel    = ( new ChannelRepository() )->create( $connection->public_id, 'buffer', 'remote-channel-1', 'mastodon', array( 'name' => 'Example Social' ), array( 'text' => true ), true );
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$envelope    = CanonicalJson::encode_object( array( 'fixture' => 'encrypted' ) );
+		$account     = $this->accountDocument();
+		$connection  = $connections->create_with_credential( 'buffer', 'Local account', $envelope, hash( 'sha256', $envelope ), array( 'profile' => 'Example' ) );
+		$connection  = $connections->store_verified_account( $connection->public_id, 'acct_1', $account );
+		$connection  = $connections->select_organization_unverified( $connection->public_id, 'org_1' );
+		$lease       = $connections->acquire_sync_lease( $connection->public_id );
+
+		self::assertNotNull( $lease );
+
+		$connection = $connections->complete_sync_success( $connection->public_id, $lease, 'acct_1', 'org_1', $account );
+		$connection = $connections->enable( $connection->public_id );
+		$channel    = $channels->create( $connection->public_id, 'buffer', 'remote-channel-1', 'mastodon', array( 'name' => 'Example Social' ), $this->channelCapabilities(), false, '2026-08-24 12:00:00', 'org_1', 'available' );
+		$channel    = $channels->set_enabled_if_current( $channel->public_id, true, $channel->updated_at->format( 'Y-m-d H:i:s' ) );
 
 		return array(
 			'channel_public_id'    => $channel->public_id,
 			'connection_public_id' => $connection->public_id,
+		);
+	}
+
+	/**
+	 * Return a verified account document.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function accountDocument(): array {
+		return array(
+			'display_label'     => 'Owner',
+			'organizations'     => array(
+				array(
+					'channel_count'          => 1,
+					'display_label'          => 'Editorial',
+					'provider'               => 'buffer',
+					'remote_organization_id' => 'org_1',
+				),
+			),
+			'provider'          => 'buffer',
+			'remote_account_id' => 'acct_1',
+			'schema_version'    => 1,
 		);
 	}
 
@@ -440,6 +476,22 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 			'priority'               => $priority,
 			'schedule_policy'        => 'immediate',
 			'triggers'               => array( 'first_publish' ),
+		);
+	}
+
+	/**
+	 * Return a v1 text immediate channel capability document.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function channelCapabilities(): array {
+		return array(
+			'delivery'       => array(
+				'schedule_slots' => array( 'immediate' ),
+				'text'           => true,
+			),
+			'schema_version' => 1,
+			'service'        => 'mastodon',
 		);
 	}
 
@@ -628,7 +680,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 			$wpdb->query( 'DROP TABLE IF EXISTS `' . $table . '`' );
 		}
 
-		foreach ( array( Schema::VERSION_OPTION, Schema::MIGRATION_LOCK_OPTION, Schema::MIGRATION_FAILED_OPTION, SettingsRepository::KILL_SWITCH_OPTION, SettingsRepository::DRY_RUN_OPTION ) as $option ) {
+		foreach ( array( Schema::VERSION_OPTION, Schema::MIGRATION_LOCK_OPTION, Schema::MIGRATION_FAILED_OPTION, Capabilities::VERSION_OPTION, SettingsRepository::KILL_SWITCH_OPTION, SettingsRepository::DRY_RUN_OPTION ) as $option ) {
 			delete_option( $option );
 		}
 

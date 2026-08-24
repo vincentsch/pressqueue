@@ -562,6 +562,15 @@ final class Planner {
 			);
 		}
 
+		if ( 'available' !== $channel->availability || ! $this->channel_capability_allows_delivery( $channel ) ) {
+			return array(
+				'destination' => $this->destination_snapshot( $channel, null ),
+				'ok'          => false,
+				'reason'      => ReasonFactory::make( 'unavailable_channel', 'Destination channel is not available for text delivery.', 'error', 'channel_availability', 'equals', 'available', $channel->availability ),
+				'result'      => 'policy_error',
+			);
+		}
+
 		$connection = $this->connections->find_by_public_id( $channel->connection_public_id );
 
 		if ( null === $connection ) {
@@ -591,6 +600,33 @@ final class Planner {
 			);
 		}
 
+		if ( 'verified' !== $connection->connection_status ) {
+			return array(
+				'destination' => $this->destination_snapshot( $channel, $connection ),
+				'ok'          => false,
+				'reason'      => ReasonFactory::make( 'unverified_connection', 'Destination connection is not verified.', 'error', 'connection_status', 'equals', 'verified', $connection->connection_status ),
+				'result'      => 'policy_error',
+			);
+		}
+
+		if ( ! $this->connection_has_delivery_identity( $connection ) ) {
+			return array(
+				'destination' => $this->destination_snapshot( $channel, $connection ),
+				'ok'          => false,
+				'reason'      => ReasonFactory::make( 'unverified_connection', 'Destination connection identity is not complete.', 'error', 'connection_identity', 'complete', true, false ),
+				'result'      => 'policy_error',
+			);
+		}
+
+		if ( $channel->remote_organization_id !== $connection->remote_organization_id ) {
+			return array(
+				'destination' => $this->destination_snapshot( $channel, $connection ),
+				'ok'          => false,
+				'reason'      => ReasonFactory::make( 'destination_identity_mismatch', 'Destination organization does not match the selected connection organization.', 'error', 'remote_organization_id', 'equals', $connection->remote_organization_id, $channel->remote_organization_id ),
+				'result'      => 'policy_error',
+			);
+		}
+
 		return array(
 			'destination' => $this->destination_snapshot( $channel, $connection ),
 			'ok'          => true,
@@ -608,18 +644,54 @@ final class Planner {
 	 */
 	private function destination_snapshot( ChannelRecord $channel, ?ConnectionRecord $connection ): array {
 		return array(
-			'channel_id'           => $channel->id,
-			'channel_label'        => $this->channel_label( $channel ),
-			'channel_public_id'    => $channel->public_id,
-			'channel_enabled'      => $channel->enabled,
-			'connection_id'        => null === $connection ? 0 : $connection->id,
-			'connection_label'     => null === $connection ? '' : $connection->label,
-			'connection_public_id' => $channel->connection_public_id,
-			'connection_enabled'   => null !== $connection && $connection->enabled,
-			'provider'             => $channel->provider,
-			'remote_channel_id'    => $channel->remote_channel_id,
-			'service'              => $channel->service,
+			'channel_id'                        => $channel->id,
+			'channel_label'                     => $this->channel_label( $channel ),
+			'channel_public_id'                 => $channel->public_id,
+			'channel_enabled'                   => $channel->enabled,
+			'channel_availability'              => $channel->availability,
+			'channel_capability_schema_version' => (int) ( $channel->capabilities['schema_version'] ?? 0 ),
+			'connection_id'                     => null === $connection ? 0 : $connection->id,
+			'connection_label'                  => null === $connection ? '' : $connection->label,
+			'connection_public_id'              => $channel->connection_public_id,
+			'connection_enabled'                => null !== $connection && $connection->enabled,
+			'connection_status'                 => null === $connection ? '' : $connection->connection_status,
+			'provider'                          => $channel->provider,
+			'remote_organization_id'            => $channel->remote_organization_id,
+			'remote_channel_id'                 => $channel->remote_channel_id,
+			'service'                           => $channel->service,
 		);
+	}
+
+	/**
+	 * Check whether the channel can receive a text immediate delivery.
+	 *
+	 * @param ChannelRecord $channel Channel.
+	 * @return bool
+	 */
+	private function channel_capability_allows_delivery( ChannelRecord $channel ): bool {
+		$delivery = $channel->capabilities['delivery'] ?? null;
+
+		return 1 === (int) ( $channel->capabilities['schema_version'] ?? 0 )
+			&& is_array( $delivery )
+			&& true === ( $delivery['text'] ?? false )
+			&& isset( $delivery['schedule_slots'] )
+			&& is_array( $delivery['schedule_slots'] )
+			&& in_array( 'immediate', $delivery['schedule_slots'], true );
+	}
+
+	/**
+	 * Check whether a verified connection has the identity required for delivery.
+	 *
+	 * @param ConnectionRecord $connection Connection.
+	 * @return bool
+	 */
+	private function connection_has_delivery_identity( ConnectionRecord $connection ): bool {
+		return $connection->has_credential
+			&& null !== $connection->credential_envelope_hash
+			&& null !== $connection->remote_account_id
+			&& null !== $connection->remote_organization_id
+			&& null !== $connection->verified_identity_hash
+			&& null !== $connection->last_sync_completed_at;
 	}
 
 	/**

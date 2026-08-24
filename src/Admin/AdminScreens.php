@@ -28,7 +28,8 @@ use PressQueue\Storage\ValidationException;
  * Registers and renders the compact administration experience.
  */
 final class AdminScreens {
-	private const SLUG_RULES     = 'pressqueue';
+	private const SLUG_ROOT      = 'pressqueue';
+	private const SLUG_RULES     = 'pressqueue-rules';
 	private const SLUG_SETTINGS  = 'pressqueue-settings';
 	private const SLUG_PREVIEW   = 'pressqueue-preview';
 	private const SLUG_DECISIONS = 'pressqueue-decisions';
@@ -50,6 +51,8 @@ final class AdminScreens {
 		add_action( 'admin_post_pressqueue_preview_rule_post', array( self::class, 'handle_rule_post_preview' ) );
 		add_action( 'admin_post_pressqueue_preview_rule_recent', array( self::class, 'handle_rule_recent_preview' ) );
 		add_action( 'admin_post_pressqueue_preview_post', array( self::class, 'handle_post_preview' ) );
+		ConnectionController::register_hooks();
+		ChannelController::register_hooks();
 	}
 
 	/**
@@ -57,18 +60,41 @@ final class AdminScreens {
 	 */
 	public static function register_menu(): void {
 		add_menu_page(
-			__( 'PressQueue Rules', 'pressqueue' ),
 			__( 'PressQueue', 'pressqueue' ),
-			Capabilities::MANAGE_RULES,
-			self::SLUG_RULES,
-			array( self::class, 'render_rules_page' ),
+			__( 'PressQueue', 'pressqueue' ),
+			Capabilities::ACCESS_ADMIN,
+			self::SLUG_ROOT,
+			array( self::class, 'render_default_page' ),
 			'dashicons-share'
 		);
 
-		add_submenu_page( self::SLUG_RULES, __( 'PressQueue Rules', 'pressqueue' ), __( 'Rules', 'pressqueue' ), Capabilities::MANAGE_RULES, self::SLUG_RULES, array( self::class, 'render_rules_page' ) );
-		add_submenu_page( self::SLUG_RULES, __( 'PressQueue Preview', 'pressqueue' ), __( 'Preview', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_PREVIEW, array( self::class, 'render_preview_page' ) );
-		add_submenu_page( self::SLUG_RULES, __( 'PressQueue Decisions', 'pressqueue' ), __( 'Decisions', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_DECISIONS, array( self::class, 'render_decisions_page' ) );
-		add_submenu_page( self::SLUG_RULES, __( 'PressQueue Settings', 'pressqueue' ), __( 'Settings', 'pressqueue' ), Capabilities::MANAGE_SETTINGS, self::SLUG_SETTINGS, array( self::class, 'render_settings_page' ) );
+		ConnectionController::register_menu( self::SLUG_ROOT );
+		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Rules', 'pressqueue' ), __( 'Rules', 'pressqueue' ), Capabilities::MANAGE_RULES, self::SLUG_RULES, array( self::class, 'render_rules_page' ) );
+		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Preview', 'pressqueue' ), __( 'Preview', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_PREVIEW, array( self::class, 'render_preview_page' ) );
+		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Decisions', 'pressqueue' ), __( 'Decisions', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_DECISIONS, array( self::class, 'render_decisions_page' ) );
+		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Settings', 'pressqueue' ), __( 'Settings', 'pressqueue' ), Capabilities::MANAGE_SETTINGS, self::SLUG_SETTINGS, array( self::class, 'render_settings_page' ) );
+	}
+
+	/**
+	 * Render the best landing page for the current user's capabilities.
+	 */
+	public static function render_default_page(): void {
+		if ( current_user_can( Capabilities::MANAGE_RULES ) ) {
+			self::render_rules_page();
+			return;
+		}
+
+		if ( current_user_can( Capabilities::MANAGE_CONNECTIONS ) ) {
+			ConnectionController::render_connections_page();
+			return;
+		}
+
+		if ( current_user_can( Capabilities::VIEW_DECISIONS ) ) {
+			self::render_decisions_page();
+			return;
+		}
+
+		self::require_capability( Capabilities::ACCESS_ADMIN );
 	}
 
 	/**
@@ -110,7 +136,7 @@ final class AdminScreens {
 		self::render_preview_result();
 
 		if ( array() === $channels ) {
-			echo '<div class="notice notice-info"><p>' . esc_html__( 'No local destinations exist yet. Provider destinations are added by later connection work.', 'pressqueue' ) . '</p></div>';
+			echo '<div class="notice notice-info"><p>' . esc_html__( 'No local destinations exist yet. Add a connection and synchronize channels first.', 'pressqueue' ) . '</p></div>';
 		}
 
 		echo '<h2>' . esc_html__( 'Saved Rules', 'pressqueue' ) . '</h2>';

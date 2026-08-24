@@ -73,6 +73,32 @@ final class StorageValidator {
 	}
 
 	/**
+	 * Assert an opaque provider identifier.
+	 *
+	 * @param string $name Value name.
+	 * @param string $value Candidate value.
+	 * @param int    $maximum_length Maximum length.
+	 */
+	public static function assert_remote_identifier( string $name, string $value, int $maximum_length = 191 ): void {
+		unset( $name );
+
+		if ( '' === trim( $value ) || strlen( $value ) > $maximum_length || preg_match( '/[\x00-\x1F\x7F]/', $value ) ) {
+			throw new ValidationException( 'Remote identifier must be a bounded printable string.' );
+		}
+	}
+
+	/**
+	 * Assert a sync lease owner token.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_lease_owner( string $value ): void {
+		if ( 1 !== preg_match( '/^[a-f0-9]{32}$/', $value ) ) {
+			throw new ValidationException( 'Lease owner must be a 16 byte lowercase hex token.' );
+		}
+	}
+
+	/**
 	 * Assert a non-negative internal ID.
 	 *
 	 * @param string $name Value name.

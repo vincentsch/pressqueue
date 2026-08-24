@@ -81,6 +81,8 @@ final class SchemaMigrator {
 
 				if ( 1 === $next_version ) {
 					$this->create_base_tables();
+				} elseif ( 2 === $next_version ) {
+					$this->migrate_to_version_2();
 				}
 
 				$this->assert_expected_schema();
@@ -148,6 +150,125 @@ final class SchemaMigrator {
 		foreach ( Schema::create_table_sql( $this->database ) as $sql ) {
 			dbDelta( $sql );
 		}
+	}
+
+	/**
+	 * Add Buffer connection and discovery metadata.
+	 */
+	private function migrate_to_version_2(): void {
+		$this->create_base_tables();
+
+		$connections = $this->database->table( Schema::CONNECTIONS );
+		$channels    = $this->database->table( Schema::CHANNELS );
+
+		$this->maybe_add_column( $connections, 'credential_envelope_json', 'credential_envelope_json LONGTEXT NULL AFTER account_json' );
+		$this->maybe_add_column( $connections, 'credential_envelope_hash', 'credential_envelope_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER credential_envelope_json' );
+		$this->maybe_add_column( $connections, 'remote_account_id', 'remote_account_id VARCHAR(191) NULL AFTER credential_envelope_hash' );
+		$this->maybe_add_column( $connections, 'remote_organization_id', 'remote_organization_id VARCHAR(191) NULL AFTER remote_account_id' );
+		$this->maybe_add_column( $connections, 'verified_identity_hash', 'verified_identity_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER remote_organization_id' );
+		$this->maybe_add_column( $connections, 'connection_status', "connection_status VARCHAR(32) NOT NULL DEFAULT 'disconnected' AFTER verified_identity_hash" );
+		$this->maybe_add_column( $connections, 'sync_lease_owner', 'sync_lease_owner CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER connection_status' );
+		$this->maybe_add_column( $connections, 'sync_lease_expires_at', 'sync_lease_expires_at DATETIME NULL AFTER sync_lease_owner' );
+		$this->maybe_add_column( $connections, 'credential_verified_at', 'credential_verified_at DATETIME NULL AFTER sync_lease_expires_at' );
+		$this->maybe_add_column( $connections, 'credential_rotated_at', 'credential_rotated_at DATETIME NULL AFTER credential_verified_at' );
+		$this->maybe_add_column( $connections, 'last_sync_started_at', 'last_sync_started_at DATETIME NULL AFTER credential_rotated_at' );
+		$this->maybe_add_column( $connections, 'last_sync_completed_at', 'last_sync_completed_at DATETIME NULL AFTER last_sync_started_at' );
+		$this->maybe_add_column( $connections, 'last_error_json', 'last_error_json LONGTEXT NULL AFTER last_sync_completed_at' );
+
+		$this->backfill_connections_for_version_2( $connections );
+
+		$this->maybe_add_index( $connections, 'verified_identity_hash', 'UNIQUE KEY verified_identity_hash (verified_identity_hash)' );
+		$this->maybe_add_index( $connections, 'connection_status', 'KEY connection_status (connection_status)' );
+		$this->maybe_add_index( $connections, 'remote_account', 'KEY remote_account (provider, remote_account_id)' );
+		$this->maybe_add_index( $connections, 'remote_organization', 'KEY remote_organization (provider, remote_organization_id)' );
+		$this->maybe_add_index( $connections, 'sync_lease_expires_at', 'KEY sync_lease_expires_at (sync_lease_expires_at)' );
+
+		$this->maybe_add_column( $channels, 'remote_organization_id', "remote_organization_id VARCHAR(191) NOT NULL DEFAULT '' AFTER provider" );
+		$this->maybe_add_column( $channels, 'availability', "availability VARCHAR(32) NOT NULL DEFAULT 'unverified' AFTER capabilities_json" );
+		$this->maybe_add_column( $channels, 'last_seen_at', 'last_seen_at DATETIME NULL AFTER last_synced_at' );
+		$this->maybe_add_column( $channels, 'availability_checked_at', 'availability_checked_at DATETIME NULL AFTER last_seen_at' );
+
+		$this->backfill_channels_for_version_2( $channels );
+		$this->drop_index_if_exists( $channels, 'connection_remote_channel' );
+		$this->maybe_add_index( $channels, 'connection_org_remote_channel', 'UNIQUE KEY connection_org_remote_channel (connection_public_id, remote_organization_id, remote_channel_id)' );
+		$this->maybe_add_index( $channels, 'remote_organization', 'KEY remote_organization (connection_public_id, remote_organization_id)' );
+		$this->maybe_add_index( $channels, 'availability', 'KEY availability (availability)' );
+		$this->maybe_add_index( $channels, 'connection_availability', 'KEY connection_availability (connection_public_id, availability)' );
+	}
+
+	/**
+	 * Backfill legacy connection rows into the disconnected state.
+	 *
+	 * @param string $table Table name.
+	 */
+	private function backfill_connections_for_version_2( string $table ): void {
+		$this->database->query(
+			"UPDATE `$table`
+				SET enabled = 0,
+					connection_status = 'disconnected',
+					verified_identity_hash = NULL,
+					sync_lease_owner = NULL,
+					sync_lease_expires_at = NULL
+				WHERE credential_envelope_json IS NULL OR credential_envelope_json = ''"
+		);
+	}
+
+	/**
+	 * Backfill legacy channel rows with empty organization identity.
+	 *
+	 * @param string $table Table name.
+	 */
+	private function backfill_channels_for_version_2( string $table ): void {
+		$this->database->query(
+			"UPDATE `$table`
+				SET enabled = 0,
+					availability = 'unverified'
+				WHERE remote_organization_id = ''"
+		);
+	}
+
+	/**
+	 * Add a column when it does not exist.
+	 *
+	 * @param string $table Table name.
+	 * @param string $column Column name.
+	 * @param string $definition Column definition.
+	 */
+	private function maybe_add_column( string $table, string $column, string $definition ): void {
+		if ( isset( $this->columns( $table )[ $column ] ) ) {
+			return;
+		}
+
+		$this->database->query( "ALTER TABLE `$table` ADD COLUMN $definition" );
+	}
+
+	/**
+	 * Add an index when it does not exist.
+	 *
+	 * @param string $table Table name.
+	 * @param string $index Index name.
+	 * @param string $definition Index definition.
+	 */
+	private function maybe_add_index( string $table, string $index, string $definition ): void {
+		if ( isset( $this->indexes( $table )[ $index ] ) ) {
+			return;
+		}
+
+		$this->database->query( "ALTER TABLE `$table` ADD $definition" );
+	}
+
+	/**
+	 * Drop a legacy index when it exists.
+	 *
+	 * @param string $table Table name.
+	 * @param string $index Index name.
+	 */
+	private function drop_index_if_exists( string $table, string $index ): void {
+		if ( ! isset( $this->indexes( $table )[ $index ] ) ) {
+			return;
+		}
+
+		$this->database->query( "ALTER TABLE `$table` DROP INDEX `$index`" );
 	}
 
 	/**

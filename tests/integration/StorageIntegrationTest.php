@@ -9,8 +9,12 @@ declare(strict_types=1);
 
 namespace PressQueue\Tests\Integration;
 
+use PressQueue\Provider\Dto\ProviderChannel;
 use PressQueue\Security\Capabilities;
+use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
+use PressQueue\Storage\Record\ChannelRecord;
+use PressQueue\Storage\Record\ConnectionRecord;
 use PressQueue\Storage\Repository\ChannelRepository;
 use PressQueue\Storage\Repository\ConnectionRepository;
 use PressQueue\Storage\Repository\DecisionRepository;
@@ -72,6 +76,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( 'dry_run', $settings->delivery_state );
 
 		$this->assertOptionIsNotAutoloaded( Schema::VERSION_OPTION );
+		$this->assertOptionIsNotAutoloaded( Capabilities::VERSION_OPTION );
 		$this->assertOptionIsNotAutoloaded( SettingsRepository::KILL_SWITCH_OPTION );
 		$this->assertOptionIsNotAutoloaded( SettingsRepository::DRY_RUN_OPTION );
 
@@ -221,6 +226,390 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		$this->assertAsciiBinaryColumn( $database->table( Schema::DELIVERIES ), 'delivery_key' );
 	}
 
+	public function test_version_one_connection_and_channel_rows_upgrade_to_discovery_shape(): void {
+		$migrator = new SchemaMigrator( Database::from_globals() );
+		$migrator->migrate();
+
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$connection  = $connections->create( 'buffer', 'Legacy account', array(), true );
+		$channel     = $channels->create( $connection->public_id, 'buffer', 'legacy-channel', 'mastodon', array( 'name' => 'Legacy' ), array(), true );
+		$database    = Database::from_globals();
+
+		$this->downgradeDiscoveryColumnsToVersionOne( $database );
+		update_option( Schema::VERSION_OPTION, 1, false );
+
+		$migrator->migrate();
+
+		$upgraded_connection = $connections->find_by_public_id( $connection->public_id );
+		$upgraded_channel    = $channels->find_by_public_id( $channel->public_id );
+
+		self::assertNotNull( $upgraded_connection );
+		self::assertNotNull( $upgraded_channel );
+		self::assertFalse( $upgraded_connection->enabled );
+		self::assertSame( 'disconnected', $upgraded_connection->connection_status );
+		self::assertFalse( $upgraded_channel->enabled );
+		self::assertSame( '', $upgraded_channel->remote_organization_id );
+		self::assertSame( 'unverified', $upgraded_channel->availability );
+		self::assertArrayNotHasKey( 'connection_remote_channel', $this->indexes( $database->table( Schema::CHANNELS ) ) );
+		self::assertArrayHasKey( 'connection_org_remote_channel', $this->indexes( $database->table( Schema::CHANNELS ) ) );
+	}
+
+	public function test_partial_discovery_migration_retry_completes_remaining_steps(): void {
+		$migrator = new SchemaMigrator( Database::from_globals() );
+		$migrator->migrate();
+
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$connection  = $connections->create( 'buffer', 'Legacy account', array(), true );
+		$channel     = $channels->create( $connection->public_id, 'buffer', 'legacy-channel', 'mastodon', array( 'name' => 'Legacy' ), array(), true );
+		$database    = Database::from_globals();
+		$conn_table  = $database->table( Schema::CONNECTIONS );
+		$chan_table  = $database->table( Schema::CHANNELS );
+
+		$this->downgradeDiscoveryColumnsToVersionOne( $database );
+		$this->addColumnIfMissing( $conn_table, 'credential_envelope_json', 'credential_envelope_json LONGTEXT NULL AFTER account_json' );
+		$this->addColumnIfMissing( $conn_table, 'credential_envelope_hash', 'credential_envelope_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER credential_envelope_json' );
+		$this->addColumnIfMissing( $chan_table, 'remote_organization_id', "remote_organization_id VARCHAR(191) NOT NULL DEFAULT '' AFTER provider" );
+		update_option( Schema::VERSION_OPTION, 1, false );
+
+		$migrator->migrate();
+
+		$upgraded_connection = $connections->find_by_public_id( $connection->public_id );
+		$upgraded_channel    = $channels->find_by_public_id( $channel->public_id );
+
+		self::assertSame( Schema::TARGET_VERSION, (int) get_option( Schema::VERSION_OPTION, 0 ) );
+		self::assertFalse( get_option( Schema::MIGRATION_FAILED_OPTION, false ) );
+		self::assertNotNull( $upgraded_connection );
+		self::assertNotNull( $upgraded_channel );
+		self::assertFalse( $upgraded_connection->enabled );
+		self::assertSame( 'disconnected', $upgraded_connection->connection_status );
+		self::assertFalse( $upgraded_channel->enabled );
+		self::assertSame( 'unverified', $upgraded_channel->availability );
+		self::assertArrayNotHasKey( 'connection_remote_channel', $this->indexes( $chan_table ) );
+		self::assertArrayHasKey( 'sync_lease_expires_at', $this->indexes( $conn_table ) );
+		self::assertArrayHasKey( 'connection_org_remote_channel', $this->indexes( $chan_table ) );
+	}
+
+	public function test_connection_channel_lifecycle_is_disabled_until_explicit_enable_and_disconnect_preserves_rows(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$connection  = $connections->create( 'buffer', 'Buffer account' );
+		$envelope    = CanonicalJson::encode_object( array( 'fixture' => 'encrypted' ) );
+		$connection  = $connections->store_initial_credential( $connection->public_id, $envelope, hash( 'sha256', $envelope ) );
+
+		self::assertFalse( $connection->enabled );
+		self::assertTrue( $connection->has_credential );
+		self::assertSame( 'unverified', $connection->connection_status );
+
+		$account = array(
+			'display_label'     => 'Owner',
+			'organizations'     => array(
+				array(
+					'channel_count'          => 1,
+					'display_label'          => 'Editorial',
+					'provider'               => 'buffer',
+					'remote_organization_id' => 'org_1',
+				),
+			),
+			'provider'          => 'buffer',
+			'remote_account_id' => 'acct_1',
+			'schema_version'    => 1,
+		);
+		$connection = $connections->store_verified_account( $connection->public_id, 'acct_1', $account );
+		self::assertFalse( $connection->enabled );
+		self::assertNull( $connection->verified_identity_hash );
+		self::assertSame( 'unverified', $connection->connection_status );
+
+		$connection = $connections->select_organization_unverified( $connection->public_id, 'org_1' );
+		$lease      = $connections->acquire_sync_lease( $connection->public_id );
+
+		self::assertNotNull( $lease );
+
+		$leased = $connections->find_by_public_id( $connection->public_id );
+		self::assertNotNull( $leased );
+
+		$synced = $channels->synchronize_provider_channels(
+			$leased,
+			$lease,
+			array(
+				new ProviderChannel(
+					'buffer',
+					'org_1',
+					'chan_1',
+					'PressQueue',
+					'PressQueue Social',
+					'mastodon',
+					null,
+					array(
+						'isDisconnected' => false,
+						'isLocked'       => false,
+						'isQueuePaused'  => false,
+					),
+					array( 'manageUpdates' ),
+					'available',
+					$this->channelCapabilities(),
+					null
+				),
+			)
+		);
+
+		self::assertFalse( $synced[0]->enabled );
+		self::assertSame( 'available', $synced[0]->availability );
+
+		$connection = $connections->complete_sync_success( $connection->public_id, $lease, 'acct_1', 'org_1', $account );
+		self::assertSame( 'verified', $connection->connection_status );
+		self::assertFalse( $connection->enabled );
+
+		$connection = $connections->enable( $connection->public_id );
+		$channel    = $channels->set_enabled_if_current( $synced[0]->public_id, true, $synced[0]->updated_at->format( 'Y-m-d H:i:s' ) );
+
+		self::assertTrue( $connection->enabled );
+		self::assertTrue( $channel->enabled );
+
+		$verified_identity_hash = $connection->verified_identity_hash;
+		$connection             = $connections->store_verified_account( $connection->public_id, 'acct_1', $account );
+
+		self::assertTrue( $connection->enabled );
+		self::assertSame( 'verified', $connection->connection_status );
+		self::assertSame( $verified_identity_hash, $connection->verified_identity_hash );
+
+		$disconnected = $connections->disconnect( $connection->public_id );
+
+		self::assertFalse( $disconnected->enabled );
+		self::assertFalse( $disconnected->has_credential );
+		self::assertNull( $disconnected->credential_envelope_hash );
+		self::assertNull( $disconnected->verified_identity_hash );
+		self::assertSame( 'disconnected', $disconnected->connection_status );
+		self::assertNotNull( $channels->find_by_public_id( $channel->public_id ) );
+	}
+
+	public function test_credential_rotation_uses_envelope_hash_cas_and_preserves_one_winner(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$destination = $this->enabledDestination();
+		$connection  = $destination['connection'];
+		$rotated_at  = $connection->credential_rotated_at;
+
+		self::assertNotNull( $rotated_at );
+		self::assertNotNull( $connection->credential_envelope_hash );
+
+		$first_envelope = CanonicalJson::encode_object( array( 'fixture' => 'rotated-one' ) );
+		$rotated        = $connections->replace_credential_if_current(
+			$connection->public_id,
+			$rotated_at->format( 'Y-m-d H:i:s' ),
+			$connection->credential_envelope_hash,
+			$first_envelope,
+			hash( 'sha256', $first_envelope ),
+			'acct_1',
+			$this->accountDocument(),
+			true
+		);
+
+		self::assertTrue( $rotated->enabled );
+		self::assertSame( 'verified', $rotated->connection_status );
+
+		$this->expectException( StaleRecordException::class );
+
+		$second_envelope = CanonicalJson::encode_object( array( 'fixture' => 'rotated-two' ) );
+		$connections->replace_credential_if_current(
+			$connection->public_id,
+			$rotated_at->format( 'Y-m-d H:i:s' ),
+			$connection->credential_envelope_hash,
+			$second_envelope,
+			hash( 'sha256', $second_envelope ),
+			'acct_1',
+			$this->accountDocument(),
+			true
+		);
+	}
+
+	public function test_credential_rotation_cannot_reattach_after_disconnect(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$destination = $this->enabledDestination();
+		$connection  = $destination['connection'];
+		$rotated_at  = $connection->credential_rotated_at;
+
+		self::assertNotNull( $rotated_at );
+		self::assertNotNull( $connection->credential_envelope_hash );
+
+		$connections->disconnect( $connection->public_id );
+
+		try {
+			$envelope = CanonicalJson::encode_object( array( 'fixture' => 'reattach' ) );
+			$connections->replace_credential_if_current(
+				$connection->public_id,
+				$rotated_at->format( 'Y-m-d H:i:s' ),
+				$connection->credential_envelope_hash,
+				$envelope,
+				hash( 'sha256', $envelope ),
+				'acct_1',
+				$this->accountDocument(),
+				true
+			);
+			self::fail( 'Rotation after disconnect must be stale.' );
+		} catch ( StaleRecordException $exception ) {
+			self::assertNotSame( '', $exception->getMessage() );
+		}
+
+		$disconnected = $connections->find_by_public_id( $connection->public_id );
+		self::assertNotNull( $disconnected );
+		self::assertFalse( $disconnected->has_credential );
+		self::assertSame( 'disconnected', $disconnected->connection_status );
+	}
+
+	public function test_rotation_demotes_when_selected_organization_is_not_visible(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$destination = $this->enabledDestination();
+		$connection  = $destination['connection'];
+		$rotated_at  = $connection->credential_rotated_at;
+
+		self::assertNotNull( $rotated_at );
+		self::assertNotNull( $connection->credential_envelope_hash );
+
+		$envelope = CanonicalJson::encode_object( array( 'fixture' => 'org-missing' ) );
+		$rotated  = $connections->replace_credential_if_current(
+			$connection->public_id,
+			$rotated_at->format( 'Y-m-d H:i:s' ),
+			$connection->credential_envelope_hash,
+			$envelope,
+			hash( 'sha256', $envelope ),
+			'acct_1',
+			array_merge( $this->accountDocument(), array( 'organizations' => array() ) ),
+			false
+		);
+
+		self::assertFalse( $rotated->enabled );
+		self::assertSame( 'unverified', $rotated->connection_status );
+		self::assertNull( $rotated->verified_identity_hash );
+	}
+
+	public function test_preserving_rotation_does_not_reenable_disabled_connection(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$destination = $this->enabledDestination();
+		$connection  = $destination['connection'];
+		$rotated_at  = $connection->credential_rotated_at;
+
+		self::assertNotNull( $rotated_at );
+		self::assertNotNull( $connection->credential_envelope_hash );
+
+		$connections->disable( $connection->public_id );
+
+		$envelope = CanonicalJson::encode_object( array( 'fixture' => 'disabled-rotation' ) );
+		$rotated  = $connections->replace_credential_if_current(
+			$connection->public_id,
+			$rotated_at->format( 'Y-m-d H:i:s' ),
+			$connection->credential_envelope_hash,
+			$envelope,
+			hash( 'sha256', $envelope ),
+			'acct_1',
+			$this->accountDocument(),
+			true
+		);
+
+		self::assertFalse( $rotated->enabled );
+		self::assertSame( 'verified', $rotated->connection_status );
+	}
+
+	public function test_failed_credential_preparation_does_not_persist_connection_row(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+
+		try {
+			$connections->create_with_credential_factory(
+				'buffer',
+				'Local account',
+				static function (): array {
+					throw new StorageException( 'Credential could not be prepared.' );
+				}
+			);
+			self::fail( 'Failed credential preparation must not create a connection.' );
+		} catch ( StorageException $exception ) {
+			self::assertSame( 'Credential could not be prepared.', $exception->getMessage() );
+		}
+
+		self::assertSame( 0, $this->rowCount( Schema::CONNECTIONS ) );
+	}
+
+	public function test_stale_sync_lease_cannot_write_channels(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$envelope    = CanonicalJson::encode_object( array( 'fixture' => 'encrypted' ) );
+		$account     = $this->accountDocument();
+		$connection  = $connections->create_with_credential( 'buffer', 'Local account', $envelope, hash( 'sha256', $envelope ) );
+		$connection  = $connections->store_verified_account( $connection->public_id, 'acct_1', $account );
+		$connection  = $connections->select_organization_unverified( $connection->public_id, 'org_1' );
+		$lease       = $connections->acquire_sync_lease( $connection->public_id );
+
+		self::assertNotNull( $lease );
+
+		$leased = $connections->find_by_public_id( $connection->public_id );
+		self::assertNotNull( $leased );
+
+		$connections->complete_sync_failure( $connection->public_id, $lease, array( 'classification' => 'test', 'schema_version' => 1 ) );
+
+		try {
+			$channels->synchronize_provider_channels( $leased, $lease, array( $this->providerChannel( 'chan_1' ) ) );
+			self::fail( 'Stale sync lease must not write channels.' );
+		} catch ( StaleRecordException $exception ) {
+			self::assertNotSame( '', $exception->getMessage() );
+		}
+
+		self::assertNull( $channels->find_by_remote_identity( $connection->public_id, 'org_1', 'chan_1' ) );
+	}
+
+	public function test_preserving_sync_completion_does_not_reenable_disabled_connection(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$destination = $this->enabledDestination();
+		$connection  = $destination['connection'];
+		$lease       = $connections->acquire_sync_lease( $connection->public_id );
+
+		self::assertNotNull( $lease );
+
+		$connections->disable( $connection->public_id );
+
+		$completed = $connections->complete_sync_success( $connection->public_id, $lease, 'acct_1', 'org_1', $this->accountDocument(), true );
+
+		self::assertFalse( $completed->enabled );
+		self::assertSame( 'verified', $completed->connection_status );
+	}
+
+	public function test_available_resync_does_not_reenable_admin_disabled_channel(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$destination = $this->enabledDestination();
+		$connection  = $destination['connection'];
+		$channel     = $channels->set_enabled_if_current( $destination['channel']->public_id, false, $destination['channel']->updated_at->format( 'Y-m-d H:i:s' ) );
+		$lease       = $connections->acquire_sync_lease( $connection->public_id );
+
+		self::assertNotNull( $lease );
+
+		$leased = $connections->find_by_public_id( $connection->public_id );
+		self::assertNotNull( $leased );
+
+		$channels->synchronize_provider_channels( $leased, $lease, array( $this->providerChannel( 'remote-channel-1' ) ) );
+
+		$resynced = $channels->find_by_public_id( $channel->public_id );
+		self::assertNotNull( $resynced );
+		self::assertFalse( $resynced->enabled );
+	}
+
 	public function test_repositories_persist_hydrate_and_enforce_unique_identities(): void {
 		( new SchemaMigrator( Database::from_globals() ) )->migrate();
 
@@ -266,15 +655,15 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 	public function test_decision_and_delivery_unique_keys_are_database_enforced(): void {
 		( new SchemaMigrator( Database::from_globals() ) )->migrate();
 
-		$connections = new ConnectionRepository();
 		$channels    = new ChannelRepository();
 		$rules       = new RuleRepository();
 		$decisions   = new DecisionRepository();
 		$deliveries  = new DeliveryRepository();
 
-		$connection = $connections->create( 'buffer', 'Local account' );
-		$channel    = $channels->create( $connection->public_id, 'buffer', 'remote-channel-1', 'mastodon' );
-		$rule       = $rules->create( $this->ruleInput( $channel->public_id ) );
+		$destination = $this->enabledDestination();
+		$connection  = $destination['connection'];
+		$channel     = $destination['channel'];
+		$rule        = $rules->create( $this->ruleInput( $channel->public_id ) );
 
 		$decision_input = $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $channel->public_id );
 		$decision       = $decisions->create( $decision_input );
@@ -349,9 +738,10 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		$decisions   = new DecisionRepository();
 		$deliveries  = new DeliveryRepository();
 
-		$connection = $connections->create( 'buffer', 'Local account' );
-		$channel    = $channels->create( $connection->public_id, 'buffer', 'remote-channel-1', 'mastodon' );
-		$rule       = $rules->create( $this->ruleInput( $channel->public_id ) );
+		$destination = $this->enabledDestination();
+		$connection  = $destination['connection'];
+		$channel     = $destination['channel'];
+		$rule        = $rules->create( $this->ruleInput( $channel->public_id ) );
 		$decision   = $decisions->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $channel->public_id, $post_id, $author_id, $term_id ) );
 		$delivery   = $deliveries->create(
 			array(
@@ -399,7 +789,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 			$wpdb->query( 'DROP TABLE IF EXISTS `' . $table . '`' );
 		}
 
-		foreach ( array( Schema::VERSION_OPTION, Schema::MIGRATION_LOCK_OPTION, Schema::MIGRATION_FAILED_OPTION, SettingsRepository::KILL_SWITCH_OPTION, SettingsRepository::DRY_RUN_OPTION ) as $option ) {
+		foreach ( array( Schema::VERSION_OPTION, Schema::MIGRATION_LOCK_OPTION, Schema::MIGRATION_FAILED_OPTION, Capabilities::VERSION_OPTION, SettingsRepository::KILL_SWITCH_OPTION, SettingsRepository::DRY_RUN_OPTION ) as $option ) {
 			delete_option( $option );
 		}
 
@@ -448,6 +838,185 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 			'custom_field_allowlist' => array(),
 			'schedule_policy'        => 'immediate',
 		);
+	}
+
+	/**
+	 * Create a verified and enabled destination fixture.
+	 *
+	 * @return array{connection:ConnectionRecord,channel:ChannelRecord}
+	 */
+	private function enabledDestination(): array {
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$envelope    = CanonicalJson::encode_object( array( 'fixture' => 'encrypted' ) );
+		$account     = $this->accountDocument();
+		$connection  = $connections->create_with_credential( 'buffer', 'Local account', $envelope, hash( 'sha256', $envelope ) );
+		$connection  = $connections->store_verified_account( $connection->public_id, 'acct_1', $account );
+		$connection  = $connections->select_organization_unverified( $connection->public_id, 'org_1' );
+		$lease       = $connections->acquire_sync_lease( $connection->public_id );
+
+		self::assertNotNull( $lease );
+
+		$connection = $connections->complete_sync_success( $connection->public_id, $lease, 'acct_1', 'org_1', $account );
+		$connection = $connections->enable( $connection->public_id );
+		$channel    = $channels->create( $connection->public_id, 'buffer', 'remote-channel-1', 'mastodon', array( 'name' => 'Example Social' ), $this->channelCapabilities(), false, '2026-08-24 12:00:00', 'org_1', 'available' );
+		$channel    = $channels->set_enabled_if_current( $channel->public_id, true, $channel->updated_at->format( 'Y-m-d H:i:s' ) );
+
+		return array(
+			'channel'    => $channel,
+			'connection' => $connection,
+		);
+	}
+
+	/**
+	 * Return a verified account document.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function accountDocument(): array {
+		return array(
+			'display_label'     => 'Owner',
+			'organizations'     => array(
+				array(
+					'channel_count'          => 1,
+					'display_label'          => 'Editorial',
+					'provider'               => 'buffer',
+					'remote_organization_id' => 'org_1',
+				),
+			),
+			'provider'          => 'buffer',
+			'remote_account_id' => 'acct_1',
+			'schema_version'    => 1,
+		);
+	}
+
+	/**
+	 * Return a provider channel DTO fixture.
+	 *
+	 * @param string $remote_channel_id Remote channel ID.
+	 * @return ProviderChannel
+	 */
+	private function providerChannel( string $remote_channel_id ): ProviderChannel {
+		return new ProviderChannel(
+			'buffer',
+			'org_1',
+			$remote_channel_id,
+			'PressQueue',
+			'PressQueue Social',
+			'mastodon',
+			null,
+			array(
+				'isDisconnected' => false,
+				'isLocked'       => false,
+				'isQueuePaused'  => false,
+			),
+			array( 'manageUpdates' ),
+			'available',
+			$this->channelCapabilities(),
+			null
+		);
+	}
+
+	/**
+	 * Return a v1 text immediate channel capability document.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function channelCapabilities(): array {
+		return array(
+			'delivery'       => array(
+				'schedule_slots' => array( 'immediate' ),
+				'text'           => true,
+			),
+			'schema_version' => 1,
+			'service'        => 'mastodon',
+		);
+	}
+
+	/**
+	 * Remove discovery columns and indexes to simulate a version 1 install.
+	 *
+	 * @param Database $database Database.
+	 */
+	private function downgradeDiscoveryColumnsToVersionOne( Database $database ): void {
+		$connections = $database->table( Schema::CONNECTIONS );
+		$channels    = $database->table( Schema::CHANNELS );
+
+		foreach ( array( 'verified_identity_hash', 'connection_status', 'remote_account', 'remote_organization', 'sync_lease_expires_at' ) as $index ) {
+			$this->dropIndexIfExists( $connections, $index );
+		}
+
+		foreach ( array( 'connection_org_remote_channel', 'remote_organization', 'availability', 'connection_availability' ) as $index ) {
+			$this->dropIndexIfExists( $channels, $index );
+		}
+
+		$this->addIndexIfMissing( $channels, 'connection_remote_channel', 'UNIQUE KEY connection_remote_channel (connection_public_id, remote_channel_id)' );
+
+		foreach ( array( 'credential_envelope_json', 'credential_envelope_hash', 'remote_account_id', 'remote_organization_id', 'verified_identity_hash', 'connection_status', 'sync_lease_owner', 'sync_lease_expires_at', 'credential_verified_at', 'credential_rotated_at', 'last_sync_started_at', 'last_sync_completed_at', 'last_error_json' ) as $column ) {
+			$this->dropColumnIfExists( $connections, $column );
+		}
+
+		foreach ( array( 'remote_organization_id', 'availability', 'last_seen_at', 'availability_checked_at' ) as $column ) {
+			$this->dropColumnIfExists( $channels, $column );
+		}
+	}
+
+	/**
+	 * Drop an index when it exists.
+	 *
+	 * @param string $table Table.
+	 * @param string $index Index.
+	 */
+	private function dropIndexIfExists( string $table, string $index ): void {
+		global $wpdb;
+
+		if ( isset( $this->indexes( $table )[ $index ] ) ) {
+			$wpdb->query( 'ALTER TABLE `' . $table . '` DROP INDEX `' . $index . '`' );
+		}
+	}
+
+	/**
+	 * Add a column when it is missing.
+	 *
+	 * @param string $table Table.
+	 * @param string $column Column.
+	 * @param string $definition Definition.
+	 */
+	private function addColumnIfMissing( string $table, string $column, string $definition ): void {
+		global $wpdb;
+
+		if ( ! isset( $this->columns( $table )[ $column ] ) ) {
+			$wpdb->query( 'ALTER TABLE `' . $table . '` ADD COLUMN ' . $definition );
+		}
+	}
+
+	/**
+	 * Add an index when it is missing.
+	 *
+	 * @param string $table Table.
+	 * @param string $index Index.
+	 * @param string $definition Definition.
+	 */
+	private function addIndexIfMissing( string $table, string $index, string $definition ): void {
+		global $wpdb;
+
+		if ( ! isset( $this->indexes( $table )[ $index ] ) ) {
+			$wpdb->query( 'ALTER TABLE `' . $table . '` ADD ' . $definition );
+		}
+	}
+
+	/**
+	 * Drop a column when it exists.
+	 *
+	 * @param string $table Table.
+	 * @param string $column Column.
+	 */
+	private function dropColumnIfExists( string $table, string $column ): void {
+		global $wpdb;
+
+		if ( isset( $this->columns( $table )[ $column ] ) ) {
+			$wpdb->query( 'ALTER TABLE `' . $table . '` DROP COLUMN `' . $column . '`' );
+		}
 	}
 
 	/**

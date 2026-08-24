@@ -19,6 +19,8 @@ $GLOBALS['pressqueue_test_loaded_textdomains'] = array();
 $GLOBALS['pressqueue_test_options']            = array();
 $GLOBALS['pressqueue_test_option_autoloads']   = array();
 $GLOBALS['pressqueue_test_roles']              = array();
+$GLOBALS['pressqueue_test_current_user_caps']  = array();
+$GLOBALS['pressqueue_test_valid_nonces']       = array();
 
 /**
  * Reset test hook state.
@@ -36,6 +38,8 @@ function pressqueue_test_reset_wordpress_stubs(): void {
 		'administrator' => new PressQueue_Test_Role(),
 		'editor'        => new PressQueue_Test_Role(),
 	);
+	$GLOBALS['pressqueue_test_current_user_caps']  = array();
+	$GLOBALS['pressqueue_test_valid_nonces']       = array();
 	$GLOBALS['pressqueue_runtime_notice']          = null;
 	$GLOBALS['wp_version']                         = '6.8.8';
 }
@@ -194,6 +198,95 @@ function esc_html( $text ): string {
  */
 function esc_html__( $text, $domain = 'default' ): string {
 	return esc_html( __( $text, $domain ) );
+}
+
+/**
+ * Escape an attribute for tests.
+ *
+ * @param string $text Text.
+ * @return string
+ */
+function esc_attr( $text ): string {
+	return esc_html( $text );
+}
+
+/**
+ * Escape a URL for tests.
+ *
+ * @param string $url URL.
+ * @return string
+ */
+function esc_url( $url ): string {
+	return esc_html( $url );
+}
+
+/**
+ * Sanitize a text field for tests.
+ *
+ * @param mixed $value Input value.
+ * @return string
+ */
+function sanitize_text_field( $value ): string {
+	return trim( strip_tags( (string) $value ) );
+}
+
+/**
+ * Sanitize a key for tests.
+ *
+ * @param mixed $value Input value.
+ * @return string
+ */
+function sanitize_key( $value ): string {
+	return strtolower( preg_replace( '/[^a-z0-9_\\-]/', '', (string) $value ) ?? '' );
+}
+
+/**
+ * Strip slashes from request data for tests.
+ *
+ * @param mixed $value Input value.
+ * @return mixed
+ */
+function wp_unslash( $value ) {
+	if ( is_array( $value ) ) {
+		return array_map( 'wp_unslash', $value );
+	}
+
+	return is_string( $value ) ? stripslashes( $value ) : $value;
+}
+
+/**
+ * Check the current user's test capabilities.
+ *
+ * @param string $capability Capability.
+ * @param mixed  ...$args Additional arguments.
+ * @return bool
+ */
+function current_user_can( $capability, ...$args ): bool {
+	unset( $args );
+
+	return ! empty( $GLOBALS['pressqueue_test_current_user_caps'][ $capability ] );
+}
+
+/**
+ * Check a test nonce for administrator mutations.
+ *
+ * @param int|string $action Nonce action.
+ * @param string     $query_arg Request field.
+ * @return int
+ */
+function check_admin_referer( $action = -1, $query_arg = '_wpnonce' ): int {
+	$nonce = isset( $_REQUEST[ $query_arg ] ) ? wp_unslash( $_REQUEST[ $query_arg ] ) : '';
+
+	if ( ! is_string( $nonce ) ) {
+		wp_die( 'Nonce check failed.' );
+	}
+
+	$expected = $GLOBALS['pressqueue_test_valid_nonces'][ (string) $action ] ?? null;
+	if ( is_string( $expected ) && hash_equals( $expected, $nonce ) ) {
+		return 1;
+	}
+
+	wp_die( 'Nonce check failed.' );
 }
 
 /**

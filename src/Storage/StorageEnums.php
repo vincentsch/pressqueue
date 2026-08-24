@@ -13,15 +13,17 @@ namespace PressQueue\Storage;
  * Keeps storage states fail-closed.
  */
 final class StorageEnums {
-	public const RULE_EFFECTS      = array( 'include', 'exclude' );
-	public const CONDITION_RESULTS = array( 'matched', 'not_matched', 'error' );
-	public const DECISION_RESULTS  = array( 'included', 'excluded', 'skipped', 'policy_error' );
-	public const EVENT_MODES       = array( 'runtime', 'preview' );
-	public const DELIVERY_MODES    = array( 'live', 'dry_run' );
-	public const DELIVERY_STATES   = array( 'proposed', 'dry_run', 'held' );
-	public const RULE_TRIGGERS     = array( 'first_publish', 'update', 'scheduled_publication' );
-	public const SCHEDULE_POLICIES = array( 'immediate' );
-	public const SCOPE_TYPES       = array( 'global', 'channel' );
+	public const RULE_EFFECTS           = array( 'include', 'exclude' );
+	public const CONDITION_RESULTS      = array( 'matched', 'not_matched', 'error' );
+	public const DECISION_RESULTS       = array( 'included', 'excluded', 'skipped', 'policy_error' );
+	public const EVENT_MODES            = array( 'runtime', 'preview' );
+	public const DELIVERY_MODES         = array( 'live', 'dry_run' );
+	public const DELIVERY_STATES        = array( 'proposed', 'dry_run', 'held' );
+	public const CONNECTION_STATUSES    = array( 'disconnected', 'unverified', 'verified', 'credential_invalid' );
+	public const CHANNEL_AVAILABILITIES = array( 'unverified', 'available', 'missing', 'unsupported' );
+	public const RULE_TRIGGERS          = array( 'first_publish', 'update', 'scheduled_publication' );
+	public const SCHEDULE_POLICIES      = array( 'immediate' );
+	public const SCOPE_TYPES            = array( 'global', 'channel' );
 
 	/**
 	 * Assert that a value belongs to an enum set.
@@ -90,6 +92,24 @@ final class StorageEnums {
 	 */
 	public static function assert_delivery_state( string $value ): void {
 		self::assert( 'Delivery state', $value, self::DELIVERY_STATES );
+	}
+
+	/**
+	 * Assert a connection status.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_connection_status( string $value ): void {
+		self::assert( 'Connection status', $value, self::CONNECTION_STATUSES );
+	}
+
+	/**
+	 * Assert a channel availability.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_channel_availability( string $value ): void {
+		self::assert( 'Channel availability', $value, self::CHANNEL_AVAILABILITIES );
 	}
 
 	/**

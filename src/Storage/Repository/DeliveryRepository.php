@@ -13,6 +13,7 @@ use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\HashKeys;
 use PressQueue\Storage\PublicIdCollisionException;
 use PressQueue\Storage\PublicIds;
+use PressQueue\Storage\Record\ConnectionRecord;
 use PressQueue\Storage\Record\DeliveryRecord;
 use PressQueue\Storage\StorageEnums;
 use PressQueue\Storage\StorageException;
@@ -208,6 +209,19 @@ final class DeliveryRepository extends AbstractRepository {
 			throw new ValidationException( 'Delivery destination identity is inconsistent.' );
 		}
 
+		if ( ! $this->connection_allows_delivery( $connection ) ) {
+			throw new ValidationException( 'Delivery connection must be enabled and verified.' );
+		}
+
+		if (
+			! $channel->enabled
+			|| 'available' !== $channel->availability
+			|| $channel->remote_organization_id !== $connection->remote_organization_id
+			|| ! $this->channel_capability_allows_delivery( $channel->capabilities )
+		) {
+			throw new ValidationException( 'Delivery channel must be enabled and available.' );
+		}
+
 		$remote_channel_id = (string) ( $input['remote_channel_id'] ?? $channel->remote_channel_id );
 		if ( $remote_channel_id !== $channel->remote_channel_id ) {
 			throw new ValidationException( 'Delivery remote channel ID must match the stored channel.' );
@@ -279,6 +293,40 @@ final class DeliveryRepository extends AbstractRepository {
 		}
 
 		throw new ValidationException( 'Delivery mode and state are inconsistent.' );
+	}
+
+	/**
+	 * Check whether a channel capability document supports text immediate delivery.
+	 *
+	 * @param array<string,mixed> $capabilities Capability document.
+	 * @return bool
+	 */
+	private function channel_capability_allows_delivery( array $capabilities ): bool {
+		$delivery = $capabilities['delivery'] ?? null;
+
+		return 1 === (int) ( $capabilities['schema_version'] ?? 0 )
+			&& is_array( $delivery )
+			&& true === ( $delivery['text'] ?? false )
+			&& isset( $delivery['schedule_slots'] )
+			&& is_array( $delivery['schedule_slots'] )
+			&& in_array( 'immediate', $delivery['schedule_slots'], true );
+	}
+
+	/**
+	 * Check whether a connection has every verified delivery prerequisite.
+	 *
+	 * @param \PressQueue\Storage\Record\ConnectionRecord $connection Connection.
+	 * @return bool
+	 */
+	private function connection_allows_delivery( ConnectionRecord $connection ): bool {
+		return $connection->enabled
+			&& 'verified' === $connection->connection_status
+			&& $connection->has_credential
+			&& null !== $connection->credential_envelope_hash
+			&& null !== $connection->remote_account_id
+			&& null !== $connection->remote_organization_id
+			&& null !== $connection->verified_identity_hash
+			&& null !== $connection->last_sync_completed_at;
 	}
 
 	/**

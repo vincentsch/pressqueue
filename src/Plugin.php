@@ -78,6 +78,7 @@ final class Plugin {
 
 		EventCollector::register_hooks();
 		AdminScreens::register_hooks();
+		Capabilities::register_hooks();
 
 		if ( Database::has_global_database() ) {
 			add_action( 'pressqueue_schema_upgrade', array( SchemaMigrator::class, 'migrate_current_site' ), 10, 1 );
@@ -97,11 +98,10 @@ final class Plugin {
 
 		$status = new SchemaStatus();
 
-		if ( $status->is_current() || $status->has_active_migration_lock() || $status->has_migration_failed() ) {
-			return;
+		if ( ! $status->is_current() && ! $status->has_active_migration_lock() && ! $status->has_migration_failed() ) {
+			do_action( 'pressqueue_schema_upgrade', false );
 		}
 
-		do_action( 'pressqueue_schema_upgrade', false );
 		do_action( 'pressqueue_capability_registration', false );
 		SettingsRepository::ensure_defaults_for_current_site();
 	}

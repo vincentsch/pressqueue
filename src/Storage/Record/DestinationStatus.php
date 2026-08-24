@@ -19,6 +19,10 @@ final class DestinationStatus {
 	public bool $channel_enabled;
 	public bool $connection_exists;
 	public bool $connection_enabled;
+	public ?string $connection_status;
+	public ?string $channel_availability;
+	/** @var array<string,mixed>|null */
+	public ?array $capabilities;
 	public ?string $provider;
 	public ?string $connection_public_id;
 	public ?string $channel_public_id;
@@ -27,20 +31,26 @@ final class DestinationStatus {
 	/**
 	 * Constructor.
 	 *
-	 * @param bool        $channel_exists Whether the channel row exists.
-	 * @param bool        $channel_enabled Whether the channel is enabled.
-	 * @param bool        $connection_exists Whether the connection row exists.
-	 * @param bool        $connection_enabled Whether the connection is enabled.
-	 * @param string|null $provider Provider key.
-	 * @param string|null $connection_public_id Connection public ID.
-	 * @param string|null $channel_public_id Channel public ID.
-	 * @param string|null $remote_channel_id Remote channel ID.
+	 * @param bool                     $channel_exists Whether the channel row exists.
+	 * @param bool                     $channel_enabled Whether the channel is enabled.
+	 * @param bool                     $connection_exists Whether the connection row exists.
+	 * @param bool                     $connection_enabled Whether the connection is enabled.
+	 * @param string|null              $connection_status Connection status.
+	 * @param string|null              $channel_availability Channel availability.
+	 * @param array<string,mixed>|null $capabilities Capability document.
+	 * @param string|null              $provider Provider key.
+	 * @param string|null              $connection_public_id Connection public ID.
+	 * @param string|null              $channel_public_id Channel public ID.
+	 * @param string|null              $remote_channel_id Remote channel ID.
 	 */
 	public function __construct(
 		bool $channel_exists,
 		bool $channel_enabled,
 		bool $connection_exists,
 		bool $connection_enabled,
+		?string $connection_status,
+		?string $channel_availability,
+		?array $capabilities,
 		?string $provider,
 		?string $connection_public_id,
 		?string $channel_public_id,
@@ -50,6 +60,9 @@ final class DestinationStatus {
 		$this->channel_enabled      = $channel_enabled;
 		$this->connection_exists    = $connection_exists;
 		$this->connection_enabled   = $connection_enabled;
+		$this->connection_status    = $connection_status;
+		$this->channel_availability = $channel_availability;
+		$this->capabilities         = $capabilities;
 		$this->provider             = $provider;
 		$this->connection_public_id = $connection_public_id;
 		$this->channel_public_id    = $channel_public_id;

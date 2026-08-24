@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace PressQueue\Storage;
 
+use Throwable;
+
 /**
  * Provides prepared access to known PressQueue tables.
  */
@@ -257,6 +259,28 @@ final class Database {
 		);
 
 		return $this->query( $sql, $args );
+	}
+
+	/**
+	 * Run work inside a database transaction.
+	 *
+	 * @template T
+	 * @param callable():T $callback Transactional work.
+	 * @return T
+	 */
+	public function transaction( callable $callback ) {
+		$this->query( 'START TRANSACTION' );
+
+		try {
+			$result = $callback();
+			$this->query( 'COMMIT' );
+
+			return $result;
+		} catch ( Throwable $throwable ) {
+			$this->query( 'ROLLBACK' );
+
+			throw $throwable;
+		}
 	}
 
 	/**
