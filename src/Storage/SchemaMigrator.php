@@ -83,6 +83,8 @@ final class SchemaMigrator {
 					$this->create_base_tables();
 				} elseif ( 2 === $next_version ) {
 					$this->migrate_to_version_2();
+				} elseif ( 3 === $next_version ) {
+					$this->migrate_to_version_3();
 				}
 
 				$this->assert_expected_schema();
@@ -156,6 +158,7 @@ final class SchemaMigrator {
 	 * Add Buffer connection and discovery metadata.
 	 */
 	private function migrate_to_version_2(): void {
+		$this->validate_existing_delivery_payloads_if_present();
 		$this->create_base_tables();
 
 		$connections = $this->database->table( Schema::CONNECTIONS );
@@ -197,6 +200,67 @@ final class SchemaMigrator {
 	}
 
 	/**
+	 * Add delivery queue projection and event ledger storage.
+	 */
+	private function migrate_to_version_3(): void {
+		$deliveries = $this->database->table( Schema::DELIVERIES );
+		$events     = $this->database->table( Schema::DELIVERY_EVENTS );
+
+		$this->validate_existing_delivery_payloads_if_present();
+		$this->create_base_tables();
+		$this->validate_legacy_delivery_payloads( $deliveries );
+
+		$this->maybe_add_column( $deliveries, 'bound_provider', 'bound_provider VARCHAR(32) NULL AFTER updated_at' );
+		$this->maybe_add_column( $deliveries, 'bound_connection_public_id', 'bound_connection_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER bound_provider' );
+		$this->maybe_add_column( $deliveries, 'bound_channel_public_id', 'bound_channel_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER bound_connection_public_id' );
+		$this->maybe_add_column( $deliveries, 'bound_remote_account_id', 'bound_remote_account_id VARCHAR(191) NULL AFTER bound_channel_public_id' );
+		$this->maybe_add_column( $deliveries, 'bound_remote_organization_id', 'bound_remote_organization_id VARCHAR(191) NULL AFTER bound_remote_account_id' );
+		$this->maybe_add_column( $deliveries, 'bound_remote_channel_id', 'bound_remote_channel_id VARCHAR(191) NULL AFTER bound_remote_organization_id' );
+		$this->maybe_add_column( $deliveries, 'bound_capability_schema_version', 'bound_capability_schema_version SMALLINT UNSIGNED NULL AFTER bound_remote_channel_id' );
+		$this->maybe_add_column( $deliveries, 'queued_at', 'queued_at DATETIME NULL AFTER bound_capability_schema_version' );
+		$this->maybe_add_column( $deliveries, 'last_attempt_at', 'last_attempt_at DATETIME NULL AFTER queued_at' );
+		$this->maybe_add_column( $deliveries, 'attempt_count', 'attempt_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER last_attempt_at' );
+		$this->maybe_add_column( $deliveries, 'automatic_attempt_count', 'automatic_attempt_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER attempt_count' );
+		$this->maybe_add_column( $deliveries, 'next_attempt_at', 'next_attempt_at DATETIME NULL AFTER automatic_attempt_count' );
+		$this->maybe_add_column( $deliveries, 'lease_owner', 'lease_owner CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER next_attempt_at' );
+		$this->maybe_add_column( $deliveries, 'lease_expires_at', 'lease_expires_at DATETIME NULL AFTER lease_owner' );
+		$this->maybe_add_column( $deliveries, 'action_id', 'action_id BIGINT UNSIGNED NULL AFTER lease_expires_at' );
+		$this->maybe_add_column( $deliveries, 'provider_result', 'provider_result VARCHAR(32) NULL AFTER action_id' );
+		$this->maybe_add_column( $deliveries, 'retry_safety', "retry_safety VARCHAR(32) NOT NULL DEFAULT 'not_retryable' AFTER provider_result" );
+		$this->maybe_add_column( $deliveries, 'receipt_json', 'receipt_json LONGTEXT NULL AFTER retry_safety' );
+		$this->maybe_add_column( $deliveries, 'remote_id', 'remote_id VARCHAR(191) NULL AFTER receipt_json' );
+		$this->maybe_add_column( $deliveries, 'remote_receipt_key', 'remote_receipt_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER remote_id' );
+		$this->maybe_add_column( $deliveries, 'error_class', 'error_class VARCHAR(64) NULL AFTER remote_receipt_key' );
+		$this->maybe_add_column( $deliveries, 'error_detail_json', 'error_detail_json LONGTEXT NULL AFTER error_class' );
+		$this->maybe_add_column( $deliveries, 'reconciliation_status', "reconciliation_status VARCHAR(32) NOT NULL DEFAULT 'none' AFTER error_detail_json" );
+		$this->maybe_add_column( $deliveries, 'reconciled_at', 'reconciled_at DATETIME NULL AFTER reconciliation_status' );
+		$this->maybe_add_column( $deliveries, 'reconciled_by', 'reconciled_by BIGINT UNSIGNED NULL AFTER reconciled_at' );
+		$this->maybe_add_column( $deliveries, 'reconciliation_note', 'reconciliation_note VARCHAR(500) NULL AFTER reconciled_by' );
+		$this->maybe_add_column( $deliveries, 'payload_schema_version', 'payload_schema_version SMALLINT UNSIGNED NOT NULL DEFAULT 1 AFTER reconciliation_note' );
+		$this->maybe_add_column( $deliveries, 'adapter_encoding_version', 'adapter_encoding_version SMALLINT UNSIGNED NOT NULL DEFAULT 1 AFTER payload_schema_version' );
+		$this->maybe_add_column( $deliveries, 'state_changed_at', 'state_changed_at DATETIME NULL AFTER adapter_encoding_version' );
+
+		$this->database->query(
+			"UPDATE `$deliveries`
+				SET state_changed_at = updated_at
+				WHERE state_changed_at IS NULL"
+		);
+
+		$this->maybe_add_index( $deliveries, 'connection_public_id', 'KEY connection_public_id (connection_public_id)' );
+		$this->maybe_add_index( $deliveries, 'state_next_attempt', 'KEY state_next_attempt (state, next_attempt_at)' );
+		$this->maybe_add_index( $deliveries, 'lease_expires_at', 'KEY lease_expires_at (lease_expires_at)' );
+		$this->maybe_add_index( $deliveries, 'action_id', 'KEY action_id (action_id)' );
+		$this->maybe_add_index( $deliveries, 'remote_id', 'KEY remote_id (remote_id)' );
+		$this->maybe_add_index( $deliveries, 'remote_receipt_key', 'UNIQUE KEY remote_receipt_key (remote_receipt_key)' );
+		$this->maybe_add_index( $deliveries, 'reconciliation_status', 'KEY reconciliation_status (reconciliation_status)' );
+		$this->maybe_add_index( $deliveries, 'state_changed_id', 'KEY state_changed_id (state_changed_at, id)' );
+
+		if ( $events !== $this->database->get_var( 'SHOW TABLES LIKE %s', array( $events ) ) ) {
+			$this->create_base_tables();
+		}
+	}
+
+	/**
 	 * Backfill legacy connection rows into the disconnected state.
 	 *
 	 * @param string $table Table name.
@@ -225,6 +289,50 @@ final class SchemaMigrator {
 					availability = 'unverified'
 				WHERE remote_organization_id = ''"
 		);
+	}
+
+	/**
+	 * Validate existing payload previews before marking them as schema version 1.
+	 *
+	 * @param string $table Deliveries table.
+	 */
+	private function validate_legacy_delivery_payloads( string $table ): void {
+		$columns = $this->columns( $table );
+
+		if ( ! isset( $columns['payload_preview_json'], $columns['payload_hash'] ) ) {
+			return;
+		}
+
+		$rows = $this->database->get_results_array(
+			"SELECT id, payload_preview_json, payload_hash FROM `$table`"
+		);
+
+		foreach ( $rows as $row ) {
+			$payload = CanonicalJson::decode_object( (string) $row['payload_preview_json'] );
+
+			if (
+				! isset( $payload['message'], $payload['canonical_url'] )
+				|| ! is_string( $payload['message'] )
+				|| ! is_string( $payload['canonical_url'] )
+			) {
+				throw new StorageException( 'Legacy delivery payload is not compatible with payload schema version 1.' );
+			}
+
+			StorageValidator::assert_hash( (string) $row['payload_hash'] );
+		}
+	}
+
+	/**
+	 * Validate existing delivery payloads before schema expansion assigns versions.
+	 */
+	private function validate_existing_delivery_payloads_if_present(): void {
+		$deliveries = $this->database->table( Schema::DELIVERIES );
+
+		if ( $deliveries !== $this->database->get_var( 'SHOW TABLES LIKE %s', array( $deliveries ) ) ) {
+			return;
+		}
+
+		$this->validate_legacy_delivery_payloads( $deliveries );
 	}
 
 	/**

@@ -562,11 +562,21 @@ final class Planner {
 			);
 		}
 
-		if ( 'available' !== $channel->availability || ! $this->channel_capability_allows_delivery( $channel ) ) {
+		if ( 'available' !== $channel->availability ) {
 			return array(
 				'destination' => $this->destination_snapshot( $channel, null ),
 				'ok'          => false,
 				'reason'      => ReasonFactory::make( 'unavailable_channel', 'Destination channel is not available for text delivery.', 'error', 'channel_availability', 'equals', 'available', $channel->availability ),
+				'result'      => 'policy_error',
+			);
+		}
+
+		$capability = $this->channel_capability_decision( $channel );
+		if ( ! $capability['compatible'] ) {
+			return array(
+				'destination' => $this->destination_snapshot( $channel, null ),
+				'ok'          => false,
+				'reason'      => ReasonFactory::make( 'unsupported_channel_capability', 'Destination channel does not support text immediate delivery.', 'error', 'channel_capability', 'supports_text_immediate', true, $capability ),
 				'result'      => 'policy_error',
 			);
 		}
@@ -649,6 +659,7 @@ final class Planner {
 			'channel_public_id'                 => $channel->public_id,
 			'channel_enabled'                   => $channel->enabled,
 			'channel_availability'              => $channel->availability,
+			'channel_capability_decision'       => $this->channel_capability_decision( $channel ),
 			'channel_capability_schema_version' => (int) ( $channel->capabilities['schema_version'] ?? 0 ),
 			'connection_id'                     => null === $connection ? 0 : $connection->id,
 			'connection_label'                  => null === $connection ? '' : $connection->label,
@@ -663,20 +674,36 @@ final class Planner {
 	}
 
 	/**
-	 * Check whether the channel can receive a text immediate delivery.
+	 * Return the text immediate delivery capability decision for a channel.
 	 *
 	 * @param ChannelRecord $channel Channel.
-	 * @return bool
+	 * @return array{schema_version:int,text:bool,schedule_slots:array<int,string>,supports_immediate:bool,compatible:bool}
 	 */
-	private function channel_capability_allows_delivery( ChannelRecord $channel ): bool {
+	private function channel_capability_decision( ChannelRecord $channel ): array {
 		$delivery = $channel->capabilities['delivery'] ?? null;
+		$slots    = array();
 
-		return 1 === (int) ( $channel->capabilities['schema_version'] ?? 0 )
-			&& is_array( $delivery )
-			&& true === ( $delivery['text'] ?? false )
-			&& isset( $delivery['schedule_slots'] )
-			&& is_array( $delivery['schedule_slots'] )
-			&& in_array( 'immediate', $delivery['schedule_slots'], true );
+		if ( is_array( $delivery ) && isset( $delivery['schedule_slots'] ) && is_array( $delivery['schedule_slots'] ) ) {
+			foreach ( $delivery['schedule_slots'] as $slot ) {
+				if ( is_string( $slot ) ) {
+					$slots[] = $slot;
+				}
+			}
+		}
+
+		$text               = is_array( $delivery ) && true === ( $delivery['text'] ?? false );
+		$supports_immediate = in_array( 'immediate', $slots, true );
+		$schema_version     = (int) ( $channel->capabilities['schema_version'] ?? 0 );
+
+		return array(
+			'compatible'         => 1 === $schema_version
+				&& $text
+				&& $supports_immediate,
+			'schedule_slots'     => $slots,
+			'schema_version'     => $schema_version,
+			'supports_immediate' => $supports_immediate,
+			'text'               => $text,
+		);
 	}
 
 	/**

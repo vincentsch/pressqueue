@@ -299,6 +299,48 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( 'disabled_connection', $connection_result->decisions[0]['reasons'][ count( $connection_result->decisions[0]['reasons'] ) - 1 ]['code'] );
 	}
 
+	public function test_unsupported_channel_capability_is_explainable_policy_error(): void {
+		$destination = $this->enabledDestination();
+		$channels    = new ChannelRepository();
+		$rules       = new RuleRepository();
+		$channel     = $channels->create(
+			$destination['connection_public_id'],
+			'buffer',
+			'unsupported-channel',
+			'mastodon',
+			array( 'name' => 'Unsupported' ),
+			array(
+				'delivery'       => array(
+					'schedule_slots' => array(),
+					'text'           => false,
+				),
+				'schema_version' => 1,
+				'service'        => 'mastodon',
+			),
+			true,
+			'2026-08-24 12:00:00',
+			'org_1',
+			'available'
+		);
+		$rule        = $rules->create(
+			array_merge(
+				$this->includeRuleInput( $channel->public_id ),
+				array( 'enabled' => true )
+			)
+		);
+
+		$result = $this->planPost( $this->publishedPost(), array( $rule ) );
+		$reason = $result->decisions[0]['reasons'][ count( $result->decisions[0]['reasons'] ) - 1 ];
+		$record = $result->decisions[0]['stored_record'];
+
+		self::assertSame( 'policy_error', $result->decisions[0]['result'] );
+		self::assertSame( 'unsupported_channel_capability', $reason['code'] );
+		self::assertSame( 'available', $record->snapshot['destination']['channel_availability'] );
+		self::assertFalse( $record->snapshot['destination']['channel_capability_decision']['compatible'] );
+		self::assertFalse( $record->snapshot['destination']['channel_capability_decision']['text'] );
+		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
 	public function test_invalid_taxonomy_configuration_is_policy_error(): void {
 		$destination = $this->enabledDestination();
 		$rule        = ( new RuleRepository() )->create(

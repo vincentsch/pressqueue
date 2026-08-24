@@ -25,27 +25,56 @@ use PressQueue\Storage\ValidationException;
  */
 final class DeliveryRepository extends AbstractRepository {
 	private const FORMATS = array(
-		'id'                   => '%d',
-		'public_id'            => '%s',
-		'decision_id'          => '%d',
-		'decision_public_id'   => '%s',
-		'event_key'            => '%s',
-		'delivery_key'         => '%s',
-		'delivery_mode'        => '%s',
-		'provider'             => '%s',
-		'connection_id'        => '%d',
-		'connection_public_id' => '%s',
-		'channel_id'           => '%d',
-		'channel_public_id'    => '%s',
-		'remote_channel_id'    => '%s',
-		'rule_public_id'       => '%s',
-		'rule_version'         => '%d',
-		'state'                => '%s',
-		'schedule_slot'        => '%s',
-		'payload_preview_json' => '%s',
-		'payload_hash'         => '%s',
-		'created_at'           => '%s',
-		'updated_at'           => '%s',
+		'id'                              => '%d',
+		'public_id'                       => '%s',
+		'decision_id'                     => '%d',
+		'decision_public_id'              => '%s',
+		'event_key'                       => '%s',
+		'delivery_key'                    => '%s',
+		'delivery_mode'                   => '%s',
+		'provider'                        => '%s',
+		'connection_id'                   => '%d',
+		'connection_public_id'            => '%s',
+		'channel_id'                      => '%d',
+		'channel_public_id'               => '%s',
+		'remote_channel_id'               => '%s',
+		'rule_public_id'                  => '%s',
+		'rule_version'                    => '%d',
+		'state'                           => '%s',
+		'schedule_slot'                   => '%s',
+		'payload_preview_json'            => '%s',
+		'payload_hash'                    => '%s',
+		'created_at'                      => '%s',
+		'updated_at'                      => '%s',
+		'bound_provider'                  => '%s',
+		'bound_connection_public_id'      => '%s',
+		'bound_channel_public_id'         => '%s',
+		'bound_remote_account_id'         => '%s',
+		'bound_remote_organization_id'    => '%s',
+		'bound_remote_channel_id'         => '%s',
+		'bound_capability_schema_version' => '%d',
+		'queued_at'                       => '%s',
+		'last_attempt_at'                 => '%s',
+		'attempt_count'                   => '%d',
+		'automatic_attempt_count'         => '%d',
+		'next_attempt_at'                 => '%s',
+		'lease_owner'                     => '%s',
+		'lease_expires_at'                => '%s',
+		'action_id'                       => '%d',
+		'provider_result'                 => '%s',
+		'retry_safety'                    => '%s',
+		'receipt_json'                    => '%s',
+		'remote_id'                       => '%s',
+		'remote_receipt_key'              => '%s',
+		'error_class'                     => '%s',
+		'error_detail_json'               => '%s',
+		'reconciliation_status'           => '%s',
+		'reconciled_at'                   => '%s',
+		'reconciled_by'                   => '%d',
+		'reconciliation_note'             => '%s',
+		'payload_schema_version'          => '%d',
+		'adapter_encoding_version'        => '%d',
+		'state_changed_at'                => '%s',
 	);
 
 	/**
@@ -66,26 +95,55 @@ final class DeliveryRepository extends AbstractRepository {
 				$this->database->insert_row(
 					$table,
 					array(
-						'public_id'            => $public_id,
-						'decision_id'          => $prepared['decision_id'],
-						'decision_public_id'   => $prepared['decision_public_id'],
-						'event_key'            => $prepared['event_key'],
-						'delivery_key'         => $prepared['delivery_key'],
-						'delivery_mode'        => $prepared['delivery_mode'],
-						'provider'             => $prepared['provider'],
-						'connection_id'        => $prepared['connection_id'],
-						'connection_public_id' => $prepared['connection_public_id'],
-						'channel_id'           => $prepared['channel_id'],
-						'channel_public_id'    => $prepared['channel_public_id'],
-						'remote_channel_id'    => $prepared['remote_channel_id'],
-						'rule_public_id'       => $prepared['rule_public_id'],
-						'rule_version'         => $prepared['rule_version'],
-						'state'                => $prepared['state'],
-						'schedule_slot'        => $prepared['schedule_slot'],
-						'payload_preview_json' => $prepared['payload_preview_json'],
-						'payload_hash'         => $prepared['payload_hash'],
-						'created_at'           => $now,
-						'updated_at'           => $now,
+						'public_id'                       => $public_id,
+						'decision_id'                     => $prepared['decision_id'],
+						'decision_public_id'              => $prepared['decision_public_id'],
+						'event_key'                       => $prepared['event_key'],
+						'delivery_key'                    => $prepared['delivery_key'],
+						'delivery_mode'                   => $prepared['delivery_mode'],
+						'provider'                        => $prepared['provider'],
+						'connection_id'                   => $prepared['connection_id'],
+						'connection_public_id'            => $prepared['connection_public_id'],
+						'channel_id'                      => $prepared['channel_id'],
+						'channel_public_id'               => $prepared['channel_public_id'],
+						'remote_channel_id'               => $prepared['remote_channel_id'],
+						'rule_public_id'                  => $prepared['rule_public_id'],
+						'rule_version'                    => $prepared['rule_version'],
+						'state'                           => $prepared['state'],
+						'schedule_slot'                   => $prepared['schedule_slot'],
+						'payload_preview_json'            => $prepared['payload_preview_json'],
+						'payload_hash'                    => $prepared['payload_hash'],
+						'created_at'                      => $now,
+						'updated_at'                      => $now,
+						'bound_provider'                  => $prepared['bound_provider'],
+						'bound_connection_public_id'      => $prepared['bound_connection_public_id'],
+						'bound_channel_public_id'         => $prepared['bound_channel_public_id'],
+						'bound_remote_account_id'         => $prepared['bound_remote_account_id'],
+						'bound_remote_organization_id'    => $prepared['bound_remote_organization_id'],
+						'bound_remote_channel_id'         => $prepared['bound_remote_channel_id'],
+						'bound_capability_schema_version' => $prepared['bound_capability_schema_version'],
+						'queued_at'                       => null,
+						'last_attempt_at'                 => null,
+						'attempt_count'                   => 0,
+						'automatic_attempt_count'         => 0,
+						'next_attempt_at'                 => null,
+						'lease_owner'                     => null,
+						'lease_expires_at'                => null,
+						'action_id'                       => null,
+						'provider_result'                 => null,
+						'retry_safety'                    => 'not_retryable',
+						'receipt_json'                    => null,
+						'remote_id'                       => null,
+						'remote_receipt_key'              => null,
+						'error_class'                     => null,
+						'error_detail_json'               => null,
+						'reconciliation_status'           => 'none',
+						'reconciled_at'                   => null,
+						'reconciled_by'                   => null,
+						'reconciliation_note'             => null,
+						'payload_schema_version'          => 1,
+						'adapter_encoding_version'        => 1,
+						'state_changed_at'                => $now,
 					),
 					self::FORMATS
 				);
@@ -156,6 +214,53 @@ final class DeliveryRepository extends AbstractRepository {
 			'SELECT * FROM `' . $this->deliveries_table() . '` WHERE event_key = %s ORDER BY id ASC',
 			array( $event_key )
 		);
+
+		return array_map( array( $this, 'hydrate' ), $rows );
+	}
+
+	/**
+	 * Return deliveries due for recovery or scheduling.
+	 *
+	 * @param int $limit Maximum rows.
+	 * @return array<int,DeliveryRecord>
+	 */
+	public function find_due_for_sweep( int $limit = 25 ): array {
+		if ( $limit < 1 || $limit > 100 ) {
+			throw new ValidationException( 'Sweep batch size is out of range.' );
+		}
+
+		$now  = StorageValidator::now();
+		$rows = $this->database->get_results(
+			'SELECT * FROM `' . $this->deliveries_table() . '`
+				WHERE
+					(delivery_mode = %s AND state = %s)
+					OR (state = %s AND next_attempt_at IS NOT NULL AND next_attempt_at <= %s)
+					OR (state = %s AND action_id IS NULL)
+					OR (state = %s AND lease_expires_at IS NOT NULL AND lease_expires_at <= %s)
+				ORDER BY
+					COALESCE(next_attempt_at, queued_at, state_changed_at, updated_at) ASC,
+					state_changed_at ASC,
+					id ASC
+				LIMIT %d',
+			array( 'live', 'proposed', 'retrying', $now, 'queued', 'leased', $now, $limit )
+		);
+
+		$remaining = $limit - count( $rows );
+		if ( $remaining > 0 ) {
+			$rows = array_merge(
+				$rows,
+				$this->database->get_results(
+					'SELECT * FROM `' . $this->deliveries_table() . '`
+						WHERE state = %s AND action_id IS NOT NULL
+						ORDER BY
+							COALESCE(queued_at, state_changed_at, updated_at) ASC,
+							state_changed_at ASC,
+							id ASC
+						LIMIT %d',
+					array( 'queued', $remaining )
+				)
+			);
+		}
 
 		return array_map( array( $this, 'hydrate' ), $rows );
 	}
@@ -256,24 +361,31 @@ final class DeliveryRepository extends AbstractRepository {
 		);
 
 		return array(
-			'decision_id'          => $decision->id,
-			'decision_public_id'   => $decision->public_id,
-			'event_key'            => $decision->event_key,
-			'delivery_key'         => HashKeys::delivery_key( $delivery_mode, $provider, $connection->public_id, $channel->public_id, $remote_channel_id, $decision->post_id, $decision->revision_fingerprint, $decision->trigger, $decision->rule_public_id, $decision->rule_version, $schedule_slot ),
-			'delivery_mode'        => $delivery_mode,
-			'provider'             => $provider,
-			'connection_id'        => $connection->id,
-			'connection_public_id' => $connection->public_id,
-			'channel_id'           => $channel->id,
-			'channel_public_id'    => $channel->public_id,
-			'remote_channel_id'    => $remote_channel_id,
-			'rule_public_id'       => $decision->rule_public_id,
-			'rule_version'         => $decision->rule_version,
-			'state'                => $state,
-			'schedule_slot'        => $schedule_slot,
-			'payload_preview'      => $payload_preview,
-			'payload_preview_json' => $payload_preview_json,
-			'payload_hash'         => $payload_hash,
+			'decision_id'                     => $decision->id,
+			'decision_public_id'              => $decision->public_id,
+			'event_key'                       => $decision->event_key,
+			'delivery_key'                    => HashKeys::delivery_key( $delivery_mode, $provider, $connection->public_id, $channel->public_id, $remote_channel_id, $decision->post_id, $decision->revision_fingerprint, $decision->trigger, $decision->rule_public_id, $decision->rule_version, $schedule_slot ),
+			'delivery_mode'                   => $delivery_mode,
+			'provider'                        => $provider,
+			'connection_id'                   => $connection->id,
+			'connection_public_id'            => $connection->public_id,
+			'channel_id'                      => $channel->id,
+			'channel_public_id'               => $channel->public_id,
+			'remote_channel_id'               => $remote_channel_id,
+			'bound_provider'                  => 'live' === $delivery_mode ? $provider : null,
+			'bound_connection_public_id'      => 'live' === $delivery_mode ? $connection->public_id : null,
+			'bound_channel_public_id'         => 'live' === $delivery_mode ? $channel->public_id : null,
+			'bound_remote_account_id'         => 'live' === $delivery_mode ? $connection->remote_account_id : null,
+			'bound_remote_organization_id'    => 'live' === $delivery_mode ? $connection->remote_organization_id : null,
+			'bound_remote_channel_id'         => 'live' === $delivery_mode ? $remote_channel_id : null,
+			'bound_capability_schema_version' => 'live' === $delivery_mode ? (int) ( $channel->capabilities['schema_version'] ?? 0 ) : null,
+			'rule_public_id'                  => $decision->rule_public_id,
+			'rule_version'                    => $decision->rule_version,
+			'state'                           => $state,
+			'schedule_slot'                   => $schedule_slot,
+			'payload_preview'                 => $payload_preview,
+			'payload_preview_json'            => $payload_preview_json,
+			'payload_hash'                    => $payload_hash,
 		);
 	}
 
@@ -357,7 +469,36 @@ final class DeliveryRepository extends AbstractRepository {
 			CanonicalJson::decode_object( (string) $row->payload_preview_json ),
 			(string) $row->payload_hash,
 			StorageValidator::parse_required_date_time( (string) $row->created_at ),
-			StorageValidator::parse_required_date_time( (string) $row->updated_at )
+			StorageValidator::parse_required_date_time( (string) $row->updated_at ),
+			null === $row->bound_provider ? null : (string) $row->bound_provider,
+			null === $row->bound_connection_public_id ? null : (string) $row->bound_connection_public_id,
+			null === $row->bound_channel_public_id ? null : (string) $row->bound_channel_public_id,
+			null === $row->bound_remote_account_id ? null : (string) $row->bound_remote_account_id,
+			null === $row->bound_remote_organization_id ? null : (string) $row->bound_remote_organization_id,
+			null === $row->bound_remote_channel_id ? null : (string) $row->bound_remote_channel_id,
+			null === $row->bound_capability_schema_version ? null : (int) $row->bound_capability_schema_version,
+			StorageValidator::parse_date_time( null === $row->queued_at ? null : (string) $row->queued_at ),
+			StorageValidator::parse_date_time( null === $row->last_attempt_at ? null : (string) $row->last_attempt_at ),
+			(int) $row->attempt_count,
+			(int) $row->automatic_attempt_count,
+			StorageValidator::parse_date_time( null === $row->next_attempt_at ? null : (string) $row->next_attempt_at ),
+			null === $row->lease_owner ? null : (string) $row->lease_owner,
+			StorageValidator::parse_date_time( null === $row->lease_expires_at ? null : (string) $row->lease_expires_at ),
+			null === $row->action_id ? null : (int) $row->action_id,
+			null === $row->provider_result ? null : (string) $row->provider_result,
+			(string) $row->retry_safety,
+			null === $row->receipt_json ? null : CanonicalJson::decode_object( (string) $row->receipt_json ),
+			null === $row->remote_id ? null : (string) $row->remote_id,
+			null === $row->remote_receipt_key ? null : (string) $row->remote_receipt_key,
+			null === $row->error_class ? null : (string) $row->error_class,
+			null === $row->error_detail_json ? null : CanonicalJson::decode_object( (string) $row->error_detail_json ),
+			(string) $row->reconciliation_status,
+			StorageValidator::parse_date_time( null === $row->reconciled_at ? null : (string) $row->reconciled_at ),
+			null === $row->reconciled_by ? null : (int) $row->reconciled_by,
+			null === $row->reconciliation_note ? null : (string) $row->reconciliation_note,
+			(int) $row->payload_schema_version,
+			(int) $row->adapter_encoding_version,
+			StorageValidator::parse_date_time( null === $row->state_changed_at ? null : (string) $row->state_changed_at )
 		);
 	}
 }

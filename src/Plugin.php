@@ -11,6 +11,7 @@ namespace PressQueue;
 
 use PressQueue\Admin\AdminScreens;
 use PressQueue\Planning\EventCollector;
+use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\SchemaMigrator;
@@ -59,6 +60,7 @@ final class Plugin {
 	 */
 	public static function deactivate( bool $network_wide ): void {
 		do_action( 'pressqueue_before_deactivation', $network_wide );
+		ActionSchedulerQueue::unschedule_all();
 		do_action( 'pressqueue_after_deactivation', $network_wide );
 	}
 
@@ -79,6 +81,7 @@ final class Plugin {
 		EventCollector::register_hooks();
 		AdminScreens::register_hooks();
 		Capabilities::register_hooks();
+		ActionSchedulerQueue::register_hooks();
 
 		if ( Database::has_global_database() ) {
 			add_action( 'pressqueue_schema_upgrade', array( SchemaMigrator::class, 'migrate_current_site' ), 10, 1 );

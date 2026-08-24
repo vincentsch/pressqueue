@@ -13,6 +13,7 @@ $GLOBALS['wp_version']                         = $GLOBALS['wp_version'] ?? '6.8.
 $GLOBALS['pressqueue_test_actions']            = array();
 $GLOBALS['pressqueue_test_hooks']              = array();
 $GLOBALS['pressqueue_test_http_requests']      = array();
+$GLOBALS['pressqueue_test_http_post_response'] = null;
 $GLOBALS['pressqueue_test_deactivated']        = array();
 $GLOBALS['pressqueue_test_is_multisite']       = false;
 $GLOBALS['pressqueue_test_loaded_textdomains'] = array();
@@ -21,6 +22,9 @@ $GLOBALS['pressqueue_test_option_autoloads']   = array();
 $GLOBALS['pressqueue_test_roles']              = array();
 $GLOBALS['pressqueue_test_current_user_caps']  = array();
 $GLOBALS['pressqueue_test_valid_nonces']       = array();
+$GLOBALS['pressqueue_test_as_next_action_id']  = 1000;
+$GLOBALS['pressqueue_test_as_supports']        = array();
+$GLOBALS['pressqueue_test_as_actions']         = array();
 
 /**
  * Reset test hook state.
@@ -29,6 +33,7 @@ function pressqueue_test_reset_wordpress_stubs(): void {
 	$GLOBALS['pressqueue_test_actions']            = array();
 	$GLOBALS['pressqueue_test_hooks']              = array();
 	$GLOBALS['pressqueue_test_http_requests']      = array();
+	$GLOBALS['pressqueue_test_http_post_response'] = null;
 	$GLOBALS['pressqueue_test_deactivated']        = array();
 	$GLOBALS['pressqueue_test_is_multisite']       = false;
 	$GLOBALS['pressqueue_test_loaded_textdomains'] = array();
@@ -40,6 +45,9 @@ function pressqueue_test_reset_wordpress_stubs(): void {
 	);
 	$GLOBALS['pressqueue_test_current_user_caps']  = array();
 	$GLOBALS['pressqueue_test_valid_nonces']       = array();
+	$GLOBALS['pressqueue_test_as_next_action_id']  = 1000;
+	$GLOBALS['pressqueue_test_as_supports']        = array();
+	$GLOBALS['pressqueue_test_as_actions']         = array();
 	$GLOBALS['pressqueue_runtime_notice']          = null;
 	$GLOBALS['wp_version']                         = '6.8.8';
 }
@@ -445,4 +453,218 @@ function wp_remote_get( $url ) {
 	$GLOBALS['pressqueue_test_http_requests'][] = $url;
 
 	throw new RuntimeException( 'External HTTP request attempted: ' . $url );
+}
+
+/**
+ * HTTP post stub that makes accidental external access visible.
+ *
+ * @param string              $url URL.
+ * @param array<string,mixed> $args Request arguments.
+ * @return mixed
+ */
+function wp_remote_post( $url, $args = array() ) {
+	$GLOBALS['pressqueue_test_http_requests'][] = array(
+		'args'   => $args,
+		'method' => 'POST',
+		'url'    => $url,
+	);
+
+	if ( null !== $GLOBALS['pressqueue_test_http_post_response'] ) {
+		return $GLOBALS['pressqueue_test_http_post_response'];
+	}
+
+	throw new RuntimeException( 'External HTTP request attempted: ' . $url );
+}
+
+/**
+ * Minimal WordPress error object for transport tests.
+ */
+class WP_Error {
+	/**
+	 * Error code.
+	 *
+	 * @var string
+	 */
+	private string $code;
+
+	/**
+	 * Error message.
+	 *
+	 * @var string
+	 */
+	private string $message;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param string $code Error code.
+	 * @param string $message Error message.
+	 */
+	public function __construct( string $code, string $message = '' ) {
+		$this->code    = $code;
+		$this->message = $message;
+	}
+
+	/**
+	 * Return the first error code.
+	 *
+	 * @return string
+	 */
+	public function get_error_code(): string {
+		return $this->code;
+	}
+
+	/**
+	 * Return the first error message.
+	 *
+	 * @return string
+	 */
+	public function get_error_message(): string {
+		return $this->message;
+	}
+}
+
+/**
+ * Check whether a value is a WordPress error.
+ *
+ * @param mixed $thing Value.
+ * @return bool
+ */
+function is_wp_error( $thing ): bool {
+	return $thing instanceof WP_Error;
+}
+
+/**
+ * Action Scheduler feature support stub.
+ *
+ * @param string $feature Feature name.
+ * @return bool
+ */
+function as_supports( $feature ): bool {
+	return ! empty( $GLOBALS['pressqueue_test_as_supports'][ $feature ] );
+}
+
+/**
+ * Return the next scheduled action ID for matching arguments.
+ *
+ * @param string           $hook Hook name.
+ * @param array<int,mixed> $args Arguments.
+ * @param string           $group Group.
+ * @return int|false
+ */
+function as_next_scheduled_action( $hook, $args = array(), $group = '' ) {
+	foreach ( $GLOBALS['pressqueue_test_as_actions'] as $action ) {
+		if ( $hook === $action['hook'] && $args === $action['args'] && $group === $action['group'] ) {
+			return $action['id'];
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Schedule a recurring action.
+ *
+ * @param int              $timestamp Timestamp.
+ * @param int              $interval Interval.
+ * @param string           $hook Hook name.
+ * @param array<int,mixed> $args Arguments.
+ * @param string           $group Group.
+ * @param bool             $unique Unique flag.
+ * @return int
+ */
+function as_schedule_recurring_action( $timestamp, $interval, $hook, $args = array(), $group = '', $unique = false ): int {
+	if ( $unique ) {
+		$existing = as_next_scheduled_action( $hook, $args, $group );
+		if ( false !== $existing ) {
+			return (int) $existing;
+		}
+	}
+
+	$id = $GLOBALS['pressqueue_test_as_next_action_id']++;
+	$GLOBALS['pressqueue_test_as_actions'][] = array(
+		'args'      => $args,
+		'group'     => $group,
+		'hook'      => $hook,
+		'id'        => $id,
+		'interval'  => $interval,
+		'timestamp' => $timestamp,
+		'type'      => 'recurring',
+	);
+
+	return $id;
+}
+
+/**
+ * Schedule a single action.
+ *
+ * @param int              $timestamp Timestamp.
+ * @param string           $hook Hook name.
+ * @param array<int,mixed> $args Arguments.
+ * @param string           $group Group.
+ * @param bool             $unique Unique flag.
+ * @return int
+ */
+function as_schedule_single_action( $timestamp, $hook, $args = array(), $group = '', $unique = false ): int {
+	if ( $unique ) {
+		$existing = as_next_scheduled_action( $hook, $args, $group );
+		if ( false !== $existing ) {
+			return (int) $existing;
+		}
+	}
+
+	$id = $GLOBALS['pressqueue_test_as_next_action_id']++;
+	$GLOBALS['pressqueue_test_as_actions'][] = array(
+		'args'      => $args,
+		'group'     => $group,
+		'hook'      => $hook,
+		'id'        => $id,
+		'timestamp' => $timestamp,
+		'type'      => 'single',
+	);
+
+	return $id;
+}
+
+/**
+ * Unschedule one matching action.
+ *
+ * @param string           $hook Hook name.
+ * @param array<int,mixed> $args Arguments.
+ * @param string           $group Group.
+ */
+function as_unschedule_action( $hook, $args = array(), $group = '' ): void {
+	foreach ( $GLOBALS['pressqueue_test_as_actions'] as $index => $action ) {
+		if ( $hook === $action['hook'] && $args === $action['args'] && $group === $action['group'] ) {
+			unset( $GLOBALS['pressqueue_test_as_actions'][ $index ] );
+			$GLOBALS['pressqueue_test_as_actions'] = array_values( $GLOBALS['pressqueue_test_as_actions'] );
+			return;
+		}
+	}
+}
+
+/**
+ * Unschedule all matching actions.
+ *
+ * @param string           $hook Hook name.
+ * @param array<int,mixed> $args Arguments.
+ * @param string           $group Group.
+ */
+function as_unschedule_all_actions( $hook = '', $args = array(), $group = '' ): void {
+	$GLOBALS['pressqueue_test_as_actions'] = array_values(
+		array_filter(
+			$GLOBALS['pressqueue_test_as_actions'],
+			static function ( array $action ) use ( $hook, $args, $group ): bool {
+				if ( '' !== $hook && $hook !== $action['hook'] ) {
+					return true;
+				}
+
+				if ( array() !== $args && $args !== $action['args'] ) {
+					return true;
+				}
+
+				return '' !== $group && $group !== $action['group'];
+			}
+		)
+	);
 }

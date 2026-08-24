@@ -143,4 +143,23 @@ final class HashKeys {
 			)
 		);
 	}
+
+	/**
+	 * Calculate a local remote receipt uniqueness key.
+	 *
+	 * @param string $provider Provider key.
+	 * @param string $connection_public_id Connection public ID.
+	 * @param string $remote_id Remote provider ID.
+	 * @return string
+	 */
+	public static function remote_receipt_key( string $provider, string $connection_public_id, string $remote_id ): string {
+		return CanonicalJson::hash(
+			'remote_receipt_key',
+			array(
+				'connection_public_id' => $connection_public_id,
+				'provider'             => $provider,
+				'remote_id'            => $remote_id,
+			)
+		);
+	}
 }

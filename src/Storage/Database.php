@@ -265,10 +265,12 @@ final class Database {
 	 * Run work inside a database transaction.
 	 *
 	 * @template T
-	 * @param callable():T $callback Transactional work.
+	 * @param callable():T      $callback Transactional work.
+	 * @param array<int,string> $table_suffixes PressQueue table suffixes touched by the transaction.
 	 * @return T
 	 */
-	public function transaction( callable $callback ) {
+	public function transaction( callable $callback, array $table_suffixes = array() ) {
+		$this->assert_transaction_capable_tables( $table_suffixes );
 		$this->query( 'START TRANSACTION' );
 
 		try {
@@ -277,7 +279,14 @@ final class Database {
 
 			return $result;
 		} catch ( Throwable $throwable ) {
-			$this->query( 'ROLLBACK' );
+			try {
+				$this->query( 'ROLLBACK' );
+			} catch ( Throwable $rollback_failure ) {
+				unset( $rollback_failure );
+
+				// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Chained exceptions are not rendered directly.
+				throw new StorageException( 'Database rollback failed after a PressQueue transition error.', 0, $throwable );
+			}
 
 			throw $throwable;
 		}
@@ -359,6 +368,45 @@ final class Database {
 		}
 
 		return (string) $value;
+	}
+
+	/**
+	 * Assert that every touched PressQueue table uses a transaction-capable engine.
+	 *
+	 * @param array<int,string> $table_suffixes PressQueue table suffixes.
+	 */
+	private function assert_transaction_capable_tables( array $table_suffixes ): void {
+		if ( array() === $table_suffixes ) {
+			return;
+		}
+
+		$tables = array();
+		foreach ( $table_suffixes as $suffix ) {
+			$tables[] = $this->table( $suffix );
+		}
+
+		$placeholders = implode( ', ', array_fill( 0, count( $tables ), '%s' ) );
+		$rows         = $this->get_results_array(
+			'SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (' . $placeholders . ')',
+			$tables
+		);
+		$engines      = array();
+
+		foreach ( $rows as $row ) {
+			if ( isset( $row['TABLE_NAME'], $row['ENGINE'] ) ) {
+				$engines[ (string) $row['TABLE_NAME'] ] = strtoupper( (string) $row['ENGINE'] );
+			}
+		}
+
+		foreach ( $tables as $table ) {
+			if ( ! isset( $engines[ $table ] ) ) {
+				throw new StorageUnavailableException( 'PressQueue transition table is missing.' );
+			}
+
+			if ( 'INNODB' !== $engines[ $table ] ) {
+				throw new StorageUnavailableException( 'PressQueue transition table does not support transactions.' );
+			}
+		}
 	}
 
 	/**

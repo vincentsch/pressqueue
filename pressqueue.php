@@ -219,6 +219,15 @@ function pressqueue_load_autoloader(): bool {
 }
 
 /**
+ * Load the bundled Action Scheduler registration file after Composer autoloads.
+ */
+function pressqueue_load_action_scheduler(): void {
+	if ( class_exists( 'PressQueue\Scheduler\ActionSchedulerLoader' ) ) {
+		PressQueue\Scheduler\ActionSchedulerLoader::load();
+	}
+}
+
+/**
  * Activation hook.
  *
  * @param bool $network_wide Whether activation was requested network-wide.
@@ -237,6 +246,8 @@ function pressqueue_activate( $network_wide ): void {
 		);
 		return;
 	}
+
+	pressqueue_load_action_scheduler();
 
 	try {
 		PressQueue\Plugin::activate( (bool) $network_wide );
@@ -261,6 +272,8 @@ function pressqueue_deactivate( $network_wide ): void {
 		return;
 	}
 
+	pressqueue_load_action_scheduler();
+
 	PressQueue\Plugin::deactivate( (bool) $network_wide );
 }
 
@@ -283,5 +296,7 @@ if ( true !== $pressqueue_requirements ) {
 if ( ! pressqueue_load_autoloader() ) {
 	return;
 }
+
+pressqueue_load_action_scheduler();
 
 PressQueue\Plugin::bootstrap();

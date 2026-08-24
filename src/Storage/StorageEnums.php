@@ -13,17 +13,22 @@ namespace PressQueue\Storage;
  * Keeps storage states fail-closed.
  */
 final class StorageEnums {
-	public const RULE_EFFECTS           = array( 'include', 'exclude' );
-	public const CONDITION_RESULTS      = array( 'matched', 'not_matched', 'error' );
-	public const DECISION_RESULTS       = array( 'included', 'excluded', 'skipped', 'policy_error' );
-	public const EVENT_MODES            = array( 'runtime', 'preview' );
-	public const DELIVERY_MODES         = array( 'live', 'dry_run' );
-	public const DELIVERY_STATES        = array( 'proposed', 'dry_run', 'held' );
-	public const CONNECTION_STATUSES    = array( 'disconnected', 'unverified', 'verified', 'credential_invalid' );
-	public const CHANNEL_AVAILABILITIES = array( 'unverified', 'available', 'missing', 'unsupported' );
-	public const RULE_TRIGGERS          = array( 'first_publish', 'update', 'scheduled_publication' );
-	public const SCHEDULE_POLICIES      = array( 'immediate' );
-	public const SCOPE_TYPES            = array( 'global', 'channel' );
+	public const RULE_EFFECTS            = array( 'include', 'exclude' );
+	public const CONDITION_RESULTS       = array( 'matched', 'not_matched', 'error' );
+	public const DECISION_RESULTS        = array( 'included', 'excluded', 'skipped', 'policy_error' );
+	public const EVENT_MODES             = array( 'runtime', 'preview' );
+	public const DELIVERY_MODES          = array( 'live', 'dry_run' );
+	public const DELIVERY_STATES         = array( 'proposed', 'dry_run', 'held', 'queued', 'leased', 'retrying', 'accepted', 'failed', 'ambiguous', 'cancelled' );
+	public const PROVIDER_RESULTS        = array( 'accepted', 'retryable_failure', 'rate_limited', 'permanent_failure', 'ambiguous' );
+	public const RETRY_SAFETY_VALUES     = array( 'not_retryable', 'automatic_allowed', 'manual_allowed', 'reconcile_first' );
+	public const RECONCILIATION_STATUSES = array( 'none', 'confirmed_remote_id', 'confirmed_not_accepted', 'cancelled' );
+	public const DELIVERY_EVENT_TYPES    = array( 'destination_bound', 'queued', 'leased', 'submission_started', 'provider_result', 'retry_scheduled', 'held', 'failed', 'cancelled', 'resumed', 'reconciled', 'refused_transition', 'scheduler_enqueue_failed', 'scheduler_unavailable', 'scheduler_action_scheduled', 'scheduler_race_repaired', 'lease_recovered', 'lease_ambiguous' );
+	public const DELIVERY_ACTOR_TYPES    = array( 'system', 'queue_sweep', 'worker', 'recovery', 'operator', 'scheduler' );
+	public const CONNECTION_STATUSES     = array( 'disconnected', 'unverified', 'verified', 'credential_invalid' );
+	public const CHANNEL_AVAILABILITIES  = array( 'unverified', 'available', 'missing', 'unsupported' );
+	public const RULE_TRIGGERS           = array( 'first_publish', 'update', 'scheduled_publication' );
+	public const SCHEDULE_POLICIES       = array( 'immediate' );
+	public const SCOPE_TYPES             = array( 'global', 'channel' );
 
 	/**
 	 * Assert that a value belongs to an enum set.
@@ -92,6 +97,51 @@ final class StorageEnums {
 	 */
 	public static function assert_delivery_state( string $value ): void {
 		self::assert( 'Delivery state', $value, self::DELIVERY_STATES );
+	}
+
+	/**
+	 * Assert a provider delivery result.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_provider_result( string $value ): void {
+		self::assert( 'Provider result', $value, self::PROVIDER_RESULTS );
+	}
+
+	/**
+	 * Assert a retry safety value.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_retry_safety( string $value ): void {
+		self::assert( 'Retry safety', $value, self::RETRY_SAFETY_VALUES );
+	}
+
+	/**
+	 * Assert a reconciliation status.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_reconciliation_status( string $value ): void {
+		self::assert( 'Reconciliation status', $value, self::RECONCILIATION_STATUSES );
+	}
+
+	/**
+	 * Assert a delivery event type.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_delivery_event_type( string $value ): void {
+		self::assert( 'Delivery event type', $value, self::DELIVERY_EVENT_TYPES );
+	}
+
+	/**
+	 * Assert a delivery actor type.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_delivery_actor_type( string $value ): void {
+		self::assert( 'Delivery actor type', $value, self::DELIVERY_ACTOR_TYPES );
 	}
 
 	/**

@@ -291,6 +291,50 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		self::assertArrayHasKey( 'connection_org_remote_channel', $this->indexes( $chan_table ) );
 	}
 
+	public function test_delivery_payload_validation_runs_before_queue_schema_expansion(): void {
+		$migrator = new SchemaMigrator( Database::from_globals() );
+		$migrator->migrate();
+
+		$destination = $this->enabledDestination();
+		$rule        = ( new RuleRepository() )->create( $this->ruleInput( $destination['channel']->public_id ) );
+		$decision    = ( new DecisionRepository() )->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $destination['channel']->public_id ) );
+		$delivery    = ( new DeliveryRepository() )->create(
+			array(
+				'channel_public_id'    => $destination['channel']->public_id,
+				'connection_public_id' => $destination['connection']->public_id,
+				'decision_public_id'   => $decision->public_id,
+				'delivery_mode'        => 'dry_run',
+				'payload_preview'      => array(
+					'canonical_url' => 'https://example.test/post',
+					'message'       => 'Legacy payload',
+				),
+				'provider'             => 'buffer',
+				'state'                => 'dry_run',
+			)
+		);
+		$database    = Database::from_globals();
+		$table       = $database->table( Schema::DELIVERIES );
+
+		global $wpdb;
+		$wpdb->update(
+			$table,
+			array( 'payload_preview_json' => '{}' ),
+			array( 'public_id' => $delivery->public_id )
+		);
+
+		$this->downgradeDeliveryColumnsToPreviewShape( $database );
+		update_option( Schema::VERSION_OPTION, 1, false );
+
+		try {
+			$migrator->migrate();
+			self::fail( 'Malformed legacy delivery payloads must stop migration before queue fields are added.' );
+		} catch ( StorageException $exception ) {
+			self::assertSame( 'Legacy delivery payload is not compatible with payload schema version 1.', $exception->getMessage() );
+		}
+
+		self::assertArrayNotHasKey( 'payload_schema_version', $this->columns( $table ) );
+	}
+
 	public function test_connection_channel_lifecycle_is_disabled_until_explicit_enable_and_disconnect_preserves_rows(): void {
 		( new SchemaMigrator( Database::from_globals() ) )->migrate();
 
@@ -958,6 +1002,23 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 
 		foreach ( array( 'remote_organization_id', 'availability', 'last_seen_at', 'availability_checked_at' ) as $column ) {
 			$this->dropColumnIfExists( $channels, $column );
+		}
+	}
+
+	/**
+	 * Remove queue projection columns and indexes to simulate preview-only delivery storage.
+	 *
+	 * @param Database $database Database.
+	 */
+	private function downgradeDeliveryColumnsToPreviewShape( Database $database ): void {
+		$deliveries = $database->table( Schema::DELIVERIES );
+
+		foreach ( array( 'state_next_attempt', 'lease_expires_at', 'action_id', 'remote_id', 'remote_receipt_key', 'reconciliation_status', 'state_changed_id' ) as $index ) {
+			$this->dropIndexIfExists( $deliveries, $index );
+		}
+
+		foreach ( array( 'bound_provider', 'bound_connection_public_id', 'bound_channel_public_id', 'bound_remote_account_id', 'bound_remote_organization_id', 'bound_remote_channel_id', 'bound_capability_schema_version', 'queued_at', 'last_attempt_at', 'attempt_count', 'automatic_attempt_count', 'next_attempt_at', 'lease_owner', 'lease_expires_at', 'action_id', 'provider_result', 'retry_safety', 'receipt_json', 'remote_id', 'remote_receipt_key', 'error_class', 'error_detail_json', 'reconciliation_status', 'reconciled_at', 'reconciled_by', 'reconciliation_note', 'payload_schema_version', 'adapter_encoding_version', 'state_changed_at' ) as $column ) {
+			$this->dropColumnIfExists( $deliveries, $column );
 		}
 	}
 
