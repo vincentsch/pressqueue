@@ -16,6 +16,9 @@ $GLOBALS['pressqueue_test_http_requests']      = array();
 $GLOBALS['pressqueue_test_deactivated']        = array();
 $GLOBALS['pressqueue_test_is_multisite']       = false;
 $GLOBALS['pressqueue_test_loaded_textdomains'] = array();
+$GLOBALS['pressqueue_test_options']            = array();
+$GLOBALS['pressqueue_test_option_autoloads']   = array();
+$GLOBALS['pressqueue_test_roles']              = array();
 
 /**
  * Reset test hook state.
@@ -27,6 +30,12 @@ function pressqueue_test_reset_wordpress_stubs(): void {
 	$GLOBALS['pressqueue_test_deactivated']        = array();
 	$GLOBALS['pressqueue_test_is_multisite']       = false;
 	$GLOBALS['pressqueue_test_loaded_textdomains'] = array();
+	$GLOBALS['pressqueue_test_options']            = array();
+	$GLOBALS['pressqueue_test_option_autoloads']   = array();
+	$GLOBALS['pressqueue_test_roles']              = array(
+		'administrator' => new PressQueue_Test_Role(),
+		'editor'        => new PressQueue_Test_Role(),
+	);
 	$GLOBALS['pressqueue_runtime_notice']          = null;
 	$GLOBALS['wp_version']                         = '6.8.8';
 }
@@ -223,6 +232,114 @@ function load_plugin_textdomain( $domain, $deprecated = false, $path = '' ): boo
 	);
 
 	return true;
+}
+
+/**
+ * Add an option.
+ *
+ * @param string $option Option name.
+ * @param mixed  $value Option value.
+ * @param string $deprecated Deprecated value.
+ * @param mixed  $autoload Autoload flag.
+ * @return bool
+ */
+function add_option( $option, $value = '', $deprecated = '', $autoload = null ): bool {
+	unset( $deprecated );
+
+	if ( array_key_exists( $option, $GLOBALS['pressqueue_test_options'] ) ) {
+		return false;
+	}
+
+	$GLOBALS['pressqueue_test_options'][ $option ]          = $value;
+	$GLOBALS['pressqueue_test_option_autoloads'][ $option ] = $autoload;
+
+	return true;
+}
+
+/**
+ * Read an option.
+ *
+ * @param string $option Option name.
+ * @param mixed  $default Default value.
+ * @return mixed
+ */
+function get_option( $option, $default = false ) {
+	return array_key_exists( $option, $GLOBALS['pressqueue_test_options'] )
+		? $GLOBALS['pressqueue_test_options'][ $option ]
+		: $default;
+}
+
+/**
+ * Update an option.
+ *
+ * @param string $option Option name.
+ * @param mixed  $value Option value.
+ * @param mixed  $autoload Autoload flag.
+ * @return bool
+ */
+function update_option( $option, $value, $autoload = null ): bool {
+	$GLOBALS['pressqueue_test_options'][ $option ] = $value;
+
+	if ( null !== $autoload ) {
+		$GLOBALS['pressqueue_test_option_autoloads'][ $option ] = $autoload;
+	}
+
+	return true;
+}
+
+/**
+ * Delete an option.
+ *
+ * @param string $option Option name.
+ * @return bool
+ */
+function delete_option( $option ): bool {
+	$existed = array_key_exists( $option, $GLOBALS['pressqueue_test_options'] );
+
+	unset( $GLOBALS['pressqueue_test_options'][ $option ], $GLOBALS['pressqueue_test_option_autoloads'][ $option ] );
+
+	return $existed;
+}
+
+/**
+ * Return a test role.
+ *
+ * @param string $role Role name.
+ * @return PressQueue_Test_Role|null
+ */
+function get_role( $role ): ?PressQueue_Test_Role {
+	return $GLOBALS['pressqueue_test_roles'][ $role ] ?? null;
+}
+
+/**
+ * Test role implementation.
+ */
+class PressQueue_Test_Role {
+	/**
+	 * Granted capabilities.
+	 *
+	 * @var array<string,bool>
+	 */
+	public array $capabilities = array();
+
+	/**
+	 * Grant a capability.
+	 *
+	 * @param string $capability Capability.
+	 */
+	public function add_cap( $capability ): void {
+		$this->capabilities[ $capability ] = true;
+	}
+
+	/**
+	 * Check a capability.
+	 *
+	 * @param string $capability Capability.
+	 * @return bool
+	 */
+	public function has_cap( $capability ): bool {
+		return ! empty( $this->capabilities[ $capability ] );
+	}
 }
 
 /**

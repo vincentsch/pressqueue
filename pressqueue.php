@@ -88,7 +88,7 @@ function pressqueue_check_runtime_requirements( $network_wide ) {
 	}
 
 	if ( $network_wide && function_exists( 'is_multisite' ) && is_multisite() ) {
-		return __( 'PressQueue does not support network activation in P01. Activate it per site.', 'pressqueue' );
+		return __( 'PressQueue does not support network activation yet. Activate it per site.', 'pressqueue' );
 	}
 
 	return true;
@@ -238,7 +238,17 @@ function pressqueue_activate( $network_wide ): void {
 		return;
 	}
 
-	PressQueue\Plugin::activate( (bool) $network_wide );
+	try {
+		PressQueue\Plugin::activate( (bool) $network_wide );
+	} catch ( \Throwable $throwable ) {
+		pressqueue_fail_activation(
+			sprintf(
+				/* translators: %s: activation failure reason. */
+				__( 'PressQueue could not complete activation setup: %s', 'pressqueue' ),
+				$throwable->getMessage()
+			)
+		);
+	}
 }
 
 /**

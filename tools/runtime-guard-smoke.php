@@ -160,7 +160,7 @@ if ( 'php' === $scenario && version_compare( PHP_VERSION, '8.1', '>=' ) ) {
 $expected = array(
 	'php'       => 'PressQueue requires PHP 8.1 or newer.',
 	'wordpress' => 'PressQueue requires WordPress 6.8 or newer.',
-	'network'   => 'PressQueue does not support network activation in P01. Activate it per site.',
+	'network'   => 'PressQueue does not support network activation yet. Activate it per site.',
 	'package'   => '',
 );
 

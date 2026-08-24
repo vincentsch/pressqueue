@@ -1,0 +1,607 @@
+<?php
+/**
+ * Storage integration tests.
+ *
+ * @package PressQueue\Tests\Integration
+ */
+
+declare(strict_types=1);
+
+namespace PressQueue\Tests\Integration;
+
+use PressQueue\Security\Capabilities;
+use PressQueue\Storage\Database;
+use PressQueue\Storage\Repository\ChannelRepository;
+use PressQueue\Storage\Repository\ConnectionRepository;
+use PressQueue\Storage\Repository\DecisionRepository;
+use PressQueue\Storage\Repository\DeliveryRepository;
+use PressQueue\Storage\Repository\RuleRepository;
+use PressQueue\Storage\Schema;
+use PressQueue\Storage\SchemaMigrator;
+use PressQueue\Storage\SchemaStatus;
+use PressQueue\Storage\SettingsRepository;
+use PressQueue\Storage\StaleRecordException;
+use PressQueue\Storage\StorageException;
+use WP_UnitTestCase;
+
+/**
+ * @covers \PressQueue\Security\Capabilities
+ * @covers \PressQueue\Storage\Database
+ * @covers \PressQueue\Storage\Repository\AbstractRepository
+ * @covers \PressQueue\Storage\Repository\ChannelRepository
+ * @covers \PressQueue\Storage\Repository\ConnectionRepository
+ * @covers \PressQueue\Storage\Repository\DecisionRepository
+ * @covers \PressQueue\Storage\Repository\DeliveryRepository
+ * @covers \PressQueue\Storage\Repository\RuleRepository
+ * @covers \PressQueue\Storage\Schema
+ * @covers \PressQueue\Storage\SchemaMigrator
+ * @covers \PressQueue\Storage\SchemaStatus
+ * @covers \PressQueue\Storage\SettingsRepository
+ */
+final class StorageIntegrationTest extends WP_UnitTestCase {
+	protected function setUp(): void {
+		parent::setUp();
+
+		$this->resetStorage();
+	}
+
+	protected function tearDown(): void {
+		$this->resetStorage();
+
+		parent::tearDown();
+	}
+
+	public function test_activation_creates_schema_settings_and_capabilities(): void {
+		pressqueue_activate( false );
+
+		$database = Database::from_globals();
+
+		self::assertSame( Schema::TARGET_VERSION, (int) get_option( Schema::VERSION_OPTION, 0 ) );
+		self::assertFalse( get_option( Schema::MIGRATION_LOCK_OPTION, false ) );
+		self::assertFalse( get_option( Schema::MIGRATION_FAILED_OPTION, false ) );
+
+		foreach ( Schema::table_suffixes() as $suffix ) {
+			$table = $database->table( $suffix );
+			self::assertSame( $table, $this->tableLike( $table ) );
+		}
+
+		$settings = ( new SettingsRepository() )->read();
+		self::assertFalse( $settings->kill_switch_enabled );
+		self::assertTrue( $settings->dry_run_enabled );
+		self::assertSame( 'dry_run', $settings->delivery_mode );
+		self::assertSame( 'dry_run', $settings->delivery_state );
+
+		$this->assertOptionIsNotAutoloaded( Schema::VERSION_OPTION );
+		$this->assertOptionIsNotAutoloaded( SettingsRepository::KILL_SWITCH_OPTION );
+		$this->assertOptionIsNotAutoloaded( SettingsRepository::DRY_RUN_OPTION );
+
+		$administrator = get_role( 'administrator' );
+		$editor        = get_role( 'editor' );
+
+		self::assertNotNull( $administrator );
+		self::assertNotNull( $editor );
+
+		foreach ( Capabilities::names() as $capability ) {
+			self::assertTrue( $administrator->has_cap( $capability ) );
+			self::assertFalse( $editor->has_cap( $capability ) );
+		}
+	}
+
+	public function test_migrations_are_rerunnable_and_preserve_data(): void {
+		$migrator = new SchemaMigrator( Database::from_globals() );
+
+		$migrator->migrate();
+
+		$connections = new ConnectionRepository();
+		$connection  = $connections->create( 'buffer', 'Local account', array( 'account' => 'example' ) );
+
+		update_option( Schema::VERSION_OPTION, 0, false );
+
+		$migrator->migrate();
+		$migrator->migrate();
+
+		self::assertSame( Schema::TARGET_VERSION, (int) get_option( Schema::VERSION_OPTION, 0 ) );
+		self::assertNotNull( $connections->find_by_public_id( $connection->public_id ) );
+		self::assertFalse( get_option( Schema::MIGRATION_LOCK_OPTION, false ) );
+	}
+
+	public function test_current_version_with_missing_tables_is_completed_on_retry(): void {
+		$migrator = new SchemaMigrator( Database::from_globals() );
+		$migrator->migrate();
+
+		$database = Database::from_globals();
+		$table    = $database->table( Schema::CHANNELS );
+
+		global $wpdb;
+		$wpdb->query( 'DROP TABLE IF EXISTS `' . $table . '`' );
+
+		self::assertSame( Schema::TARGET_VERSION, (int) get_option( Schema::VERSION_OPTION, 0 ) );
+		self::assertFalse( ( new SchemaStatus( $database ) )->is_ready_for_planning() );
+
+		$migrator->migrate();
+
+		self::assertSame( $table, $this->tableLike( $table ) );
+		self::assertTrue( ( new SchemaStatus( $database ) )->is_ready_for_planning() );
+	}
+
+	public function test_stale_migration_locks_can_be_recovered_without_releasing_active_locks(): void {
+		$migrator = new SchemaMigrator( Database::from_globals() );
+
+		add_option(
+			Schema::MIGRATION_LOCK_OPTION,
+			array(
+				'owner'      => 'active',
+				'created_at' => gmdate( 'Y-m-d H:i:s' ),
+			),
+			'',
+			false
+		);
+
+		self::assertFalse( $migrator->recover_stale_lock() );
+		self::assertNotFalse( get_option( Schema::MIGRATION_LOCK_OPTION, false ) );
+
+		update_option(
+			Schema::MIGRATION_LOCK_OPTION,
+			array(
+				'owner'      => 'stale',
+				'created_at' => gmdate( 'Y-m-d H:i:s', time() - Schema::LOCK_TTL_SECONDS - 1 ),
+			),
+			false
+		);
+
+		self::assertTrue( $migrator->recover_stale_lock() );
+		self::assertFalse( get_option( Schema::MIGRATION_LOCK_OPTION, false ) );
+	}
+
+	public function test_lock_delete_preserves_a_replaced_owner(): void {
+		$database = Database::from_globals();
+		$stale    = array(
+			'owner'      => 'stale',
+			'created_at' => gmdate( 'Y-m-d H:i:s', time() - Schema::LOCK_TTL_SECONDS - 1 ),
+		);
+		$active   = array(
+			'owner'      => 'active',
+			'created_at' => gmdate( 'Y-m-d H:i:s' ),
+		);
+
+		add_option( Schema::MIGRATION_LOCK_OPTION, $active, '', false );
+
+		self::assertFalse( $database->delete_option_if_value( Schema::MIGRATION_LOCK_OPTION, $stale ) );
+		self::assertSame( $active, get_option( Schema::MIGRATION_LOCK_OPTION, false ) );
+
+		self::assertTrue( $database->delete_option_if_value( Schema::MIGRATION_LOCK_OPTION, $active ) );
+		self::assertFalse( get_option( Schema::MIGRATION_LOCK_OPTION, false ) );
+	}
+
+	public function test_table_shapes_match_the_storage_contract(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$database = Database::from_globals();
+
+		foreach ( Schema::expected_shape() as $suffix => $shape ) {
+			$table   = $database->table( $suffix );
+			$columns = $this->columns( $table );
+			$indexes = $this->indexes( $table );
+
+			self::assertSame( array_keys( $shape['columns'] ), array_keys( $columns ), $suffix . ' columns changed.' );
+
+			foreach ( $shape['indexes'] as $index_name => $index ) {
+				self::assertArrayHasKey( $index_name, $indexes, $suffix . ' is missing index ' . $index_name );
+				self::assertSame( $index['columns'], $indexes[ $index_name ]['columns'], $suffix . ' index columns changed for ' . $index_name );
+				self::assertSame( $index['unique'] ? 0 : 1, $indexes[ $index_name ]['non_unique'], $suffix . ' index uniqueness changed for ' . $index_name );
+			}
+		}
+
+		$connection_indexes = $this->indexes( $database->table( Schema::CONNECTIONS ) );
+		$decision_indexes   = $this->indexes( $database->table( Schema::DECISIONS ) );
+		$delivery_indexes   = $this->indexes( $database->table( Schema::DELIVERIES ) );
+		self::assertSame( 0, $connection_indexes['public_id']['non_unique'] );
+		self::assertSame( 0, $decision_indexes['decision_key']['non_unique'] );
+		self::assertSame( 0, $delivery_indexes['delivery_key']['non_unique'] );
+
+		$connections = $this->columns( $database->table( Schema::CONNECTIONS ) );
+		self::assertSame( 'NO', $connections['id']->Null );
+		self::assertStringStartsWith( 'bigint unsigned', strtolower( $connections['id']->Type ) );
+		self::assertSame( 'auto_increment', strtolower( $connections['id']->Extra ) );
+		self::assertSame( '0', (string) $connections['enabled']->Default );
+
+		$channels = $this->columns( $database->table( Schema::CHANNELS ) );
+		self::assertSame( 'YES', $channels['last_synced_at']->Null );
+
+		$rules = $this->columns( $database->table( Schema::RULES ) );
+		self::assertSame( 'immediate', (string) $rules['schedule_policy']->Default );
+		self::assertSame( '1', (string) $rules['version']->Default );
+		self::assertSame( '1', (string) $rules['lock_version']->Default );
+
+		$decisions = $this->columns( $database->table( Schema::DECISIONS ) );
+		self::assertArrayNotHasKey( 'updated_at', $decisions );
+
+		$this->assertAsciiBinaryColumn( $database->table( Schema::CONNECTIONS ), 'public_id' );
+		$this->assertAsciiBinaryColumn( $database->table( Schema::DECISIONS ), 'decision_key' );
+		$this->assertAsciiBinaryColumn( $database->table( Schema::DELIVERIES ), 'delivery_key' );
+	}
+
+	public function test_repositories_persist_hydrate_and_enforce_unique_identities(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$rules       = new RuleRepository();
+		$decisions   = new DecisionRepository();
+		$deliveries  = new DeliveryRepository();
+
+		$connection = $connections->create( 'buffer', 'Local account', array( 'profile' => 'Example' ) );
+		$channel    = $channels->create(
+			$connection->public_id,
+			'buffer',
+			'remote-channel-1',
+			'mastodon',
+			array( 'name' => 'Example Social' ),
+			array( 'text' => true )
+		);
+
+		self::assertFalse( $connection->enabled );
+		self::assertFalse( $channel->enabled );
+		self::assertFalse( $channels->destination_status( $channel->public_id )->channel_enabled );
+
+		$rule = $rules->create( $this->ruleInput( $channel->public_id ) );
+
+		self::assertFalse( $rule->enabled );
+		self::assertSame( 1, $rule->version );
+		self::assertSame( 1, $rule->lock_version );
+
+		$enabled_rule = $rules->update( $rule->public_id, $rule->lock_version, array( 'enabled' => true ) );
+		self::assertTrue( $enabled_rule->enabled );
+		self::assertSame( 1, $enabled_rule->version );
+		self::assertSame( 2, $enabled_rule->lock_version );
+
+		$changed_rule = $rules->update( $enabled_rule->public_id, $enabled_rule->lock_version, array( 'priority' => 10 ) );
+		self::assertSame( 2, $changed_rule->version );
+		self::assertSame( 3, $changed_rule->lock_version );
+
+		$this->expectException( StaleRecordException::class );
+		$rules->update( $changed_rule->public_id, 1, array( 'enabled' => false ) );
+	}
+
+	public function test_decision_and_delivery_unique_keys_are_database_enforced(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$rules       = new RuleRepository();
+		$decisions   = new DecisionRepository();
+		$deliveries  = new DeliveryRepository();
+
+		$connection = $connections->create( 'buffer', 'Local account' );
+		$channel    = $channels->create( $connection->public_id, 'buffer', 'remote-channel-1', 'mastodon' );
+		$rule       = $rules->create( $this->ruleInput( $channel->public_id ) );
+
+		$decision_input = $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $channel->public_id );
+		$decision       = $decisions->create( $decision_input );
+
+		self::assertSame( $decision->decision_key, $decisions->find_by_decision_key( $decision->decision_key )->decision_key );
+
+		try {
+			$decisions->create( $decision_input );
+			self::fail( 'Duplicate decision keys must be rejected.' );
+		} catch ( StorageException $exception ) {
+			self::assertStringContainsStringIgnoringCase( 'duplicate', $exception->getMessage() );
+		}
+
+		$delivery_input = array(
+			'decision_public_id'   => $decision->public_id,
+			'delivery_mode'        => 'dry_run',
+			'state'                => 'dry_run',
+			'provider'             => 'buffer',
+			'connection_public_id' => $connection->public_id,
+			'channel_public_id'    => $channel->public_id,
+			'payload_preview'      => array(
+				'canonical_url' => 'https://example.test/post',
+				'message'       => 'Hello from storage',
+			),
+		);
+		$delivery = $deliveries->create( $delivery_input );
+
+		self::assertSame( $delivery->delivery_key, $deliveries->find_by_delivery_key( $delivery->delivery_key )->delivery_key );
+
+		try {
+			$deliveries->create( $delivery_input );
+			self::fail( 'Duplicate delivery keys must be rejected.' );
+		} catch ( StorageException $exception ) {
+			self::assertStringContainsStringIgnoringCase( 'duplicate', $exception->getMessage() );
+		}
+	}
+
+	public function test_deactivation_preserves_tables_and_options(): void {
+		pressqueue_activate( false );
+
+		$database = Database::from_globals();
+
+		pressqueue_deactivate( false );
+
+		foreach ( Schema::table_suffixes() as $suffix ) {
+			$table = $database->table( $suffix );
+			self::assertSame( $table, $this->tableLike( $table ) );
+		}
+
+		self::assertSame( Schema::TARGET_VERSION, (int) get_option( Schema::VERSION_OPTION, 0 ) );
+		self::assertSame( '0', get_option( SettingsRepository::KILL_SWITCH_OPTION ) );
+		self::assertSame( '1', get_option( SettingsRepository::DRY_RUN_OPTION ) );
+	}
+
+	public function test_historical_snapshots_survive_referenced_deletions(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$author_id = self::factory()->user->create();
+		$post_id   = self::factory()->post->create(
+			array(
+				'post_author' => $author_id,
+				'post_status' => 'publish',
+			)
+		);
+		$term_id   = self::factory()->term->create( array( 'taxonomy' => 'category' ) );
+
+		wp_set_post_terms( $post_id, array( $term_id ), 'category' );
+
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$rules       = new RuleRepository();
+		$decisions   = new DecisionRepository();
+		$deliveries  = new DeliveryRepository();
+
+		$connection = $connections->create( 'buffer', 'Local account' );
+		$channel    = $channels->create( $connection->public_id, 'buffer', 'remote-channel-1', 'mastodon' );
+		$rule       = $rules->create( $this->ruleInput( $channel->public_id ) );
+		$decision   = $decisions->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $channel->public_id, $post_id, $author_id, $term_id ) );
+		$delivery   = $deliveries->create(
+			array(
+				'decision_public_id'   => $decision->public_id,
+				'delivery_mode'        => 'dry_run',
+				'state'                => 'dry_run',
+				'provider'             => 'buffer',
+				'connection_public_id' => $connection->public_id,
+				'channel_public_id'    => $channel->public_id,
+				'payload_preview'      => array(
+					'canonical_url' => 'https://example.test/post',
+					'message'       => 'Historical payload',
+				),
+			)
+		);
+
+		wp_delete_post( $post_id, true );
+		wp_delete_user( $author_id );
+		wp_delete_term( $term_id, 'category' );
+
+		global $wpdb;
+		$wpdb->delete( Database::from_globals()->table( Schema::CHANNELS ), array( 'public_id' => $channel->public_id ) );
+		$wpdb->delete( Database::from_globals()->table( Schema::CONNECTIONS ), array( 'public_id' => $connection->public_id ) );
+
+		$stored_decision = $decisions->find_by_public_id( $decision->public_id );
+		$stored_delivery = $deliveries->find_by_public_id( $delivery->public_id );
+
+		self::assertNotNull( $stored_decision );
+		self::assertNotNull( $stored_delivery );
+		self::assertSame( $term_id, $stored_decision->snapshot['terms'][0]['term_id'] );
+		self::assertSame( 'Historical payload', $stored_delivery->payload_preview['message'] );
+		self::assertFalse( $channels->destination_status( $channel->public_id )->channel_exists );
+	}
+
+	/**
+	 * Reset custom storage between tests.
+	 */
+	private function resetStorage(): void {
+		global $wpdb;
+
+		$database = Database::from_globals();
+
+		foreach ( array_reverse( Schema::table_suffixes() ) as $suffix ) {
+			$table = $database->table( $suffix );
+			$wpdb->query( 'DROP TABLE IF EXISTS `' . $table . '`' );
+		}
+
+		foreach ( array( Schema::VERSION_OPTION, Schema::MIGRATION_LOCK_OPTION, Schema::MIGRATION_FAILED_OPTION, SettingsRepository::KILL_SWITCH_OPTION, SettingsRepository::DRY_RUN_OPTION ) as $option ) {
+			delete_option( $option );
+		}
+
+		foreach ( Capabilities::names() as $capability ) {
+			get_role( 'administrator' )->remove_cap( $capability );
+			get_role( 'editor' )->remove_cap( $capability );
+		}
+	}
+
+	/**
+	 * Return a valid include rule input.
+	 *
+	 * @param string $channel_public_id Channel public ID.
+	 * @return array<string,mixed>
+	 */
+	private function ruleInput( string $channel_public_id ): array {
+		return array(
+			'name'                   => 'Publish posts',
+			'effect'                 => 'include',
+			'priority'               => 100,
+			'triggers'               => array( 'first_publish' ),
+			'condition_tree'         => array(
+				'schema_version' => 1,
+				'type'           => 'group',
+				'operator'       => 'ALL',
+				'children'       => array(
+					array(
+						'type'      => 'condition',
+						'condition' => 'post_type',
+						'operator'  => 'equals',
+						'value'     => 'post',
+					),
+				),
+			),
+			'inline_template'        => array(
+				'schema_version'          => 1,
+				'message'                 => '{{ title }}',
+				'custom_field_allowlist'  => array(),
+			),
+			'destination_set'        => array(
+				'schema_version' => 1,
+				'destinations'    => array(
+					array( 'channel_public_id' => $channel_public_id ),
+				),
+			),
+			'custom_field_allowlist' => array(),
+			'schedule_policy'        => 'immediate',
+		);
+	}
+
+	/**
+	 * Return a valid included decision input.
+	 *
+	 * @param int         $rule_id Rule internal ID.
+	 * @param string      $rule_public_id Rule public ID.
+	 * @param int         $rule_version Rule version.
+	 * @param string      $channel_public_id Channel public ID.
+	 * @param int         $post_id Post ID.
+	 * @param int         $author_id Author ID.
+	 * @param int|null    $term_id Term ID.
+	 * @return array<string,mixed>
+	 */
+	private function decisionInput(
+		int $rule_id,
+		string $rule_public_id,
+		int $rule_version,
+		string $channel_public_id,
+		int $post_id = 42,
+		int $author_id = 7,
+		?int $term_id = null
+	): array {
+		return array(
+			'scope_type'           => 'channel',
+			'scope_public_id'      => $channel_public_id,
+			'post_id'              => $post_id,
+			'post_type'            => 'post',
+			'post_status'          => 'publish',
+			'author_id'            => $author_id,
+			'revision_fingerprint' => str_repeat( 'a', 64 ),
+			'trigger'              => 'first_publish',
+			'event_mode'           => 'runtime',
+			'rule_id'              => $rule_id,
+			'rule_public_id'       => $rule_public_id,
+			'rule_version'         => $rule_version,
+			'result'               => 'included',
+			'reasons'              => array(
+				array(
+					'code'             => 'matched_rule',
+					'condition_result' => 'matched',
+				),
+			),
+			'snapshot'             => array(
+				'post'     => array(
+					'id' => $post_id,
+				),
+				'settings' => array(
+					'dry_run' => true,
+				),
+				'terms'    => null === $term_id ? array() : array(
+					array(
+						'taxonomy' => 'category',
+						'term_id'  => $term_id,
+					),
+				),
+			),
+		);
+	}
+
+	/**
+	 * Return a SHOW TABLES LIKE match.
+	 *
+	 * @param string $table Table name.
+	 * @return string|null
+	 */
+	private function tableLike( string $table ): ?string {
+		global $wpdb;
+
+		return $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+	}
+
+	/**
+	 * Return DESCRIBE output keyed by column name.
+	 *
+	 * @param string $table Table name.
+	 * @return array<string,object>
+	 */
+	private function columns( string $table ): array {
+		global $wpdb;
+
+		$rows    = $wpdb->get_results( 'DESCRIBE `' . $table . '`' );
+		$columns = array();
+
+		foreach ( $rows as $row ) {
+			$columns[ $row->Field ] = $row;
+		}
+
+		return $columns;
+	}
+
+	/**
+	 * Return SHOW INDEX output keyed by index name.
+	 *
+	 * @param string $table Table name.
+	 * @return array<string,array{columns:array<int,string>,non_unique:int}>
+	 */
+	private function indexes( string $table ): array {
+		global $wpdb;
+
+		$rows    = $wpdb->get_results( 'SHOW INDEX FROM `' . $table . '`' );
+		$indexes = array();
+
+		foreach ( $rows as $row ) {
+			$name = (string) $row->Key_name;
+
+			$indexes[ $name ]['columns'][ (int) $row->Seq_in_index ] = (string) $row->Column_name;
+			$indexes[ $name ]['non_unique']                         = (int) $row->Non_unique;
+		}
+
+		foreach ( $indexes as $name => $index ) {
+			ksort( $index['columns'] );
+			$indexes[ $name ]['columns'] = array_values( $index['columns'] );
+		}
+
+		return $indexes;
+	}
+
+	/**
+	 * Assert that an option is not autoloaded.
+	 *
+	 * @param string $option Option name.
+	 */
+	private function assertOptionIsNotAutoloaded( string $option ): void {
+		global $wpdb;
+
+		$autoload = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT autoload FROM $wpdb->options WHERE option_name = %s",
+				$option
+			)
+		);
+
+		self::assertContains( $autoload, array( 'no', 'off', 'auto-off', '0' ) );
+	}
+
+	/**
+	 * Assert a column uses ascii_bin collation.
+	 *
+	 * @param string $table Table name.
+	 * @param string $column Column name.
+	 */
+	private function assertAsciiBinaryColumn( string $table, string $column ): void {
+		global $wpdb;
+
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				'SELECT CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s',
+				$table,
+				$column
+			)
+		);
+
+		self::assertSame( 'ascii', $row->CHARACTER_SET_NAME );
+		self::assertSame( 'ascii_bin', $row->COLLATION_NAME );
+	}
+}
