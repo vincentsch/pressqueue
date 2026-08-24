@@ -17,9 +17,14 @@ The first provider will be Buffer. The intended product combines:
 
 ## Status
 
-PressQueue has an installable guarded plugin skeleton and local quality gate.
-It does not yet contain provider connections, rules, previews, storage,
-background delivery, or live social publishing.
+PressQueue has an installable guarded plugin skeleton, local storage,
+capability boundaries, dry-run and kill-switch settings, JSON-based rules,
+transport-neutral message previews, immutable decision records, and local
+delivery-preview records.
+
+It does not yet contain provider connection flows, credential storage,
+background delivery workers, media handling, release packaging, or live social
+publishing.
 
 The project will begin privately and be made public when its first release is
 tested, documented, license-clean, and useful.

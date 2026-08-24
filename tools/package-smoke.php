@@ -13,7 +13,7 @@ if ( PHP_SAPI !== 'cli' ) {
 }
 
 $root        = dirname( __DIR__ );
-$scratch     = $root . '/.vroni/wip/scratch/package-smoke';
+$scratch     = package_smoke_scratch_dir();
 $stage_root  = $scratch . '/stage';
 $plugin_root = $stage_root . '/pressqueue';
 $zip_path    = $scratch . '/pressqueue.zip';
@@ -66,6 +66,21 @@ if ( false === $wp_path || '' === $wp_path ) {
 assert_wordpress_activation( $zip_path, $wp_path, $scratch );
 
 fwrite( STDOUT, "Package smoke artifact: " . $zip_path . "\n" );
+
+/**
+ * Return the package smoke scratch directory.
+ *
+ * @return string
+ */
+function package_smoke_scratch_dir(): string {
+	$override = getenv( 'PRESSQUEUE_PACKAGE_SMOKE_DIR' );
+
+	if ( false !== $override && '' !== $override ) {
+		return rtrim( $override, '/\\' );
+	}
+
+	return rtrim( sys_get_temp_dir(), '/\\' ) . '/pressqueue-package-smoke';
+}
 
 /**
  * Create a directory or fail.
@@ -260,7 +275,7 @@ function assert_zip_contents( string $zip_path ): void {
 	$forbidden_fragments = array(
 		'/.git/',
 		'/.github/',
-		'/.vroni/',
+		'/.',
 		'/tests/',
 		'/tools/',
 		'/build/',

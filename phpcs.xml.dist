@@ -12,7 +12,6 @@
 
 	<exclude-pattern>*/vendor/*</exclude-pattern>
 	<exclude-pattern>*/build/*</exclude-pattern>
-	<exclude-pattern>*/.vroni/*</exclude-pattern>
 
 	<config name="minimum_supported_wp_version" value="6.8"/>
 	<config name="testVersion" value="8.1-"/>

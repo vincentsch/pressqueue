@@ -17,6 +17,7 @@ if ( PHP_SAPI !== 'cli' ) {
 $root              = dirname( __DIR__ );
 $wp_path           = getenv( 'WP_PATH' );
 $plugin_check_path = getenv( 'PLUGIN_CHECK_PATH' );
+$wp_cli_cache      = wp_cli_cache_dir();
 
 if ( false === $wp_path || '' === $wp_path ) {
 	fwrite( STDERR, "WP_PATH must point to a disposable WordPress install for Plugin Check.\n" );
@@ -33,7 +34,7 @@ if ( ! file_exists( $plugin_check_path ) ) {
 }
 
 $command = array_merge(
-	resolve_wp_cli_command( $root . '/.vroni/wip/scratch/plugin-check' ),
+	resolve_wp_cli_command( $wp_cli_cache ),
 	array(
 		'plugin',
 		'activate',
@@ -56,7 +57,7 @@ if ( 'pressqueue' !== $target && ! file_exists( $target ) ) {
 }
 
 $command = array_merge(
-	resolve_wp_cli_command( $root . '/.vroni/wip/scratch/plugin-check' ),
+	resolve_wp_cli_command( $wp_cli_cache ),
 	array(
 		'plugin',
 		'check',
@@ -113,6 +114,21 @@ function wp_json_encode_for_tool( $value ): string {
 	}
 
 	return $encoded;
+}
+
+/**
+ * Return the WP-CLI download cache directory.
+ *
+ * @return string
+ */
+function wp_cli_cache_dir(): string {
+	$override = getenv( 'PRESSQUEUE_WP_CLI_CACHE_DIR' );
+
+	if ( false !== $override && '' !== $override ) {
+		return rtrim( $override, '/\\' );
+	}
+
+	return rtrim( sys_get_temp_dir(), '/\\' ) . '/pressqueue-wp-cli';
 }
 
 /**

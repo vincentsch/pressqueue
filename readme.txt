@@ -11,11 +11,16 @@ Conditional social publishing control plane for WordPress.
 
 == Description ==
 
-PressQueue is in private development. The current package is a guarded plugin
-skeleton with local quality gates and no live social publishing behavior.
+PressQueue is in private development. The current package provides guarded
+bootstrap, local storage, safety settings, rule evaluation, message previews,
+and immutable local decision and delivery-preview records.
+
+It does not connect to social providers, store credentials, run delivery
+workers, or publish live social posts.
 
 == Changelog ==
 
 = 0.1.0-dev =
 
-* Add the guarded plugin skeleton and local quality gate.
+* Add guarded bootstrap, local quality gates, storage, safety settings, rule
+  evaluation, message previews, and immutable local planning records.

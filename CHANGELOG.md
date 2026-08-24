@@ -15,13 +15,27 @@
 - Tightened the bootstrap harness after review so PHP 8.1 dependency installs,
   Plugin Check parsing, HTTP guarding, and network-activation refusal are all
   enforced by tests.
+- Moved local smoke-tool caches to neutral temporary directories so CI and
+  package tooling stay independent of private planning paths.
 
-### Local planning and Vroni readiness
+### Local policy, storage, and preview control plane
 
-- Added a root changelog before material repository work.
-- Expanded `.vroni/wip/notes/` with agent, ticket, QA, tools, release,
-  operations, delivery-governance, provider-contract, state-machine,
-  security/privacy, and strategy notes.
-- Linked the expanded note map from the architecture note.
-- No product code exists yet and no public release, push, provider call, or
-  live WordPress installation was performed.
+- Added versioned local tables for provider connection metadata, destination
+  channels, rules, decisions, and delivery previews.
+- Added non-autoloaded dry-run and kill-switch settings, with dry run enabled
+  by default and all new connections, channels, and rules disabled by default.
+- Added administrator capabilities for settings, rules, and decision viewing.
+- Added typed repositories, canonical JSON validation, public IDs, stable event
+  keys, decision keys, delivery keys, snapshot hashes, and payload hashes.
+- Added deterministic rule evaluation for include and exclude rules, nested
+  conditions, taxonomy ancestors, allowlisted metadata, explicit post policy,
+  and policy errors that fail closed.
+- Added inline template rendering for transport-neutral previews with
+  allowlisted tags, safe plain-text normalization, and Unicode-safe truncation.
+- Added local planning that writes immutable decision and delivery-preview
+  records in dry-run, held, or proposed states without provider requests.
+- Added a shared event collector for WordPress publication paths and basic
+  server-rendered administration for settings, rules, previews, and recent
+  decisions.
+- No provider connection flow, credential storage, background delivery worker,
+  public release, live provider request, or live social publishing was added.
