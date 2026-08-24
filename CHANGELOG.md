@@ -37,5 +37,31 @@
 - Added a shared event collector for WordPress publication paths and basic
   server-rendered administration for settings, rules, previews, and recent
   decisions.
-- No provider connection flow, credential storage, background delivery worker,
-  public release, live provider request, or live social publishing was added.
+
+### Buffer connection, delivery, and operator controls
+
+- Added encrypted Buffer personal API-key storage with strict credential
+  envelopes, redacted failure handling, and disabled-by-default connection
+  lifecycle management.
+- Added provider-neutral discovery and delivery interfaces with Buffer GraphQL
+  account, organization, channel, and text-post adapters behind fakeable HTTP
+  transports.
+- Added organization-scoped channel synchronization, availability
+  normalization, text-only immediate delivery capability documents, explicit
+  channel enablement, and fail-closed planning gates for unavailable or
+  incompatible destinations.
+- Added schema version 3 delivery projection fields, immutable destination
+  binding, remote receipt uniqueness, transaction-backed state transitions,
+  and an append-only delivery event ledger.
+- Added Action Scheduler loading, recurring queue sweeps, worker actions,
+  local leases, kill-switch and destination preflight gates, immutable
+  payload submission, sanitized receipts, provider result classification, and
+  bounded automatic retries.
+- Tightened worker credential cleanup so resolved provider credentials are
+  erased after delivery preflight and submission paths.
+- Added redacted delivery list and detail screens, local cancellation and
+  resume controls, manual retry gates, duplicate receipt protection, and
+  ambiguity reconciliation that never mutates remote posts.
+- No OAuth, media delivery, bulk publishing, evergreen reposting, retention,
+  export, compaction, uninstall deletion, public release, live provider
+  validation, or live social publishing proof was added.

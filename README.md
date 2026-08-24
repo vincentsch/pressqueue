@@ -1,10 +1,9 @@
 # PressQueue
 
-PressQueue is an open-source WordPress plugin skeleton for conditionally
-publishing and scheduling WordPress content through social publishing
-providers.
+PressQueue is an open-source WordPress plugin for conditionally publishing and
+scheduling WordPress content through social publishing providers.
 
-The first provider will be Buffer. The intended product combines:
+Buffer is the first provider. The intended product combines:
 
 - account and channel selection;
 - reusable status templates;
@@ -17,14 +16,21 @@ The first provider will be Buffer. The intended product combines:
 
 ## Status
 
-PressQueue has an installable guarded plugin skeleton, local storage,
+PressQueue has an installable guarded development build with local storage,
 capability boundaries, dry-run and kill-switch settings, JSON-based rules,
 transport-neutral message previews, immutable decision records, and local
-delivery-preview records.
+delivery records.
 
-It does not yet contain provider connection flows, credential storage,
-background delivery workers, media handling, release packaging, or live social
-publishing.
+The current build also includes encrypted Buffer personal API-key storage,
+fakeable Buffer organization and channel discovery, disabled-by-default channel
+enablement, an Action Scheduler backed delivery outbox, immutable text-only
+Buffer submission, bounded retry handling, a redacted delivery log, local
+cancel and resume controls, manual retry gates, and ambiguity reconciliation.
+
+Default validation uses HTTP fakes and local test doubles. No live Buffer
+canary, public release package, WordPress.org publication, OAuth, media
+delivery, bulk publishing, evergreen reposting, retention, export, compaction,
+or uninstall deletion workflow is part of the current build.
 
 The project will begin privately and be made public when its first release is
 tested, documented, license-clean, and useful.
@@ -62,7 +68,7 @@ composer run ci
 Prerequisites:
 
 - PHP 8.1 or newer with `bcmath`, `curl`, `dom`, `intl`, `json`, `mbstring`,
-  `mysqli`, and `zip`.
+  `mysqli`, `sodium`, and `zip`.
 - Composer 2.
 - MySQL or MariaDB for WordPress integration tests.
 - The WordPress core test suite. Install it with

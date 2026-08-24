@@ -139,6 +139,7 @@ final class DeliveryWorker {
 
 		$submission_started = false;
 		$request            = null;
+		$preflight          = array();
 
 		try {
 			$preflight = $this->preflight( $leased );
@@ -177,6 +178,8 @@ final class DeliveryWorker {
 			$this->store_result( $started, $owner, $result );
 		} catch ( Throwable $throwable ) {
 			$this->handle_exception( $leased, $owner, $request, $submission_started, $throwable );
+		} finally {
+			$this->clear_preflight_credential( $preflight );
 		}
 	}
 
@@ -482,5 +485,18 @@ final class DeliveryWorker {
 			'ok'           => false,
 			'retry_safety' => $retry_safety,
 		);
+	}
+
+	/**
+	 * Erase any resolved provider credential held by worker preflight state.
+	 *
+	 * @param array<string,mixed> $preflight Preflight state.
+	 */
+	private function clear_preflight_credential( array &$preflight ): void {
+		if ( isset( $preflight['credential'] ) && is_string( $preflight['credential'] ) && function_exists( 'sodium_memzero' ) ) {
+			sodium_memzero( $preflight['credential'] );
+		}
+
+		unset( $preflight['credential'] );
 	}
 }
