@@ -53,6 +53,7 @@ final class AdminScreens {
 		add_action( 'admin_post_pressqueue_preview_post', array( self::class, 'handle_post_preview' ) );
 		ConnectionController::register_hooks();
 		ChannelController::register_hooks();
+		DeliveryActionController::register_hooks();
 	}
 
 	/**
@@ -69,6 +70,8 @@ final class AdminScreens {
 		);
 
 		ConnectionController::register_menu( self::SLUG_ROOT );
+		DeliveryListController::register_menu( self::SLUG_ROOT );
+		DeliveryDetailController::register_menu( self::SLUG_ROOT );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Rules', 'pressqueue' ), __( 'Rules', 'pressqueue' ), Capabilities::MANAGE_RULES, self::SLUG_RULES, array( self::class, 'render_rules_page' ) );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Preview', 'pressqueue' ), __( 'Preview', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_PREVIEW, array( self::class, 'render_preview_page' ) );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Decisions', 'pressqueue' ), __( 'Decisions', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_DECISIONS, array( self::class, 'render_decisions_page' ) );
@@ -86,6 +89,11 @@ final class AdminScreens {
 
 		if ( current_user_can( Capabilities::MANAGE_CONNECTIONS ) ) {
 			ConnectionController::render_connections_page();
+			return;
+		}
+
+		if ( current_user_can( Capabilities::VIEW_DELIVERIES ) ) {
+			DeliveryListController::render_page();
 			return;
 		}
 

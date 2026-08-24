@@ -614,13 +614,18 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 	 *
 	 * @param string              $delivery_public_id Delivery public ID.
 	 * @param array<string,mixed> $detail Redacted detail.
+	 * @param int|null            $actor_user_id Actor user ID.
 	 */
-	public function record_refused_transition( string $delivery_public_id, array $detail ): void {
-		$this->append_event_only( $delivery_public_id, 'refused_transition', 'operator', $detail );
+	public function record_refused_transition( string $delivery_public_id, array $detail, ?int $actor_user_id = null ): void {
+		if ( null !== $actor_user_id ) {
+			StorageValidator::assert_unsigned_id( 'Actor user ID', $actor_user_id, true );
+		}
+
+		$this->append_event_only( $delivery_public_id, 'refused_transition', 'operator', $detail, null, null, null, $actor_user_id );
 	}
 
 	/**
-	 * Cancel a non-leased delivery.
+	 * Cancel pending or failed local work.
 	 *
 	 * @param string              $delivery_public_id Delivery public ID.
 	 * @param int|null            $actor_user_id Actor user ID.
@@ -634,7 +639,7 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 
 		return $this->state_transition(
 			$delivery_public_id,
-			array( 'proposed', 'held', 'queued', 'retrying', 'failed', 'ambiguous' ),
+			array( 'proposed', 'held', 'queued', 'retrying', 'failed' ),
 			'cancelled',
 			array(
 				'action_id'        => null,
@@ -647,6 +652,283 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 			$detail,
 			null,
 			null,
+			$actor_user_id
+		);
+	}
+
+	/**
+	 * Resume a held live delivery.
+	 *
+	 * @param string              $delivery_public_id Delivery public ID.
+	 * @param int|null            $actor_user_id Actor user ID.
+	 * @param array<string,mixed> $detail Redacted detail.
+	 * @return DeliveryRecord|null Updated delivery.
+	 */
+	public function resume_held( string $delivery_public_id, ?int $actor_user_id, array $detail ): ?DeliveryRecord {
+		if ( null !== $actor_user_id ) {
+			StorageValidator::assert_unsigned_id( 'Actor user ID', $actor_user_id, true );
+		}
+
+		return $this->transactional_delivery_update(
+			$delivery_public_id,
+			function ( object $row ): ?array {
+				if ( 'held' !== (string) $row->state || 'live' !== (string) $row->delivery_mode || ! $this->row_has_bound_identity( $row ) ) {
+					return null;
+				}
+
+				return $this->queue_values( $row, StorageValidator::now() );
+			},
+			'resumed',
+			'operator',
+			$detail,
+			null,
+			null,
+			'queued',
+			null,
+			null,
+			$actor_user_id
+		);
+	}
+
+	/**
+	 * Retry a failed delivery that is marked manual-safe.
+	 *
+	 * @param string              $delivery_public_id Delivery public ID.
+	 * @param int|null            $actor_user_id Actor user ID.
+	 * @param array<string,mixed> $detail Redacted detail.
+	 * @return DeliveryRecord|null Updated delivery.
+	 */
+	public function manual_retry_failed( string $delivery_public_id, ?int $actor_user_id, array $detail ): ?DeliveryRecord {
+		if ( null !== $actor_user_id ) {
+			StorageValidator::assert_unsigned_id( 'Actor user ID', $actor_user_id, true );
+		}
+
+		return $this->transactional_delivery_update(
+			$delivery_public_id,
+			function ( object $row ): ?array {
+				if ( 'failed' !== (string) $row->state || 'manual_allowed' !== (string) $row->retry_safety || 'live' !== (string) $row->delivery_mode || ! $this->row_has_bound_identity( $row ) ) {
+					return null;
+				}
+
+				return $this->queue_values( $row, StorageValidator::now() );
+			},
+			'manual_retry',
+			'operator',
+			$detail,
+			null,
+			null,
+			'queued',
+			null,
+			null,
+			$actor_user_id
+		);
+	}
+
+	/**
+	 * Retry an ambiguous delivery after the operator confirms it was not accepted.
+	 *
+	 * @param string              $delivery_public_id Delivery public ID.
+	 * @param int|null            $actor_user_id Actor user ID.
+	 * @param array<string,mixed> $detail Redacted detail.
+	 * @return DeliveryRecord|null Updated delivery.
+	 */
+	public function manual_retry_confirmed_not_accepted( string $delivery_public_id, ?int $actor_user_id, array $detail ): ?DeliveryRecord {
+		if ( null !== $actor_user_id ) {
+			StorageValidator::assert_unsigned_id( 'Actor user ID', $actor_user_id, true );
+		}
+
+		return $this->transactional_delivery_update(
+			$delivery_public_id,
+			function ( object $row ): ?array {
+				if (
+					'ambiguous' !== (string) $row->state
+					|| 'confirmed_not_accepted' !== (string) $row->reconciliation_status
+					|| 'manual_allowed' !== (string) $row->retry_safety
+					|| 'live' !== (string) $row->delivery_mode
+					|| ! $this->row_has_bound_identity( $row )
+				) {
+					return null;
+				}
+
+				return array_merge(
+					$this->queue_values( $row, StorageValidator::now() ),
+					array(
+						'action_id'             => null,
+						'error_detail_json'     => null,
+						'receipt_json'          => null,
+						'reconciled_at'         => null,
+						'reconciled_by'         => null,
+						'reconciliation_note'   => null,
+						'reconciliation_status' => 'none',
+						'remote_id'             => null,
+						'remote_receipt_key'    => null,
+					)
+				);
+			},
+			'manual_retry',
+			'operator',
+			$detail,
+			null,
+			null,
+			'queued',
+			null,
+			null,
+			$actor_user_id
+		);
+	}
+
+	/**
+	 * Reconcile an ambiguous delivery by confirming the remote post ID.
+	 *
+	 * @param string              $delivery_public_id Delivery public ID.
+	 * @param string              $remote_id Remote provider post ID.
+	 * @param int|null            $actor_user_id Actor user ID.
+	 * @param string|null         $note Sanitized evidence note.
+	 * @param array<string,mixed> $detail Redacted detail.
+	 * @return DeliveryRecord|null Updated delivery.
+	 */
+	public function reconcile_confirmed_remote_id( string $delivery_public_id, string $remote_id, ?int $actor_user_id, ?string $note, array $detail ): ?DeliveryRecord {
+		StorageValidator::assert_remote_identifier( 'Remote ID', $remote_id );
+
+		if ( null !== $actor_user_id ) {
+			StorageValidator::assert_unsigned_id( 'Actor user ID', $actor_user_id, true );
+		}
+
+		return $this->transactional_delivery_update(
+			$delivery_public_id,
+			function ( object $row ) use ( $remote_id, $actor_user_id, $note ): ?array {
+				if ( 'ambiguous' !== (string) $row->state ) {
+					return null;
+				}
+
+				$provider             = null === $row->bound_provider ? (string) $row->provider : (string) $row->bound_provider;
+				$connection_public_id = null === $row->bound_connection_public_id ? (string) $row->connection_public_id : (string) $row->bound_connection_public_id;
+				$receipt_key          = HashKeys::remote_receipt_key( $provider, $connection_public_id, $remote_id );
+
+				if ( $this->remote_receipt_key_exists_locked( $receipt_key, (string) $row->public_id ) ) {
+					throw new ValidationException( 'Remote receipt has already been confirmed for this connection.' );
+				}
+
+				$now = StorageValidator::now();
+
+				return array(
+					'action_id'             => null,
+					'lease_expires_at'      => null,
+					'lease_owner'           => null,
+					'next_attempt_at'       => null,
+					'provider_result'       => 'ambiguous',
+					'reconciled_at'         => $now,
+					'reconciled_by'         => $actor_user_id,
+					'reconciliation_note'   => $note,
+					'reconciliation_status' => 'confirmed_remote_id',
+					'remote_id'             => $remote_id,
+					'remote_receipt_key'    => $receipt_key,
+					'retry_safety'          => 'not_retryable',
+					'state'                 => 'accepted',
+					'state_changed_at'      => $now,
+					'updated_at'            => $now,
+				);
+			},
+			'reconciled',
+			'operator',
+			array_merge(
+				$detail,
+				array(
+					'outcome'   => 'confirmed_remote_id',
+					'remote_id' => $remote_id,
+				)
+			),
+			'ambiguous',
+			'not_retryable',
+			'accepted',
+			null,
+			null,
+			$actor_user_id
+		);
+	}
+
+	/**
+	 * Reconcile an ambiguous delivery as not accepted by the provider.
+	 *
+	 * @param string              $delivery_public_id Delivery public ID.
+	 * @param int|null            $actor_user_id Actor user ID.
+	 * @param string|null         $note Sanitized evidence note.
+	 * @param array<string,mixed> $detail Redacted detail.
+	 * @return DeliveryRecord|null Updated delivery.
+	 */
+	public function reconcile_confirmed_not_accepted( string $delivery_public_id, ?int $actor_user_id, ?string $note, array $detail ): ?DeliveryRecord {
+		if ( null !== $actor_user_id ) {
+			StorageValidator::assert_unsigned_id( 'Actor user ID', $actor_user_id, true );
+		}
+
+		return $this->transactional_delivery_update(
+			$delivery_public_id,
+			static function ( object $row ) use ( $actor_user_id, $note ): ?array {
+				if ( 'ambiguous' !== (string) $row->state ) {
+					return null;
+				}
+
+				return array(
+					'action_id'             => null,
+					'next_attempt_at'       => null,
+					'provider_result'       => 'ambiguous',
+					'reconciled_at'         => StorageValidator::now(),
+					'reconciled_by'         => $actor_user_id,
+					'reconciliation_note'   => $note,
+					'reconciliation_status' => 'confirmed_not_accepted',
+					'remote_id'             => null,
+					'remote_receipt_key'    => null,
+					'retry_safety'          => 'manual_allowed',
+					'updated_at'            => StorageValidator::now(),
+				);
+			},
+			'reconciled',
+			'operator',
+			array_merge( $detail, array( 'outcome' => 'confirmed_not_accepted' ) ),
+			'ambiguous',
+			'manual_allowed',
+			'ambiguous',
+			null,
+			null,
+			$actor_user_id
+		);
+	}
+
+	/**
+	 * Reconcile an ambiguous delivery by cancelling the local work.
+	 *
+	 * @param string              $delivery_public_id Delivery public ID.
+	 * @param int|null            $actor_user_id Actor user ID.
+	 * @param string|null         $note Sanitized evidence note.
+	 * @param array<string,mixed> $detail Redacted detail.
+	 * @return DeliveryRecord|null Updated delivery.
+	 */
+	public function reconcile_cancelled( string $delivery_public_id, ?int $actor_user_id, ?string $note, array $detail ): ?DeliveryRecord {
+		if ( null !== $actor_user_id ) {
+			StorageValidator::assert_unsigned_id( 'Actor user ID', $actor_user_id, true );
+		}
+
+		return $this->state_transition(
+			$delivery_public_id,
+			array( 'ambiguous' ),
+			'cancelled',
+			array(
+				'action_id'             => null,
+				'lease_expires_at'      => null,
+				'lease_owner'           => null,
+				'next_attempt_at'       => null,
+				'provider_result'       => 'ambiguous',
+				'reconciled_at'         => StorageValidator::now(),
+				'reconciled_by'         => $actor_user_id,
+				'reconciliation_note'   => $note,
+				'reconciliation_status' => 'cancelled',
+				'retry_safety'          => 'not_retryable',
+			),
+			'reconciled',
+			'operator',
+			array_merge( $detail, array( 'outcome' => 'cancelled' ) ),
+			'ambiguous',
+			'not_retryable',
 			$actor_user_id
 		);
 	}
@@ -884,12 +1166,13 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 	 * @param string|null         $provider_result Provider result.
 	 * @param string|null         $retry_safety Retry safety.
 	 * @param int|null            $action_id Action ID.
+	 * @param int|null            $actor_user_id Actor user ID.
 	 */
-	private function append_event_only( string $delivery_public_id, string $event_type, string $actor_type, array $detail, ?string $provider_result = null, ?string $retry_safety = null, ?int $action_id = null ): void {
+	private function append_event_only( string $delivery_public_id, string $event_type, string $actor_type, array $detail, ?string $provider_result = null, ?string $retry_safety = null, ?int $action_id = null, ?int $actor_user_id = null ): void {
 		PublicIds::assert( $delivery_public_id );
 
 		$this->database->transaction(
-			function () use ( $delivery_public_id, $event_type, $actor_type, $detail, $provider_result, $retry_safety, $action_id ): void {
+			function () use ( $delivery_public_id, $event_type, $actor_type, $detail, $provider_result, $retry_safety, $action_id, $actor_user_id ): void {
 				$row = $this->locked_delivery_row( $delivery_public_id );
 				if ( null === $row ) {
 					throw new StorageException( 'Delivery does not exist.' );
@@ -899,6 +1182,7 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 					array(
 						'action_id'          => $action_id,
 						'actor_type'         => $actor_type,
+						'actor_user_id'      => $actor_user_id,
 						'delivery_id'        => (int) $row->id,
 						'delivery_public_id' => $delivery_public_id,
 						'detail'             => $detail,
@@ -912,6 +1196,25 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 			},
 			array( Schema::DELIVERIES, Schema::DELIVERY_EVENTS )
 		);
+	}
+
+	/**
+	 * Check duplicate receipt keys before an operator confirmation is written.
+	 *
+	 * @param string $remote_receipt_key Receipt uniqueness key.
+	 * @param string $exclude_public_id Delivery public ID to ignore.
+	 * @return bool
+	 */
+	private function remote_receipt_key_exists_locked( string $remote_receipt_key, string $exclude_public_id ): bool {
+		StorageValidator::assert_hash( $remote_receipt_key );
+		PublicIds::assert( $exclude_public_id );
+
+		$row = $this->database->get_row(
+			'SELECT public_id FROM `' . $this->deliveries_table() . '` USE INDEX (remote_receipt_key) WHERE remote_receipt_key = %s AND public_id <> %s FOR UPDATE',
+			array( $remote_receipt_key, $exclude_public_id )
+		);
+
+		return null !== $row;
 	}
 
 	/**

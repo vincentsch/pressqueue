@@ -18,8 +18,10 @@ final class Capabilities {
 	public const MANAGE_RULES       = 'manage_pressqueue_rules';
 	public const VIEW_DECISIONS     = 'view_pressqueue_decisions';
 	public const MANAGE_CONNECTIONS = 'manage_pressqueue_connections';
+	public const VIEW_DELIVERIES    = 'view_pressqueue_deliveries';
+	public const OPERATE_DELIVERIES = 'operate_pressqueue_deliveries';
 	public const VERSION_OPTION     = 'pressqueue_capability_schema_version';
-	public const TARGET_VERSION     = 1;
+	public const TARGET_VERSION     = 2;
 
 	/**
 	 * Return the initial capability names.
@@ -32,6 +34,8 @@ final class Capabilities {
 			self::MANAGE_RULES,
 			self::VIEW_DECISIONS,
 			self::MANAGE_CONNECTIONS,
+			self::VIEW_DELIVERIES,
+			self::OPERATE_DELIVERIES,
 		);
 	}
 

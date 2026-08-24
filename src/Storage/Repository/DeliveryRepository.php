@@ -202,6 +202,36 @@ final class DeliveryRepository extends AbstractRepository {
 	}
 
 	/**
+	 * Check whether a remote receipt key already belongs to another delivery.
+	 *
+	 * @param string      $remote_receipt_key Receipt uniqueness key.
+	 * @param string|null $exclude_public_id Optional delivery to ignore.
+	 * @return bool
+	 */
+	public function remote_receipt_key_exists( string $remote_receipt_key, ?string $exclude_public_id = null ): bool {
+		StorageValidator::assert_hash( $remote_receipt_key );
+
+		if ( null !== $exclude_public_id ) {
+			PublicIds::assert( $exclude_public_id );
+		}
+
+		$where = 'remote_receipt_key = %s';
+		$args  = array( $remote_receipt_key );
+
+		if ( null !== $exclude_public_id ) {
+			$where .= ' AND public_id <> %s';
+			$args[] = $exclude_public_id;
+		}
+
+		$count = $this->database->get_var(
+			'SELECT COUNT(*) FROM `' . $this->deliveries_table() . '` USE INDEX (remote_receipt_key) WHERE ' . $where,
+			$args
+		);
+
+		return (int) $count > 0;
+	}
+
+	/**
 	 * Return deliveries for an event.
 	 *
 	 * @param string $event_key Event key.
@@ -447,7 +477,7 @@ final class DeliveryRepository extends AbstractRepository {
 	 * @param object $row Database row.
 	 * @return DeliveryRecord
 	 */
-	private function hydrate( object $row ): DeliveryRecord {
+	public function hydrate_record( object $row ): DeliveryRecord {
 		return new DeliveryRecord(
 			(int) $row->id,
 			(string) $row->public_id,
@@ -500,5 +530,15 @@ final class DeliveryRepository extends AbstractRepository {
 			(int) $row->adapter_encoding_version,
 			StorageValidator::parse_date_time( null === $row->state_changed_at ? null : (string) $row->state_changed_at )
 		);
+	}
+
+	/**
+	 * Hydrate a delivery record.
+	 *
+	 * @param object $row Database row.
+	 * @return DeliveryRecord
+	 */
+	private function hydrate( object $row ): DeliveryRecord {
+		return $this->hydrate_record( $row );
 	}
 }

@@ -25,6 +25,7 @@ use PressQueue\Storage\Record\ConnectionRecord;
 use PressQueue\Storage\Record\DeliveryRecord;
 use PressQueue\Storage\Repository\ChannelRepository;
 use PressQueue\Storage\Repository\ConnectionRepository;
+use PressQueue\Storage\Repository\DeliveryEventRepository;
 use PressQueue\Storage\Repository\DeliveryRepository;
 use PressQueue\Storage\Repository\DeliveryTransitionRepository;
 use PressQueue\Storage\SchemaStatus;
@@ -43,6 +44,7 @@ final class DeliveryWorker {
 	private ChannelRepository $channels;
 	private SettingsRepository $settings;
 	private ActionSchedulerQueue $scheduler;
+	private DeliveryEventRepository $events;
 	private SchemaStatus $schema_status;
 	private ProviderRegistry $providers;
 	private CredentialEnvelope $credential_envelope;
@@ -71,6 +73,7 @@ final class DeliveryWorker {
 		$this->transitions         = new DeliveryTransitionRepository( $database );
 		$this->connections         = new ConnectionRepository( $database );
 		$this->channels            = new ChannelRepository( $database );
+		$this->events              = new DeliveryEventRepository( $database );
 		$this->settings            = new SettingsRepository();
 		$this->scheduler           = $scheduler ?? new ActionSchedulerQueue();
 		$this->schema_status       = new SchemaStatus( $database );
@@ -163,7 +166,7 @@ final class DeliveryWorker {
 				return;
 			}
 
-			$started = $this->transitions->submission_started( $leased->public_id, $owner, true );
+			$started = $this->transitions->submission_started( $leased->public_id, $owner, ! $this->is_manual_retry_action( $leased ) );
 			if ( null === $started ) {
 				return;
 			}
@@ -175,6 +178,23 @@ final class DeliveryWorker {
 		} catch ( Throwable $throwable ) {
 			$this->handle_exception( $leased, $owner, $request, $submission_started, $throwable );
 		}
+	}
+
+	/**
+	 * Check whether the scheduled action came from an operator manual retry.
+	 *
+	 * @param DeliveryRecord $delivery Leased delivery.
+	 * @return bool
+	 */
+	private function is_manual_retry_action( DeliveryRecord $delivery ): bool {
+		if ( null === $delivery->action_id ) {
+			return false;
+		}
+
+		$event = $this->events->find_scheduled_action_event( $delivery->id, $delivery->action_id );
+
+		return null !== $event
+			&& 'manual_retry_action_scheduled' === ( $event->detail['classification'] ?? null );
 	}
 
 	/**

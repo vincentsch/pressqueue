@@ -90,6 +90,31 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 			self::assertTrue( $administrator->has_cap( $capability ) );
 			self::assertFalse( $editor->has_cap( $capability ) );
 		}
+
+		self::assertSame( Capabilities::TARGET_VERSION, (int) get_option( Capabilities::VERSION_OPTION, 0 ) );
+	}
+
+	public function test_delivery_capability_upgrade_runs_when_storage_schema_is_current(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		update_option( Capabilities::VERSION_OPTION, 1, false );
+
+		$administrator = get_role( 'administrator' );
+		$editor        = get_role( 'editor' );
+
+		self::assertNotNull( $administrator );
+		self::assertNotNull( $editor );
+		self::assertFalse( $administrator->has_cap( Capabilities::VIEW_DELIVERIES ) );
+		self::assertFalse( $administrator->has_cap( Capabilities::OPERATE_DELIVERIES ) );
+
+		Capabilities::grant_to_administrators( false );
+
+		self::assertSame( Schema::TARGET_VERSION, (int) get_option( Schema::VERSION_OPTION, 0 ) );
+		self::assertSame( Capabilities::TARGET_VERSION, (int) get_option( Capabilities::VERSION_OPTION, 0 ) );
+		self::assertTrue( $administrator->has_cap( Capabilities::VIEW_DELIVERIES ) );
+		self::assertTrue( $administrator->has_cap( Capabilities::OPERATE_DELIVERIES ) );
+		self::assertFalse( $editor->has_cap( Capabilities::VIEW_DELIVERIES ) );
+		self::assertFalse( $editor->has_cap( Capabilities::OPERATE_DELIVERIES ) );
 	}
 
 	public function test_migrations_are_rerunnable_and_preserve_data(): void {

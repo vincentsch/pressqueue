@@ -161,6 +161,19 @@ class ActionSchedulerQueue {
 	}
 
 	/**
+	 * Check whether the recurring queue sweep is scheduled.
+	 *
+	 * @return bool
+	 */
+	public function has_recurring_sweep(): bool {
+		if ( ! $this->is_ready() ) {
+			return false;
+		}
+
+		return false !== as_next_scheduled_action( self::SWEEP_HOOK, array(), self::GROUP );
+	}
+
+	/**
 	 * Unschedule matching worker action.
 	 *
 	 * @param string $delivery_public_id Delivery public ID.

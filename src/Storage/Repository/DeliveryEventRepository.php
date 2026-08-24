@@ -129,6 +129,42 @@ final class DeliveryEventRepository extends AbstractRepository {
 	}
 
 	/**
+	 * Return events for a delivery using the delivery-created index.
+	 *
+	 * @param int $delivery_id Internal delivery ID.
+	 * @return array<int,DeliveryEventRecord>
+	 */
+	public function find_by_delivery_id( int $delivery_id ): array {
+		StorageValidator::assert_unsigned_id( 'Delivery ID', $delivery_id );
+
+		$rows = $this->database->get_results(
+			'SELECT * FROM `' . $this->delivery_events_table() . '` USE INDEX (delivery_created) WHERE delivery_id = %d ORDER BY created_at ASC, id ASC',
+			array( $delivery_id )
+		);
+
+		return array_map( array( $this, 'hydrate' ), $rows );
+	}
+
+	/**
+	 * Return the scheduler event that created a worker action.
+	 *
+	 * @param int $delivery_id Internal delivery ID.
+	 * @param int $action_id Action Scheduler action ID.
+	 * @return DeliveryEventRecord|null
+	 */
+	public function find_scheduled_action_event( int $delivery_id, int $action_id ): ?DeliveryEventRecord {
+		StorageValidator::assert_unsigned_id( 'Delivery ID', $delivery_id );
+		StorageValidator::assert_unsigned_id( 'Action ID', $action_id );
+
+		$row = $this->database->get_row(
+			'SELECT * FROM `' . $this->delivery_events_table() . '` USE INDEX (action_id) WHERE action_id = %d AND delivery_id = %d AND event_type = %s ORDER BY created_at DESC, id DESC LIMIT 1',
+			array( $action_id, $delivery_id, 'scheduler_action_scheduled' )
+		);
+
+		return $row ? $this->hydrate( $row ) : null;
+	}
+
+	/**
 	 * Check whether an attempt has a submission-started event.
 	 *
 	 * @param string $delivery_public_id Delivery public ID.
@@ -267,7 +303,7 @@ final class DeliveryEventRepository extends AbstractRepository {
 	 * @param object $row Database row.
 	 * @return DeliveryEventRecord
 	 */
-	private function hydrate( object $row ): DeliveryEventRecord {
+	public function hydrate_record( object $row ): DeliveryEventRecord {
 		return new DeliveryEventRecord(
 			(int) $row->id,
 			(string) $row->public_id,
@@ -285,5 +321,15 @@ final class DeliveryEventRepository extends AbstractRepository {
 			CanonicalJson::decode_object( (string) $row->detail_json ),
 			StorageValidator::parse_required_date_time( (string) $row->created_at )
 		);
+	}
+
+	/**
+	 * Hydrate an event record.
+	 *
+	 * @param object $row Database row.
+	 * @return DeliveryEventRecord
+	 */
+	private function hydrate( object $row ): DeliveryEventRecord {
+		return $this->hydrate_record( $row );
 	}
 }

@@ -22,7 +22,7 @@ final class StorageEnums {
 	public const PROVIDER_RESULTS        = array( 'accepted', 'retryable_failure', 'rate_limited', 'permanent_failure', 'ambiguous' );
 	public const RETRY_SAFETY_VALUES     = array( 'not_retryable', 'automatic_allowed', 'manual_allowed', 'reconcile_first' );
 	public const RECONCILIATION_STATUSES = array( 'none', 'confirmed_remote_id', 'confirmed_not_accepted', 'cancelled' );
-	public const DELIVERY_EVENT_TYPES    = array( 'destination_bound', 'queued', 'leased', 'submission_started', 'provider_result', 'retry_scheduled', 'held', 'failed', 'cancelled', 'resumed', 'reconciled', 'refused_transition', 'scheduler_enqueue_failed', 'scheduler_unavailable', 'scheduler_action_scheduled', 'scheduler_race_repaired', 'lease_recovered', 'lease_ambiguous' );
+	public const DELIVERY_EVENT_TYPES    = array( 'destination_bound', 'queued', 'leased', 'submission_started', 'provider_result', 'retry_scheduled', 'held', 'failed', 'cancelled', 'resumed', 'manual_retry', 'reconciled', 'refused_transition', 'scheduler_enqueue_failed', 'scheduler_unavailable', 'scheduler_action_scheduled', 'scheduler_race_repaired', 'lease_recovered', 'lease_ambiguous' );
 	public const DELIVERY_ACTOR_TYPES    = array( 'system', 'queue_sweep', 'worker', 'recovery', 'operator', 'scheduler' );
 	public const CONNECTION_STATUSES     = array( 'disconnected', 'unverified', 'verified', 'credential_invalid' );
 	public const CHANNEL_AVAILABILITIES  = array( 'unverified', 'available', 'missing', 'unsupported' );
