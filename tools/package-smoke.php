@@ -66,7 +66,7 @@ try {
 	remove_path( $plugin_root . '/composer.lock' );
 
 	create_zip( $stage_root, $zip_path );
-	assert_zip_contents( $zip_path );
+	$zip_summary = assert_zip_contents( $zip_path );
 
 	$wp_path = getenv( 'PACKAGE_SMOKE_WP_PATH' );
 
@@ -75,10 +75,18 @@ try {
 	}
 
 	if ( false === $wp_path || '' === $wp_path ) {
+		write_package_smoke_evidence(
+			$root,
+			$zip_path,
+			$zip_summary,
+			'not_run_environment_missing',
+			'PACKAGE_SMOKE_WP_PATH or WP_PATH was not set to a disposable WordPress install.'
+		);
 		throw new RuntimeException( 'PACKAGE_SMOKE_WP_PATH or WP_PATH must point to a disposable supported WordPress install.' );
 	}
 
 	assert_wordpress_activation( $zip_path, $wp_path, $scratch );
+	write_package_smoke_evidence( $root, $zip_path, $zip_summary, 'passed', null );
 
 	fwrite( STDOUT, "Package smoke artifact: " . $zip_path . "\n" );
 } catch ( RuntimeException $exception ) {
@@ -289,8 +297,9 @@ function create_zip( string $stage_root, string $zip_path ): void {
  * Assert package contents.
  *
  * @param string $zip_path Zip path.
+ * @return array{required_entries:array<int,string>,forbidden_fragments:array<int,string>,entries:array<int,string>,entry_count:int}
  */
-function assert_zip_contents( string $zip_path ): void {
+function assert_zip_contents( string $zip_path ): array {
 	$zip = new ZipArchive();
 
 	if ( true !== $zip->open( $zip_path ) ) {
@@ -353,6 +362,99 @@ function assert_zip_contents( string $zip_path ): void {
 	}
 
 	$zip->close();
+
+	return array(
+		'required_entries'    => $required,
+		'forbidden_fragments' => $forbidden_fragments,
+		'entries'             => $names,
+		'entry_count'         => count( $names ),
+	);
+}
+
+/**
+ * Write durable package smoke evidence.
+ *
+ * @param string              $root Repository root.
+ * @param string              $zip_path Zip path.
+ * @param array<string,mixed> $zip_summary Zip summary.
+ * @param string              $activation_status Activation status.
+ * @param string|null         $activation_reason Activation limitation.
+ */
+function write_package_smoke_evidence( string $root, string $zip_path, array $zip_summary, string $activation_status, ?string $activation_reason ): void {
+	$evidence_dir = package_smoke_evidence_dir( $root );
+
+	mkdir_checked( $evidence_dir );
+
+	$sha256  = hash_file( 'sha256', $zip_path );
+	$size    = filesize( $zip_path );
+	$now_utc = gmdate( 'Y-m-d\TH:i:s\Z' );
+
+	if ( ! is_string( $sha256 ) || false === $size ) {
+		throw new RuntimeException( 'Unable to inspect package smoke artifact.' );
+	}
+
+	$manifest = array(
+		'generated_at_utc'    => $now_utc,
+		'artifact_path'       => $zip_path,
+		'artifact_sha256'     => $sha256,
+		'artifact_size_bytes' => $size,
+		'zip_root'            => 'pressqueue/',
+		'zip_entry_count'     => $zip_summary['entry_count'],
+		'required_entries'    => $zip_summary['required_entries'],
+		'forbidden_fragments' => $zip_summary['forbidden_fragments'],
+		'entries'             => $zip_summary['entries'],
+	);
+	$smoke    = array(
+		'generated_at_utc'          => $now_utc,
+		'artifact_path'             => $zip_path,
+		'artifact_sha256'           => $sha256,
+		'artifact_size_bytes'       => $size,
+		'zip_entry_count'           => $zip_summary['entry_count'],
+		'content_inspection_status' => 'passed',
+		'activation_smoke_status'   => $activation_status,
+		'activation_smoke_reason'   => $activation_reason,
+	);
+
+	write_json_file( $evidence_dir . '/manifest.json', $manifest );
+	write_json_file( $evidence_dir . '/smoke.json', $smoke );
+
+	if ( false === file_put_contents( $evidence_dir . '/checksum.sha256', $sha256 . '  ' . $zip_path . "\n" ) ) {
+		throw new RuntimeException( 'Unable to write package checksum evidence.' );
+	}
+}
+
+/**
+ * Return the durable package smoke evidence directory.
+ *
+ * @param string $root Repository root.
+ * @return string
+ */
+function package_smoke_evidence_dir( string $root ): string {
+	$override = getenv( 'PRESSQUEUE_PACKAGE_EVIDENCE_DIR' );
+
+	if ( false !== $override && '' !== $override ) {
+		return rtrim( $override, '/\\' );
+	}
+
+	return $root . '/.vroni/wip/qa/p04-private-rc/package';
+}
+
+/**
+ * Write JSON evidence.
+ *
+ * @param string              $path File path.
+ * @param array<string,mixed> $data Data.
+ */
+function write_json_file( string $path, array $data ): void {
+	$json = json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+
+	if ( ! is_string( $json ) ) {
+		throw new RuntimeException( 'Unable to encode package smoke evidence.' );
+	}
+
+	if ( false === file_put_contents( $path, $json . "\n" ) ) {
+		throw new RuntimeException( 'Unable to write package smoke evidence: ' . $path );
+	}
 }
 
 /**

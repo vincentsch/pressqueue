@@ -11,10 +11,17 @@ namespace PressQueue\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Contract tests inspect local files.
+
 /**
+ * Test development tooling contracts.
+ *
  * @coversNothing
  */
 final class ToolingContractsTest extends TestCase {
+	/**
+	 * The matrix runner declares required cells and durable result paths.
+	 */
 	public function test_local_matrix_declares_required_cells_and_durable_results(): void {
 		$tool = file_get_contents( dirname( __DIR__, 2 ) . '/tools/local-matrix.php' );
 
@@ -25,8 +32,13 @@ final class ToolingContractsTest extends TestCase {
 		self::assertStringContainsString( 'composer run plugin-check', $tool );
 		self::assertStringContainsString( 'tools/runtime-guard-smoke.php', $tool );
 		self::assertStringContainsString( 'pressqueue_matrix_record_result', $tool );
+		self::assertStringContainsString( "'/matrix/'", $tool );
+		self::assertStringContainsString( "'-php'", $tool );
 	}
 
+	/**
+	 * The package smoke runner covers package activation and lifecycle checks.
+	 */
 	public function test_package_smoke_covers_activation_scripts_uninstall_and_multisite(): void {
 		$tool = file_get_contents( dirname( __DIR__, 2 ) . '/tools/package-smoke.php' );
 
@@ -37,8 +49,16 @@ final class ToolingContractsTest extends TestCase {
 		self::assertStringContainsString( 'assert_preserving_uninstall', $tool );
 		self::assertStringContainsString( 'assert_deleting_uninstall', $tool );
 		self::assertStringContainsString( 'PACKAGE_SMOKE_MULTISITE_PATH', $tool );
+		self::assertStringContainsString( 'write_package_smoke_evidence', $tool );
+		self::assertStringContainsString( 'PRESSQUEUE_PACKAGE_EVIDENCE_DIR', $tool );
+		self::assertStringContainsString( "'/manifest.json'", $tool );
+		self::assertStringContainsString( "'/checksum.sha256'", $tool );
+		self::assertStringContainsString( "'/smoke.json'", $tool );
 	}
 
+	/**
+	 * The Plugin Check runner pins the checked tool version.
+	 */
 	public function test_plugin_check_runner_pins_plugin_check_version(): void {
 		$tool = file_get_contents( dirname( __DIR__, 2 ) . '/tools/run-plugin-check.php' );
 

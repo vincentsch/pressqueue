@@ -330,7 +330,7 @@ function pressqueue_matrix_run_php_boundary_cell( string $root, string $scratch,
  * @param array<string,mixed> $details Details.
  */
 function pressqueue_matrix_record_result( string $evidence_dir, string $label, string $status, array $details ): void {
-	$path = $evidence_dir . '/' . pressqueue_matrix_sanitize_label( $label ) . '.json';
+	$path = pressqueue_matrix_result_path( $evidence_dir, $label, $details );
 	$data = array_merge(
 		$details,
 		array(
@@ -345,9 +345,32 @@ function pressqueue_matrix_record_result( string $evidence_dir, string $label, s
 		throw new RuntimeException( 'Unable to encode matrix result.' );
 	}
 
+	pressqueue_matrix_mkdir_checked( dirname( $path ) );
+
 	if ( false === file_put_contents( $path, $json . "\n" ) ) {
 		throw new RuntimeException( 'Unable to write matrix result: ' . $path );
 	}
+}
+
+/**
+ * Return the durable result path for a matrix cell.
+ *
+ * @param string              $evidence_dir Evidence directory.
+ * @param string              $label Cell label.
+ * @param array<string,mixed> $details Details.
+ * @return string
+ */
+function pressqueue_matrix_result_path( string $evidence_dir, string $label, array $details ): string {
+	if ( isset( $details['php'], $details['wordpress'] ) ) {
+		return $evidence_dir
+			. '/matrix/'
+			. pressqueue_matrix_sanitize_label( (string) $details['wordpress'] )
+			. '-php'
+			. pressqueue_matrix_sanitize_label( (string) $details['php'] )
+			. '.json';
+	}
+
+	return $evidence_dir . '/' . pressqueue_matrix_sanitize_label( $label ) . '.json';
 }
 
 /**

@@ -4,7 +4,8 @@ PressQueue is an independent implementation of conditional social publishing
 for WordPress.
 
 Buffer is the first provider integration. PressQueue is not affiliated with
-Buffer, WP Zinc, WordPress.org, Automattic, or WooCommerce.
+Buffer, WordPress.org, Automattic, WooCommerce, or any third-party social
+publishing plugin.
 
 Project rules:
 

@@ -12,7 +12,8 @@ Buffer is the first provider. The intended product combines:
 - media handling;
 - idempotent background delivery;
 - retryable failures and an auditable delivery log;
-- bulk publishing, evergreen reposting, and WP-CLI controls.
+- bounded manual bulk and selected repost batches;
+- WP-CLI controls.
 
 ## Status
 
@@ -20,6 +21,7 @@ PressQueue has an installable guarded development build with local storage,
 capability boundaries, dry-run and kill-switch settings, JSON-based rules,
 role-protected editor controls, a condition builder, transport-neutral
 previews, immutable decision records, and local delivery records.
+The current private development version is `0.1.0-dev`.
 
 The current build also includes encrypted Buffer personal API-key storage,
 fakeable Buffer organization and channel discovery, disabled-by-default channel
@@ -60,11 +62,26 @@ tested, documented, license-clean, and useful.
 ## Clean-room boundary
 
 PressQueue is an independent implementation inspired by the general workflow
-of WordPress social publishing tools. It is not affiliated with Buffer, WP
-Zinc, or WordPress.org. No third-party proprietary code, branding, or protected
-assets may be copied into this project.
+of WordPress social publishing tools. It is not affiliated with Buffer,
+WordPress.org, or any third-party social publishing plugin. No third-party
+proprietary code, branding, or protected assets may be copied into this
+project.
 
 See [docs/clean-room.md](docs/clean-room.md).
+
+## Manual adoption checklist
+
+- Inventory existing WordPress social-publishing workflows and disable
+  overlapping automated posting before enabling PressQueue live delivery.
+- Create the Buffer personal API-key connection on a disposable or staging
+  site first, then keep the connection and discovered channels disabled until
+  previews are reviewed.
+- Recreate only the needed destinations, templates, and conditions as
+  PressQueue rules. There is no import path or compatibility layer.
+- Use dry-run previews, the kill switch, and reviewed batch previews before
+  enabling rules on regular publishing workflows.
+- Start with one low-risk post and confirm the delivery log, retry behavior,
+  and remote result before expanding to more destinations.
 
 ## Privacy and uninstall
 

@@ -35,6 +35,23 @@ confirmation.
 OAuth, standing evergreen automation, public release packaging, and live social
 publishing proof are not part of this development package.
 
+== Remote Services ==
+
+PressQueue can connect to Buffer, a third-party social publishing service,
+only after an administrator adds a Buffer personal API key and enables the
+local connection, channel, and rule paths. PressQueue contacts Buffer to verify
+credentials, discover account, organization, and channel metadata, and submit
+or schedule approved social posts.
+
+Data sent to Buffer may include the API key in the Authorization header,
+provider account and channel identifiers, rendered social text, schedule
+facts, media URLs or media references needed for the provider request, and
+request metadata required by Buffer. PressQueue does not contact Buffer during
+default local validation, local previews, package smoke, or tests.
+
+Review Buffer's legal terms and privacy information before connecting:
+https://buffer.com/legal
+
 == Changelog ==
 
 = 0.1.0-dev =
