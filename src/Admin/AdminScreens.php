@@ -57,6 +57,7 @@ final class AdminScreens {
 		PostControlsController::register_hooks();
 		PostPreviewController::register_hooks();
 		ConditionBuilderController::register_hooks();
+		TemplateController::register_hooks();
 	}
 
 	/**
@@ -145,6 +146,7 @@ final class AdminScreens {
 		echo '<h1>' . esc_html__( 'PressQueue Rules', 'pressqueue' ) . '</h1>';
 		self::render_notice();
 		self::render_preview_result();
+		TemplateController::render_section();
 
 		if ( array() === $channels ) {
 			echo '<div class="notice notice-info"><p>' . esc_html__( 'No local destinations exist yet. Add a connection and synchronize channels first.', 'pressqueue' ) . '</p></div>';
@@ -170,6 +172,7 @@ final class AdminScreens {
 			echo '<td>' . esc_html( $rule->enabled ? __( 'Enabled', 'pressqueue' ) : __( 'Disabled', 'pressqueue' ) ) . '</td>';
 			echo '<td>';
 			self::render_rule_preview_forms( $rule );
+			TemplateController::render_rule_adoption_form( $rule );
 			self::render_enable_form( $rule );
 			self::render_disable_form( $rule );
 			echo '</td>';
@@ -270,8 +273,9 @@ final class AdminScreens {
 
 		try {
 			$repository = new RuleRepository();
-			$input      = self::rule_input_from_request();
 			$public_id  = self::post_text( 'rule_public_id' );
+			$current    = '' === $public_id ? null : $repository->find_by_public_id( $public_id );
+			$input      = self::rule_input_from_request( $current );
 
 			if ( '' === $public_id ) {
 				$repository->create( $input );
@@ -528,17 +532,36 @@ final class AdminScreens {
 			$rule
 		);
 		self::render_json_textarea(
-			'inline_template_json',
-			__( 'Inline Template JSON', 'pressqueue' ),
+			'template_set_json',
+			__( 'Template Set JSON', 'pressqueue' ),
 			null === $rule ? array(
-				'schema_version'         => 1,
-				'message'                => '{{ title }} {{ canonical_url }}',
-				'custom_field_allowlist' => array(),
-			) : $rule->inline_template,
+				'default_message' => '{{ title }}',
+				'schema_version'  => 1,
+			) : $rule->template_set,
 			$rule
 		);
 		self::render_json_textarea( 'custom_field_allowlist_json', __( 'Custom Field Allowlist JSON', 'pressqueue' ), null === $rule ? array() : $rule->custom_field_allowlist, $rule );
-		echo '<tr><th scope="row">' . esc_html__( 'Schedule Policy', 'pressqueue' ) . '</th><td><code>immediate</code><input type="hidden" name="schedule_policy" value="immediate" /></td></tr>';
+		self::render_json_textarea(
+			'schedule_policy_json',
+			__( 'Schedule Policy JSON', 'pressqueue' ),
+			null === $rule ? array(
+				'mode'           => 'immediate',
+				'schema_version' => 1,
+			) : $rule->schedule_policy_document,
+			$rule
+		);
+		self::render_json_textarea(
+			'media_policy_json',
+			__( 'Media Policy JSON', 'pressqueue' ),
+			null === $rule ? array(
+				'mode'           => 'none',
+				'schema_version' => 1,
+			) : $rule->media_policy,
+			$rule
+		);
+		if ( null !== $rule && null !== $rule->source_template_public_id ) {
+			echo '<tr><th scope="row">' . esc_html__( 'Template Source', 'pressqueue' ) . '</th><td><code>' . esc_html( $rule->source_template_public_id . ' v' . (string) $rule->source_template_version ) . '</code></td></tr>';
+		}
 		echo '</tbody></table>';
 		submit_button( $is_edit ? __( 'Save Rule', 'pressqueue' ) : __( 'Save Disabled Rule', 'pressqueue' ) );
 		echo '</form>';
@@ -634,13 +657,19 @@ final class AdminScreens {
 		}
 
 		$messages = array(
-			'preview_error'  => __( 'Preview failed.', 'pressqueue' ),
-			'preview_ready'  => __( 'Preview is ready.', 'pressqueue' ),
-			'rule_disabled'  => __( 'Rule disabled.', 'pressqueue' ),
-			'rule_enabled'   => __( 'Rule enabled.', 'pressqueue' ),
-			'rule_error'     => __( 'Rule change failed.', 'pressqueue' ),
-			'rule_saved'     => __( 'Rule saved disabled.', 'pressqueue' ),
-			'settings_saved' => __( 'Settings saved.', 'pressqueue' ),
+			'preview_error'     => __( 'Preview failed.', 'pressqueue' ),
+			'preview_ready'     => __( 'Preview is ready.', 'pressqueue' ),
+			'rule_disabled'     => __( 'Rule disabled.', 'pressqueue' ),
+			'rule_enabled'      => __( 'Rule enabled.', 'pressqueue' ),
+			'rule_error'        => __( 'Rule change failed.', 'pressqueue' ),
+			'rule_saved'        => __( 'Rule saved disabled.', 'pressqueue' ),
+			'settings_saved'    => __( 'Settings saved.', 'pressqueue' ),
+			'template_adopted'  => __( 'Template snapshot adopted. Preview the rule before re-enabling it.', 'pressqueue' ),
+			'template_deleted'  => __( 'Template removed from selection.', 'pressqueue' ),
+			'template_disabled' => __( 'Template disabled.', 'pressqueue' ),
+			'template_enabled'  => __( 'Template enabled for selection.', 'pressqueue' ),
+			'template_error'    => __( 'Template change failed.', 'pressqueue' ),
+			'template_saved'    => __( 'Template saved disabled.', 'pressqueue' ),
 		);
 
 		$text = $messages[ $message ] ?? '';
@@ -664,23 +693,32 @@ final class AdminScreens {
 	/**
 	 * Build rule input from request.
 	 *
+	 * @param RuleRecord|null $current Existing rule.
 	 * @return array<string,mixed>
 	 */
-	private static function rule_input_from_request(): array {
+	private static function rule_input_from_request( ?RuleRecord $current = null ): array {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked by caller.
-		$triggers = isset( $_POST['triggers'] ) && is_array( $_POST['triggers'] ) ? array_map( 'sanitize_key', wp_unslash( $_POST['triggers'] ) ) : array();
-
-		return array(
+		$triggers     = isset( $_POST['triggers'] ) && is_array( $_POST['triggers'] ) ? array_map( 'sanitize_key', wp_unslash( $_POST['triggers'] ) ) : array();
+		$template_set = self::post_json_object( 'template_set_json' );
+		$input        = array(
 			'condition_tree'         => self::post_json_object( 'condition_tree_json' ),
 			'custom_field_allowlist' => self::post_json_list( 'custom_field_allowlist_json' ),
 			'destination_set'        => self::post_json_object( 'destination_set_json' ),
 			'effect'                 => self::post_text( 'effect', 'include' ),
-			'inline_template'        => self::post_json_object( 'inline_template_json' ),
+			'media_policy'           => self::post_json_object( 'media_policy_json' ),
 			'name'                   => self::post_text( 'name' ),
 			'priority'               => self::post_int( 'priority', 100 ),
-			'schedule_policy'        => 'immediate',
+			'schedule_policy'        => self::post_json_object( 'schedule_policy_json' ),
+			'template_set'           => $template_set,
 			'triggers'               => $triggers,
 		);
+
+		if ( null !== $current && null !== $current->source_template_public_id && CanonicalJson::encode_object( $template_set ) === CanonicalJson::encode_object( $current->template_set ) ) {
+			$input['source_template_public_id'] = $current->source_template_public_id;
+			$input['source_template_version']   = $current->source_template_version;
+		}
+
+		return $input;
 	}
 
 	/**

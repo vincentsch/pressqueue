@@ -85,6 +85,8 @@ final class SchemaMigrator {
 					$this->migrate_to_version_2();
 				} elseif ( 3 === $next_version ) {
 					$this->migrate_to_version_3();
+				} elseif ( 4 === $next_version ) {
+					$this->migrate_to_version_4();
 				}
 
 				$this->assert_expected_schema();
@@ -258,6 +260,32 @@ final class SchemaMigrator {
 		if ( $events !== $this->database->get_var( 'SHOW TABLES LIKE %s', array( $events ) ) ) {
 			$this->create_base_tables();
 		}
+	}
+
+	/**
+	 * Add reusable templates, rule snapshots, schedule and media provenance.
+	 */
+	private function migrate_to_version_4(): void {
+		$rules      = $this->database->table( Schema::RULES );
+		$deliveries = $this->database->table( Schema::DELIVERIES );
+
+		$this->validate_existing_delivery_payloads_if_present();
+		$this->create_base_tables();
+
+		$this->maybe_add_column( $rules, 'source_template_public_id', 'source_template_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER inline_template_json' );
+		$this->maybe_add_column( $rules, 'source_template_version', 'source_template_version INT UNSIGNED NULL AFTER source_template_public_id' );
+		$this->maybe_add_column( $rules, 'template_set_json', 'template_set_json LONGTEXT NULL AFTER source_template_version' );
+		$this->maybe_add_column( $rules, 'schedule_policy_json', 'schedule_policy_json LONGTEXT NULL AFTER schedule_policy' );
+		$this->maybe_add_column( $rules, 'media_policy_json', 'media_policy_json LONGTEXT NULL AFTER schedule_policy_json' );
+		$this->maybe_add_index( $rules, 'source_template_version', 'KEY source_template_version (source_template_public_id, source_template_version)' );
+
+		$this->maybe_add_column( $deliveries, 'scheduled_for_utc', 'scheduled_for_utc DATETIME NULL AFTER schedule_slot' );
+		$this->maybe_add_column( $deliveries, 'schedule_timezone', 'schedule_timezone VARCHAR(64) NULL AFTER scheduled_for_utc' );
+		$this->maybe_add_column( $deliveries, 'bound_capability_hash', 'bound_capability_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER bound_capability_schema_version' );
+		$this->maybe_add_column( $deliveries, 'bound_capability_catalog_version', 'bound_capability_catalog_version VARCHAR(64) NULL AFTER bound_capability_hash' );
+		$this->maybe_add_column( $deliveries, 'media_snapshot_json', 'media_snapshot_json LONGTEXT NULL AFTER bound_capability_catalog_version' );
+		$this->maybe_add_column( $deliveries, 'media_identity_hash', 'media_identity_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER media_snapshot_json' );
+		$this->maybe_add_index( $deliveries, 'scheduled_for_utc', 'KEY scheduled_for_utc (scheduled_for_utc)' );
 	}
 
 	/**

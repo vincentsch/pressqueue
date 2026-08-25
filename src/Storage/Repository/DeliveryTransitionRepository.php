@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue\Storage\Repository;
 
 use PressQueue\Provider\Dto\ProviderDeliveryResult;
+use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\HashKeys;
 use PressQueue\Storage\PublicIds;
@@ -27,37 +28,39 @@ use PressQueue\Storage\ValidationException;
  */
 final class DeliveryTransitionRepository extends AbstractRepository {
 	private const FORMATS = array(
-		'bound_provider'                  => '%s',
-		'bound_connection_public_id'      => '%s',
-		'bound_channel_public_id'         => '%s',
-		'bound_remote_account_id'         => '%s',
-		'bound_remote_organization_id'    => '%s',
-		'bound_remote_channel_id'         => '%s',
-		'bound_capability_schema_version' => '%d',
-		'state'                           => '%s',
-		'queued_at'                       => '%s',
-		'last_attempt_at'                 => '%s',
-		'attempt_count'                   => '%d',
-		'automatic_attempt_count'         => '%d',
-		'next_attempt_at'                 => '%s',
-		'lease_owner'                     => '%s',
-		'lease_expires_at'                => '%s',
-		'action_id'                       => '%d',
-		'provider_result'                 => '%s',
-		'retry_safety'                    => '%s',
-		'receipt_json'                    => '%s',
-		'remote_id'                       => '%s',
-		'remote_receipt_key'              => '%s',
-		'error_class'                     => '%s',
-		'error_detail_json'               => '%s',
-		'reconciliation_status'           => '%s',
-		'reconciled_at'                   => '%s',
-		'reconciled_by'                   => '%d',
-		'reconciliation_note'             => '%s',
-		'state_changed_at'                => '%s',
-		'updated_at'                      => '%s',
-		'public_id'                       => '%s',
-		'lease_owner_where'               => '%s',
+		'bound_provider'                   => '%s',
+		'bound_connection_public_id'       => '%s',
+		'bound_channel_public_id'          => '%s',
+		'bound_remote_account_id'          => '%s',
+		'bound_remote_organization_id'     => '%s',
+		'bound_remote_channel_id'          => '%s',
+		'bound_capability_schema_version'  => '%d',
+		'bound_capability_hash'            => '%s',
+		'bound_capability_catalog_version' => '%s',
+		'state'                            => '%s',
+		'queued_at'                        => '%s',
+		'last_attempt_at'                  => '%s',
+		'attempt_count'                    => '%d',
+		'automatic_attempt_count'          => '%d',
+		'next_attempt_at'                  => '%s',
+		'lease_owner'                      => '%s',
+		'lease_expires_at'                 => '%s',
+		'action_id'                        => '%d',
+		'provider_result'                  => '%s',
+		'retry_safety'                     => '%s',
+		'receipt_json'                     => '%s',
+		'remote_id'                        => '%s',
+		'remote_receipt_key'               => '%s',
+		'error_class'                      => '%s',
+		'error_detail_json'                => '%s',
+		'reconciliation_status'            => '%s',
+		'reconciled_at'                    => '%s',
+		'reconciled_by'                    => '%d',
+		'reconciliation_note'              => '%s',
+		'state_changed_at'                 => '%s',
+		'updated_at'                       => '%s',
+		'public_id'                        => '%s',
+		'lease_owner_where'                => '%s',
 	);
 
 	/**
@@ -91,11 +94,13 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 	public function bind_destination( DeliveryRecord $delivery, ConnectionRecord $connection, ChannelRecord $channel, array $detail = array() ): ?DeliveryRecord {
 		$this->assert_destination_matches_delivery( $delivery, $connection, $channel );
 		$capability_schema = (int) ( $channel->capabilities['schema_version'] ?? 0 );
+		$capability_hash   = 2 === $capability_schema ? DeliveryCapability::hash( $channel->capabilities ) : null;
+		$catalog_version   = DeliveryCapability::catalog_version( $channel->capabilities );
 		$now               = StorageValidator::now();
 
 		return $this->transactional_delivery_update(
 			$delivery->public_id,
-			static function ( object $row ) use ( $connection, $channel, $capability_schema, $now ): ?array {
+			static function ( object $row ) use ( $connection, $channel, $capability_schema, $capability_hash, $catalog_version, $now ): ?array {
 				if ( 'proposed' !== (string) $row->state ) {
 					return null;
 				}
@@ -105,14 +110,16 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 				}
 
 				return array(
-					'bound_provider'                  => (string) $row->provider,
-					'bound_connection_public_id'      => $connection->public_id,
-					'bound_channel_public_id'         => $channel->public_id,
-					'bound_remote_account_id'         => $connection->remote_account_id,
-					'bound_remote_organization_id'    => $connection->remote_organization_id,
-					'bound_remote_channel_id'         => $channel->remote_channel_id,
-					'bound_capability_schema_version' => $capability_schema,
-					'updated_at'                      => $now,
+					'bound_provider'                   => (string) $row->provider,
+					'bound_connection_public_id'       => $connection->public_id,
+					'bound_channel_public_id'          => $channel->public_id,
+					'bound_remote_account_id'          => $connection->remote_account_id,
+					'bound_remote_organization_id'     => $connection->remote_organization_id,
+					'bound_remote_channel_id'          => $channel->remote_channel_id,
+					'bound_capability_schema_version'  => $capability_schema,
+					'bound_capability_hash'            => $capability_hash,
+					'bound_capability_catalog_version' => $catalog_version,
+					'updated_at'                       => $now,
 				);
 			},
 			'destination_bound',
@@ -139,24 +146,40 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 	 * @return DeliveryRecord|null Updated delivery.
 	 */
 	public function fail_destination_binding( string $delivery_public_id, array $detail ): ?DeliveryRecord {
+		return $this->fail_proposed_preflight( $delivery_public_id, 'destination_binding_failed', 'not_retryable', $detail );
+	}
+
+	/**
+	 * Fail a proposed delivery before queueing.
+	 *
+	 * @param string              $delivery_public_id Delivery public ID.
+	 * @param string              $error_class Error class.
+	 * @param string              $retry_safety Retry safety.
+	 * @param array<string,mixed> $detail Redacted failure detail.
+	 * @return DeliveryRecord|null Updated delivery.
+	 */
+	public function fail_proposed_preflight( string $delivery_public_id, string $error_class, string $retry_safety, array $detail ): ?DeliveryRecord {
+		StorageValidator::assert_text_key( 'Error class', $error_class );
+		StorageEnums::assert_retry_safety( $retry_safety );
+
 		return $this->state_transition(
 			$delivery_public_id,
 			array( 'proposed' ),
 			'failed',
 			array(
 				'action_id'         => null,
-				'error_class'       => 'destination_binding_failed',
+				'error_class'       => $error_class,
 				'error_detail_json' => $this->detail_json( $detail, Schema::ERROR_JSON_MAX_BYTES ),
 				'lease_expires_at'  => null,
 				'lease_owner'       => null,
 				'next_attempt_at'   => null,
-				'retry_safety'      => 'not_retryable',
+				'retry_safety'      => $retry_safety,
 			),
 			'failed',
 			'queue_sweep',
 			$detail,
 			null,
-			'not_retryable'
+			$retry_safety
 		);
 	}
 

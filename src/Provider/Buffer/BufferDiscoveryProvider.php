@@ -50,18 +50,14 @@ query PressQueueChannels($input: ChannelsInput!) {
     isQueuePaused
     allowedActions
     externalLink
+    metadata {
+      ... on MastodonMetadata {
+        maxCharacters
+      }
+    }
   }
 }
 GRAPHQL;
-
-	private const SUPPORTED_SERVICES = array(
-		'bluesky',
-		'facebook',
-		'linkedin',
-		'mastodon',
-		'threads',
-		'twitter',
-	);
 
 	/**
 	 * GraphQL client.
@@ -71,12 +67,20 @@ GRAPHQL;
 	private BufferGraphqlClient $client;
 
 	/**
+	 * Capability catalog.
+	 *
+	 * @var BufferCapabilityCatalog
+	 */
+	private BufferCapabilityCatalog $capabilities;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param BufferGraphqlClient $client Client.
 	 */
 	public function __construct( BufferGraphqlClient $client ) {
-		$this->client = $client;
+		$this->client       = $client;
+		$this->capabilities = new BufferCapabilityCatalog();
 	}
 
 	/**
@@ -205,14 +209,13 @@ GRAPHQL;
 		$actions      = $this->allowed_actions( $channel['allowedActions'] ?? null );
 		$reason       = $this->unavailable_reason( $service, $organization_id, $selected_organization_id, $flags, $actions );
 		$availability = null === $reason ? 'available' : 'unsupported';
-		$capability   = array(
-			'delivery'       => array(
-				'schedule_slots' => null === $reason ? array( 'immediate' ) : array(),
-				'text'           => null === $reason,
-			),
-			'schema_version' => 1,
-			'service'        => $service,
-		);
+		$metadata     = isset( $channel['metadata'] ) && is_array( $channel['metadata'] ) ? $channel['metadata'] : array();
+		$capability   = $this->capabilities->capability_for_service( $service, $metadata, null === $reason );
+
+		if ( true !== ( $capability['supported'] ?? false ) && null === $reason ) {
+			$reason       = isset( $capability['unsupported_reason'] ) && is_string( $capability['unsupported_reason'] ) ? $capability['unsupported_reason'] : 'unsupported_capability';
+			$availability = 'unsupported';
+		}
 
 		StorageEnums::assert_channel_availability( $availability );
 
@@ -287,7 +290,7 @@ GRAPHQL;
 			return 'organization_mismatch';
 		}
 
-		if ( ! in_array( $service, self::SUPPORTED_SERVICES, true ) ) {
+		if ( ! in_array( $service, BufferCapabilityCatalog::supported_services(), true ) ) {
 			return 'unsupported_service';
 		}
 

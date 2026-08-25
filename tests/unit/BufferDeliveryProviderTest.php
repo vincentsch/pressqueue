@@ -38,7 +38,49 @@ final class BufferDeliveryProviderTest extends TestCase {
 		self::assertSame( "Hello world\n\nhttps://example.test/post", $body['variables']['input']['text'] );
 		self::assertSame( 'shareNow', $body['variables']['input']['mode'] );
 		self::assertSame( 'automatic', $body['variables']['input']['schedulingType'] );
-		self::assertArrayNotHasKey( 'metadata', $body['variables']['input'] );
+		self::assertSame( array(), $body['variables']['input']['assets'] );
+		self::assertArrayNotHasKey( 'dueAt', $body['variables']['input'] );
+	}
+
+	public function test_encoder_maps_explicit_schedule_and_image_asset_shape(): void {
+		$request = $this->request(
+			'explicit_time',
+			'2026-08-24 12:15:30',
+			array(
+				'items'          => array(
+					array(
+						'alt_text'  => 'Launch image',
+						'mime_type' => 'image/png',
+						'url'       => 'https://media.example.test/image.png',
+					),
+				),
+				'mode'           => 'post_media',
+				'schema_version' => 1,
+			)
+		);
+		$body    = json_decode( ( new BufferPostEncoder() )->body( $request ), true, 512, JSON_THROW_ON_ERROR );
+		$input   = $body['variables']['input'];
+
+		self::assertSame( 'customScheduled', $input['mode'] );
+		self::assertSame( '2026-08-24T12:15:30.000Z', $input['dueAt'] );
+		self::assertSame(
+			array(
+				array(
+					'image' => array(
+						'metadata' => array( 'altText' => 'Launch image' ),
+						'url'      => 'https://media.example.test/image.png',
+					),
+				),
+			),
+			$input['assets']
+		);
+	}
+
+	public function test_encoder_maps_queue_modes(): void {
+		$encoder = new BufferPostEncoder();
+
+		self::assertSame( 'shareNext', $encoder->variables( $this->request( 'queue_next' ) )['input']['mode'] );
+		self::assertSame( 'addToQueue', $encoder->variables( $this->request( 'queue_end' ) )['input']['mode'] );
 	}
 
 	public function test_accepted_response_stores_sanitized_receipt_and_redacted_warnings(): void {
@@ -74,7 +116,7 @@ final class BufferDeliveryProviderTest extends TestCase {
 			}
 		);
 
-		$result = $provider->submit( $this->request(), 'fixture credential' );
+		$result  = $provider->submit( $this->request(), 'fixture credential' );
 		$receipt = $result->receipt ? $result->receipt->document() : array();
 
 		self::assertSame( 'accepted', $result->provider_result );
@@ -95,9 +137,9 @@ final class BufferDeliveryProviderTest extends TestCase {
 			null,
 			static function (): array {
 				return array(
-					'body'                                        => '{bad json',
+					'body'     => '{bad json',
 					'pressqueue_request_may_have_reached_provider' => true,
-					'response'                                    => array( 'code' => 200 ),
+					'response' => array( 'code' => 200 ),
 				);
 			}
 		);
@@ -164,7 +206,7 @@ final class BufferDeliveryProviderTest extends TestCase {
 		self::assertFalse( $policy->has_automatic_budget( $this->deliveryWithAutomaticAttempts( 5 ) ) );
 	}
 
-	private function request(): ProviderDeliveryRequest {
+	private function request( string $schedule_slot = 'immediate', ?string $scheduled_for_utc = null, array $media_snapshot = array() ): ProviderDeliveryRequest {
 		return new ProviderDeliveryRequest(
 			'buffer',
 			'01K8Z8D0PKH2N8J7S3K5A9C6DE',
@@ -174,10 +216,14 @@ final class BufferDeliveryProviderTest extends TestCase {
 			'acct_1',
 			'org_1',
 			'chan_1',
-			1,
-			1,
+			2,
+			2,
 			'Hello world',
-			'https://example.test/post'
+			'https://example.test/post',
+			"Hello world\n\nhttps://example.test/post",
+			$schedule_slot,
+			$scheduled_for_utc,
+			$media_snapshot
 		);
 	}
 
@@ -200,9 +246,23 @@ final class BufferDeliveryProviderTest extends TestCase {
 			1,
 			'leased',
 			'immediate',
+			null,
+			null,
 			array(
-				'canonical_url' => 'https://example.test/post',
-				'message'       => 'Hello world',
+				'adapter_encoding_version'  => 2,
+				'bound_capability_hash'     => str_repeat( 'd', 64 ),
+				'capability_schema_version' => 2,
+				'canonical_url'             => 'https://example.test/post',
+				'final_encoded_text'        => "Hello world\n\nhttps://example.test/post",
+				'final_encoded_text_length' => 38,
+				'media_snapshot'            => array(
+					'items'          => array(),
+					'mode'           => 'none',
+					'schema_version' => 1,
+				),
+				'message'                   => 'Hello world',
+				'payload_schema_version'    => 2,
+				'schedule_slot'             => 'immediate',
 			),
 			str_repeat( 'c', 64 ),
 			new \DateTimeImmutable( '2026-08-24 12:00:00', new \DateTimeZone( 'UTC' ) ),
@@ -213,11 +273,36 @@ final class BufferDeliveryProviderTest extends TestCase {
 			'acct_1',
 			'org_1',
 			'chan_1',
-			1,
+			2,
+			str_repeat( 'd', 64 ),
+			'2026-08-25.1',
+			array(
+				'items'          => array(),
+				'mode'           => 'none',
+				'schema_version' => 1,
+			),
+			null,
 			null,
 			null,
 			$automatic_attempts,
-			$automatic_attempts
+			$automatic_attempts,
+			null,
+			null,
+			null,
+			null,
+			null,
+			'not_retryable',
+			null,
+			null,
+			null,
+			null,
+			null,
+			'none',
+			null,
+			null,
+			null,
+			2,
+			2
 		);
 	}
 

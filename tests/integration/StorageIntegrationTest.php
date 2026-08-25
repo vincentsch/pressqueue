@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Tests\Integration;
 
+use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Provider\Dto\ProviderChannel;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\CanonicalJson;
@@ -331,8 +332,20 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 				'decision_public_id'   => $decision->public_id,
 				'delivery_mode'        => 'dry_run',
 				'payload_preview'      => array(
-					'canonical_url' => 'https://example.test/post',
-					'message'       => 'Legacy payload',
+					'adapter_encoding_version'  => 2,
+					'bound_capability_hash'     => DeliveryCapability::hash( $destination['channel']->capabilities ),
+					'capability_schema_version' => 2,
+					'canonical_url'             => 'https://example.test/post',
+					'final_encoded_text'        => "Legacy payload\n\nhttps://example.test/post",
+					'final_encoded_text_length' => strlen( "Legacy payload\n\nhttps://example.test/post" ),
+					'media_snapshot'            => array(
+						'items'          => array(),
+						'mode'           => 'none',
+						'schema_version' => 1,
+					),
+					'message'                   => 'Legacy payload',
+					'payload_schema_version'    => 2,
+					'schedule_slot'             => 'immediate',
 				),
 				'provider'             => 'buffer',
 				'state'                => 'dry_run',
@@ -374,7 +387,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		self::assertTrue( $connection->has_credential );
 		self::assertSame( 'unverified', $connection->connection_status );
 
-		$account = array(
+		$account    = array(
 			'display_label'     => 'Owner',
 			'organizations'     => array(
 				array(
@@ -628,7 +641,14 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		$leased = $connections->find_by_public_id( $connection->public_id );
 		self::assertNotNull( $leased );
 
-		$connections->complete_sync_failure( $connection->public_id, $lease, array( 'classification' => 'test', 'schema_version' => 1 ) );
+		$connections->complete_sync_failure(
+			$connection->public_id,
+			$lease,
+			array(
+				'classification' => 'test',
+				'schema_version' => 1,
+			)
+		);
 
 		try {
 			$channels->synchronize_provider_channels( $leased, $lease, array( $this->providerChannel( 'chan_1' ) ) );
@@ -696,7 +716,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 			'remote-channel-1',
 			'mastodon',
 			array( 'name' => 'Example Social' ),
-			array( 'text' => true )
+			$this->channelCapabilities()
 		);
 
 		self::assertFalse( $connection->enabled );
@@ -742,13 +762,69 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		$rules->update( $changed_rule->public_id, 1, array( 'enabled' => false ) );
 	}
 
+	public function test_display_only_rule_updates_do_not_backfill_legacy_template_snapshot(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+
+		$destination = $this->enabledDestination();
+		$database    = Database::from_globals();
+		$table       = $database->table( Schema::RULES );
+		$rules       = new RuleRepository();
+		$created     = $rules->create( $this->ruleInput( $destination['channel']->public_id ) );
+
+		self::assertSame(
+			1,
+			$database->update_rows(
+				$table,
+				array( 'template_set_json' => null ),
+				array( 'public_id' => $created->public_id ),
+				array()
+			)
+		);
+
+		$stored_before = $database->get_row(
+			'SELECT template_set_json, inline_template_json FROM `' . $table . '` WHERE public_id = %s',
+			array( $created->public_id )
+		);
+		$legacy        = $rules->find_by_public_id( $created->public_id );
+
+		self::assertNotNull( $stored_before );
+		self::assertNull( $stored_before->template_set_json );
+		self::assertNotNull( $legacy );
+		self::assertFalse( $legacy->has_template_snapshot );
+		self::assertNotNull( $legacy->template_set );
+
+		$renamed           = $rules->update( $legacy->public_id, $legacy->lock_version, array( 'name' => 'Renamed rule' ) );
+		$stored_after_name = $database->get_row(
+			'SELECT template_set_json, inline_template_json FROM `' . $table . '` WHERE public_id = %s',
+			array( $created->public_id )
+		);
+
+		self::assertNotNull( $stored_after_name );
+		self::assertSame( $legacy->version, $renamed->version );
+		self::assertFalse( $renamed->has_template_snapshot );
+		self::assertNull( $stored_after_name->template_set_json );
+		self::assertSame( $stored_before->inline_template_json, $stored_after_name->inline_template_json );
+
+		$changed               = $rules->update( $renamed->public_id, $renamed->lock_version, array( 'priority' => 77 ) );
+		$stored_after_behavior = $database->get_row(
+			'SELECT template_set_json, inline_template_json FROM `' . $table . '` WHERE public_id = %s',
+			array( $created->public_id )
+		);
+
+		self::assertNotNull( $stored_after_behavior );
+		self::assertSame( $renamed->version + 1, $changed->version );
+		self::assertTrue( $changed->has_template_snapshot );
+		self::assertNotNull( $stored_after_behavior->template_set_json );
+		self::assertSame( $stored_before->inline_template_json, $stored_after_behavior->inline_template_json );
+	}
+
 	public function test_decision_and_delivery_unique_keys_are_database_enforced(): void {
 		( new SchemaMigrator( Database::from_globals() ) )->migrate();
 
-		$channels    = new ChannelRepository();
-		$rules       = new RuleRepository();
-		$decisions   = new DecisionRepository();
-		$deliveries  = new DeliveryRepository();
+		$channels   = new ChannelRepository();
+		$rules      = new RuleRepository();
+		$decisions  = new DecisionRepository();
+		$deliveries = new DeliveryRepository();
 
 		$destination = $this->enabledDestination();
 		$connection  = $destination['connection'];
@@ -775,11 +851,23 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 			'connection_public_id' => $connection->public_id,
 			'channel_public_id'    => $channel->public_id,
 			'payload_preview'      => array(
-				'canonical_url' => 'https://example.test/post',
-				'message'       => 'Hello from storage',
+				'adapter_encoding_version'  => 2,
+				'bound_capability_hash'     => DeliveryCapability::hash( $channel->capabilities ),
+				'capability_schema_version' => 2,
+				'canonical_url'             => 'https://example.test/post',
+				'final_encoded_text'        => "Hello from storage\n\nhttps://example.test/post",
+				'final_encoded_text_length' => strlen( "Hello from storage\n\nhttps://example.test/post" ),
+				'media_snapshot'            => array(
+					'items'          => array(),
+					'mode'           => 'none',
+					'schema_version' => 1,
+				),
+				'message'                   => 'Hello from storage',
+				'payload_schema_version'    => 2,
+				'schedule_slot'             => 'immediate',
 			),
 		);
-		$delivery = $deliveries->create( $delivery_input );
+		$delivery       = $deliveries->create( $delivery_input );
 
 		self::assertSame( $delivery->delivery_key, $deliveries->find_by_delivery_key( $delivery->delivery_key )->delivery_key );
 
@@ -832,8 +920,8 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		$connection  = $destination['connection'];
 		$channel     = $destination['channel'];
 		$rule        = $rules->create( $this->ruleInput( $channel->public_id ) );
-		$decision   = $decisions->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $channel->public_id, $post_id, $author_id, $term_id ) );
-		$delivery   = $deliveries->create(
+		$decision    = $decisions->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $channel->public_id, $post_id, $author_id, $term_id ) );
+		$delivery    = $deliveries->create(
 			array(
 				'decision_public_id'   => $decision->public_id,
 				'delivery_mode'        => 'dry_run',
@@ -842,8 +930,20 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 				'connection_public_id' => $connection->public_id,
 				'channel_public_id'    => $channel->public_id,
 				'payload_preview'      => array(
-					'canonical_url' => 'https://example.test/post',
-					'message'       => 'Historical payload',
+					'adapter_encoding_version'  => 2,
+					'bound_capability_hash'     => DeliveryCapability::hash( $channel->capabilities ),
+					'capability_schema_version' => 2,
+					'canonical_url'             => 'https://example.test/post',
+					'final_encoded_text'        => "Historical payload\n\nhttps://example.test/post",
+					'final_encoded_text_length' => strlen( "Historical payload\n\nhttps://example.test/post" ),
+					'media_snapshot'            => array(
+						'items'          => array(),
+						'mode'           => 'none',
+						'schema_version' => 1,
+					),
+					'message'                   => 'Historical payload',
+					'payload_schema_version'    => 2,
+					'schedule_slot'             => 'immediate',
 				),
 			)
 		);
@@ -915,13 +1015,13 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 				),
 			),
 			'inline_template'        => array(
-				'schema_version'          => 1,
-				'message'                 => '{{ title }}',
-				'custom_field_allowlist'  => array(),
+				'schema_version'         => 1,
+				'message'                => '{{ title }}',
+				'custom_field_allowlist' => array(),
 			),
 			'destination_set'        => array(
 				'schema_version' => 1,
-				'destinations'    => array(
+				'destinations'   => array(
 					array( 'channel_public_id' => $channel_public_id ),
 				),
 			),
@@ -1008,18 +1108,31 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Return a v1 text immediate channel capability document.
+	 * Return a schema 2 text and image channel capability document.
 	 *
 	 * @return array<string,mixed>
 	 */
 	private function channelCapabilities(): array {
 		return array(
-			'delivery'       => array(
-				'schedule_slots' => array( 'immediate' ),
-				'text'           => true,
+			'catalog_version' => '2026-08-25.1',
+			'delivery'        => array(
+				'image'               => array(
+					'alt_text_required' => false,
+					'max_bytes'         => 5 * 1024 * 1024,
+					'max_height'        => 4096,
+					'max_items'         => 1,
+					'max_width'         => 4096,
+					'mime_types'        => array( 'image/gif', 'image/jpeg', 'image/png' ),
+					'min_height'        => 1,
+					'min_width'         => 1,
+				),
+				'max_text_characters' => 280,
+				'schedule_slots'      => array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' ),
+				'text'                => true,
 			),
-			'schema_version' => 1,
-			'service'        => 'mastodon',
+			'schema_version'  => 2,
+			'service'         => 'mastodon',
+			'supported'       => true,
 		);
 	}
 
@@ -1059,11 +1172,11 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 	private function downgradeDeliveryColumnsToPreviewShape( Database $database ): void {
 		$deliveries = $database->table( Schema::DELIVERIES );
 
-		foreach ( array( 'state_next_attempt', 'lease_expires_at', 'action_id', 'remote_id', 'remote_receipt_key', 'reconciliation_status', 'state_changed_id' ) as $index ) {
+		foreach ( array( 'state_next_attempt', 'lease_expires_at', 'action_id', 'remote_id', 'remote_receipt_key', 'reconciliation_status', 'state_changed_id', 'scheduled_for_utc' ) as $index ) {
 			$this->dropIndexIfExists( $deliveries, $index );
 		}
 
-		foreach ( array( 'bound_provider', 'bound_connection_public_id', 'bound_channel_public_id', 'bound_remote_account_id', 'bound_remote_organization_id', 'bound_remote_channel_id', 'bound_capability_schema_version', 'queued_at', 'last_attempt_at', 'attempt_count', 'automatic_attempt_count', 'next_attempt_at', 'lease_owner', 'lease_expires_at', 'action_id', 'provider_result', 'retry_safety', 'receipt_json', 'remote_id', 'remote_receipt_key', 'error_class', 'error_detail_json', 'reconciliation_status', 'reconciled_at', 'reconciled_by', 'reconciliation_note', 'payload_schema_version', 'adapter_encoding_version', 'state_changed_at' ) as $column ) {
+		foreach ( array( 'bound_provider', 'bound_connection_public_id', 'bound_channel_public_id', 'bound_remote_account_id', 'bound_remote_organization_id', 'bound_remote_channel_id', 'bound_capability_schema_version', 'bound_capability_hash', 'bound_capability_catalog_version', 'scheduled_for_utc', 'schedule_timezone', 'media_snapshot_json', 'media_identity_hash', 'queued_at', 'last_attempt_at', 'attempt_count', 'automatic_attempt_count', 'next_attempt_at', 'lease_owner', 'lease_expires_at', 'action_id', 'provider_result', 'retry_safety', 'receipt_json', 'remote_id', 'remote_receipt_key', 'error_class', 'error_detail_json', 'reconciliation_status', 'reconciled_at', 'reconciled_by', 'reconciliation_note', 'payload_schema_version', 'adapter_encoding_version', 'state_changed_at' ) as $column ) {
 			$this->dropColumnIfExists( $deliveries, $column );
 		}
 	}
@@ -1129,13 +1242,13 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 	/**
 	 * Return a valid included decision input.
 	 *
-	 * @param int         $rule_id Rule internal ID.
-	 * @param string      $rule_public_id Rule public ID.
-	 * @param int         $rule_version Rule version.
-	 * @param string      $channel_public_id Channel public ID.
-	 * @param int         $post_id Post ID.
-	 * @param int         $author_id Author ID.
-	 * @param int|null    $term_id Term ID.
+	 * @param int      $rule_id Rule internal ID.
+	 * @param string   $rule_public_id Rule public ID.
+	 * @param int      $rule_version Rule version.
+	 * @param string   $channel_public_id Channel public ID.
+	 * @param int      $post_id Post ID.
+	 * @param int      $author_id Author ID.
+	 * @param int|null $term_id Term ID.
 	 * @return array<string,mixed>
 	 */
 	private function decisionInput(
@@ -1231,7 +1344,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 			$name = (string) $row->Key_name;
 
 			$indexes[ $name ]['columns'][ (int) $row->Seq_in_index ] = (string) $row->Column_name;
-			$indexes[ $name ]['non_unique']                         = (int) $row->Non_unique;
+			$indexes[ $name ]['non_unique']                          = (int) $row->Non_unique;
 		}
 
 		foreach ( $indexes as $name => $index ) {

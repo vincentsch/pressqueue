@@ -20,11 +20,16 @@ use PressQueue\Storage\ValidationException;
 final class PostControlMetadata {
 	public const META_KEY        = '_pressqueue_controls';
 	public const LEGACY_META_KEY = '_pressqueue_policy';
-	public const SCHEMA_VERSION  = 1;
-	public const MAX_BYTES       = 16384;
+	public const SCHEMA_VERSION  = 2;
+	public const MAX_BYTES       = 32768;
 
-	private const POLICY_VALUES = array( 'inherit', 'include', 'exclude' );
-	private const CHANNEL_MODES = array( 'inherit', 'override' );
+	private const POLICY_VALUES     = array( 'inherit', 'include', 'exclude' );
+	private const CHANNEL_MODES     = array( 'inherit', 'override' );
+	private const MESSAGE_MODES     = array( 'inherit', 'override' );
+	private const SCHEDULE_MODES    = array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time' );
+	private const MEDIA_MODES       = array( 'inherit', 'none', 'featured_image', 'post_media' );
+	private const MESSAGE_MAX_CHARS = 2000;
+	private const MESSAGE_MAX_BYTES = 16384;
 
 	/**
 	 * Return the canonical inherited bundle.
@@ -36,7 +41,16 @@ final class PostControlMetadata {
 			'channels'       => array(
 				'mode' => 'inherit',
 			),
+			'media'          => array(
+				'mode' => 'inherit',
+			),
+			'message'        => array(
+				'mode' => 'inherit',
+			),
 			'policy'         => 'inherit',
+			'schedule'       => array(
+				'mode' => 'inherit',
+			),
 			'schema_version' => self::SCHEMA_VERSION,
 		);
 	}
@@ -66,11 +80,14 @@ final class PostControlMetadata {
 	public static function normalize_bundle( $value ): array {
 		$bundle = self::decode_bundle_value( $value );
 
-		self::assert_object_keys( $bundle, array( 'schema_version', 'policy', 'channels' ), 'Control bundle' );
-
-		if ( ( $bundle['schema_version'] ?? null ) !== self::SCHEMA_VERSION ) {
-			throw new ValidationException( 'PressQueue controls must use schema version 1.' );
+		$schema_version = $bundle['schema_version'] ?? null;
+		if ( 1 === $schema_version ) {
+			$bundle = self::normalize_legacy_v1_bundle( $bundle );
+		} elseif ( self::SCHEMA_VERSION !== $schema_version ) {
+			throw new ValidationException( 'PressQueue controls must use schema version 2.' );
 		}
+
+		self::assert_object_keys( $bundle, array( 'schema_version', 'policy', 'channels', 'message', 'schedule', 'media' ), 'Control bundle' );
 
 		if ( ! isset( $bundle['policy'] ) || ! is_string( $bundle['policy'] ) ) {
 			throw new ValidationException( 'PressQueue policy is required.' );
@@ -86,10 +103,16 @@ final class PostControlMetadata {
 		}
 
 		$channels = self::normalize_channels( $bundle['channels'] );
+		$message  = self::normalize_message( $bundle['message'] );
+		$schedule = self::normalize_schedule( $bundle['schedule'] );
+		$media    = self::normalize_media( $bundle['media'] );
 
 		$normalized = array(
 			'channels'       => $channels,
+			'media'          => $media,
+			'message'        => $message,
 			'policy'         => $policy,
+			'schedule'       => $schedule,
 			'schema_version' => self::SCHEMA_VERSION,
 		);
 
@@ -214,12 +237,72 @@ final class PostControlMetadata {
 			$channels['channel_public_ids'] = array_values( $ids );
 		}
 
+		$message = array(
+			'mode' => isset( $input['pressqueue_message_mode'] ) ? (string) $input['pressqueue_message_mode'] : 'inherit',
+		);
+
+		if ( 'override' === $message['mode'] ) {
+			$message['value'] = isset( $input['pressqueue_message_value'] ) ? (string) $input['pressqueue_message_value'] : '';
+		}
+
+		$schedule = array(
+			'mode' => isset( $input['pressqueue_schedule_mode'] ) ? (string) $input['pressqueue_schedule_mode'] : 'inherit',
+		);
+
+		if ( 'explicit_time' === $schedule['mode'] ) {
+			foreach ( array( 'local_date', 'local_time', 'timezone', 'utc_offset' ) as $key ) {
+				$form_key = 'pressqueue_schedule_' . $key;
+				if ( isset( $input[ $form_key ] ) && '' !== (string) $input[ $form_key ] ) {
+					$schedule[ $key ] = (string) $input[ $form_key ];
+				}
+			}
+		}
+
+		$media = array(
+			'mode' => isset( $input['pressqueue_media_mode'] ) ? (string) $input['pressqueue_media_mode'] : 'inherit',
+		);
+
+		if ( 'post_media' === $media['mode'] ) {
+			$ids = $input['pressqueue_media_attachment_ids'] ?? array();
+			if ( is_string( $ids ) ) {
+				$ids = array_filter( array_map( 'trim', explode( ',', $ids ) ) );
+			}
+
+			if ( ! is_array( $ids ) ) {
+				throw new ValidationException( 'PressQueue media attachments must be a list.' );
+			}
+
+			$media['post_media'] = array( 'attachment_ids' => array_values( $ids ) );
+		}
+
 		return self::normalize_bundle(
 			array(
 				'channels'       => $channels,
+				'media'          => $media,
+				'message'        => $message,
 				'policy'         => isset( $input['pressqueue_policy'] ) ? (string) $input['pressqueue_policy'] : '',
+				'schedule'       => $schedule,
 				'schema_version' => self::SCHEMA_VERSION,
 			)
+		);
+	}
+
+	/**
+	 * Normalize a schema version 1 bundle into schema version 2 inheritance.
+	 *
+	 * @param array<string,mixed> $bundle Version 1 bundle.
+	 * @return array<string,mixed>
+	 */
+	private static function normalize_legacy_v1_bundle( array $bundle ): array {
+		self::assert_object_keys( $bundle, array( 'schema_version', 'policy', 'channels' ), 'Control bundle' );
+
+		return array(
+			'channels'       => $bundle['channels'],
+			'media'          => array( 'mode' => 'inherit' ),
+			'message'        => array( 'mode' => 'inherit' ),
+			'policy'         => $bundle['policy'],
+			'schedule'       => array( 'mode' => 'inherit' ),
+			'schema_version' => self::SCHEMA_VERSION,
 		);
 	}
 
@@ -296,6 +379,188 @@ final class PostControlMetadata {
 	}
 
 	/**
+	 * Normalize message controls.
+	 *
+	 * @param mixed $message Message control.
+	 * @return array<string,mixed>
+	 */
+	private static function normalize_message( $message ): array {
+		if ( ! is_array( $message ) || array_is_list( $message ) ) {
+			throw new ValidationException( 'PressQueue message controls must be an object.' );
+		}
+
+		if ( ! isset( $message['mode'] ) || ! is_string( $message['mode'] ) ) {
+			throw new ValidationException( 'PressQueue message mode is required.' );
+		}
+
+		$mode = strtolower( $message['mode'] );
+		if ( ! in_array( $mode, self::MESSAGE_MODES, true ) ) {
+			throw new ValidationException( 'PressQueue message mode is unsupported.' );
+		}
+
+		if ( 'inherit' === $mode ) {
+			self::assert_object_keys( $message, array( 'mode' ), 'PressQueue message' );
+			return array( 'mode' => 'inherit' );
+		}
+
+		self::assert_object_keys( $message, array( 'mode', 'value' ), 'PressQueue message' );
+
+		if ( ! isset( $message['value'] ) || ! is_string( $message['value'] ) ) {
+			throw new ValidationException( 'PressQueue message override is required.' );
+		}
+
+		if ( strlen( $message['value'] ) > self::MESSAGE_MAX_BYTES ) {
+			throw new ValidationException( 'PressQueue message override exceeds the allowed storage size.' );
+		}
+
+		$value = self::normalize_plain_text( $message['value'] );
+		if ( '' === $value || self::length( $value ) > self::MESSAGE_MAX_CHARS ) {
+			throw new ValidationException( 'PressQueue message override must be a non-empty bounded string.' );
+		}
+
+		return array(
+			'mode'  => 'override',
+			'value' => $value,
+		);
+	}
+
+	/**
+	 * Normalize schedule controls.
+	 *
+	 * @param mixed $schedule Schedule control.
+	 * @return array<string,mixed>
+	 */
+	private static function normalize_schedule( $schedule ): array {
+		if ( ! is_array( $schedule ) || array_is_list( $schedule ) ) {
+			throw new ValidationException( 'PressQueue schedule controls must be an object.' );
+		}
+
+		if ( ! isset( $schedule['mode'] ) || ! is_string( $schedule['mode'] ) ) {
+			throw new ValidationException( 'PressQueue schedule mode is required.' );
+		}
+
+		$mode = strtolower( $schedule['mode'] );
+		if ( ! in_array( $mode, self::SCHEDULE_MODES, true ) ) {
+			throw new ValidationException( 'PressQueue schedule mode is unsupported.' );
+		}
+
+		if ( 'explicit_time' !== $mode ) {
+			self::assert_object_keys( $schedule, array( 'mode' ), 'PressQueue schedule' );
+			return array( 'mode' => $mode );
+		}
+
+		$allowed = array( 'mode', 'local_date', 'local_time', 'timezone', 'utc_offset' );
+		foreach ( array_keys( $schedule ) as $key ) {
+			if ( ! in_array( $key, $allowed, true ) ) {
+				throw new ValidationException( 'PressQueue schedule contains unsupported fields.' );
+			}
+		}
+
+		foreach ( array( 'local_date', 'local_time', 'timezone' ) as $key ) {
+			if ( ! isset( $schedule[ $key ] ) || ! is_string( $schedule[ $key ] ) ) {
+				throw new ValidationException( 'PressQueue explicit schedule is incomplete.' );
+			}
+		}
+
+		if ( 1 !== preg_match( '/^\d{4}-\d{2}-\d{2}$/', $schedule['local_date'] ) ) {
+			throw new ValidationException( 'PressQueue explicit schedule date is invalid.' );
+		}
+
+		if ( 1 !== preg_match( '/^(?:[01]\d|2[0-3]):[0-5]\d$/', $schedule['local_time'] ) ) {
+			throw new ValidationException( 'PressQueue explicit schedule time is invalid.' );
+		}
+
+		if ( false === timezone_open( $schedule['timezone'] ) ) {
+			throw new ValidationException( 'PressQueue explicit schedule timezone is invalid.' );
+		}
+
+		$normalized = array(
+			'local_date' => $schedule['local_date'],
+			'local_time' => $schedule['local_time'],
+			'mode'       => 'explicit_time',
+			'timezone'   => $schedule['timezone'],
+		);
+
+		if ( isset( $schedule['utc_offset'] ) ) {
+			if ( ! is_string( $schedule['utc_offset'] ) || 1 !== preg_match( '/^[+-](?:0\d|1[0-4]):[0-5]\d$/', $schedule['utc_offset'] ) ) {
+				throw new ValidationException( 'PressQueue explicit schedule UTC offset is invalid.' );
+			}
+
+			$normalized['utc_offset'] = $schedule['utc_offset'];
+		}
+
+		return $normalized;
+	}
+
+	/**
+	 * Normalize media controls.
+	 *
+	 * @param mixed $media Media control.
+	 * @return array<string,mixed>
+	 */
+	private static function normalize_media( $media ): array {
+		if ( ! is_array( $media ) || array_is_list( $media ) ) {
+			throw new ValidationException( 'PressQueue media controls must be an object.' );
+		}
+
+		if ( ! isset( $media['mode'] ) || ! is_string( $media['mode'] ) ) {
+			throw new ValidationException( 'PressQueue media mode is required.' );
+		}
+
+		$mode = strtolower( $media['mode'] );
+		if ( ! in_array( $mode, self::MEDIA_MODES, true ) ) {
+			throw new ValidationException( 'PressQueue media mode is unsupported.' );
+		}
+
+		if ( 'post_media' !== $mode ) {
+			self::assert_object_keys( $media, array( 'mode' ), 'PressQueue media' );
+			return array( 'mode' => $mode );
+		}
+
+		self::assert_object_keys( $media, array( 'mode', 'post_media' ), 'PressQueue media' );
+
+		if ( ! isset( $media['post_media'] ) || ! is_array( $media['post_media'] ) || array_is_list( $media['post_media'] ) ) {
+			throw new ValidationException( 'PressQueue post media controls must be an object.' );
+		}
+
+		self::assert_object_keys( $media['post_media'], array( 'attachment_ids' ), 'PressQueue post media' );
+
+		if ( ! isset( $media['post_media']['attachment_ids'] ) || ! is_array( $media['post_media']['attachment_ids'] ) || ! array_is_list( $media['post_media']['attachment_ids'] ) ) {
+			throw new ValidationException( 'PressQueue post media attachments must be a list.' );
+		}
+
+		if ( count( $media['post_media']['attachment_ids'] ) > 4 ) {
+			throw new ValidationException( 'PressQueue post media supports at most four attachments.' );
+		}
+
+		$seen = array();
+		$ids  = array();
+		foreach ( $media['post_media']['attachment_ids'] as $attachment_id ) {
+			if ( is_string( $attachment_id ) && ctype_digit( $attachment_id ) ) {
+				$attachment_id = (int) $attachment_id;
+			}
+
+			if ( ! is_int( $attachment_id ) || $attachment_id <= 0 ) {
+				throw new ValidationException( 'PressQueue media attachment ID is invalid.' );
+			}
+
+			if ( isset( $seen[ $attachment_id ] ) ) {
+				throw new ValidationException( 'PressQueue media attachment IDs must be unique.' );
+			}
+
+			$seen[ $attachment_id ] = true;
+			$ids[]                  = $attachment_id;
+		}
+
+		return array(
+			'mode'       => 'post_media',
+			'post_media' => array(
+				'attachment_ids' => $ids,
+			),
+		);
+	}
+
+	/**
 	 * Assert exact object keys.
 	 *
 	 * @param array<string,mixed> $value Object value.
@@ -320,6 +585,43 @@ final class PostControlMetadata {
 	 */
 	private static function assert_encoded_size( array $bundle ): void {
 		CanonicalJson::assert_maximum_size( CanonicalJson::encode_object( $bundle ), self::MAX_BYTES );
+	}
+
+	/**
+	 * Normalize plain text without executing shortcodes.
+	 *
+	 * @param string $value Raw value.
+	 * @return string
+	 */
+	private static function normalize_plain_text( string $value ): string {
+		if ( function_exists( 'wp_strip_all_tags' ) ) {
+			$value = wp_strip_all_tags( $value, true );
+		} else {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags -- Unit-test fallback.
+			$value = strip_tags( $value );
+		}
+
+		$value = html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$value = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $value );
+		$value = preg_replace( '/\s+/u', ' ', null === $value ? '' : $value );
+
+		return trim( null === $value ? '' : $value );
+	}
+
+	/**
+	 * Return Unicode character length.
+	 *
+	 * @param string $value Value.
+	 * @return int
+	 */
+	private static function length( string $value ): int {
+		if ( function_exists( 'mb_strlen' ) ) {
+			return mb_strlen( $value, 'UTF-8' );
+		}
+
+		preg_match_all( '/./us', $value, $matches );
+
+		return count( $matches[0] );
 	}
 
 	/**

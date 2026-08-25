@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue\Planning;
 
 use PressQueue\Editorial\PostControlMetadata;
+use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\HashKeys;
@@ -90,19 +91,43 @@ final class Planner {
 	private TemplateRenderer $templates;
 
 	/**
+	 * Template set resolver.
+	 *
+	 * @var TemplateSetResolver
+	 */
+	private TemplateSetResolver $template_sets;
+
+	/**
+	 * Schedule resolver.
+	 *
+	 * @var ScheduleResolver
+	 */
+	private ScheduleResolver $schedules;
+
+	/**
+	 * Media resolver.
+	 *
+	 * @var MediaResolver
+	 */
+	private MediaResolver $media;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Database|null $database Database wrapper.
 	 */
 	public function __construct( ?Database $database = null ) {
-		$this->rules       = new RuleRepository( $database );
-		$this->decisions   = new DecisionRepository( $database );
-		$this->deliveries  = new DeliveryRepository( $database );
-		$this->channels    = new ChannelRepository( $database );
-		$this->connections = new ConnectionRepository( $database );
-		$this->settings    = new SettingsRepository();
-		$this->conditions  = new ConditionEvaluator();
-		$this->templates   = new TemplateRenderer();
+		$this->rules         = new RuleRepository( $database );
+		$this->decisions     = new DecisionRepository( $database );
+		$this->deliveries    = new DeliveryRepository( $database );
+		$this->channels      = new ChannelRepository( $database );
+		$this->connections   = new ConnectionRepository( $database );
+		$this->settings      = new SettingsRepository();
+		$this->conditions    = new ConditionEvaluator();
+		$this->templates     = new TemplateRenderer();
+		$this->template_sets = new TemplateSetResolver();
+		$this->schedules     = new ScheduleResolver();
+		$this->media         = new MediaResolver();
 	}
 
 	/**
@@ -350,7 +375,27 @@ final class Planner {
 				}
 
 				try {
-					$payload_preview = $this->templates->payload_preview( $rule->inline_template, $event, $destination['destination'], $rule->public_id, $rule->version );
+					$template_set     = $this->template_sets->effective_template_set( $rule );
+					$message_template = $this->template_sets->message_for_service( $template_set, (string) $destination['destination']['service'] );
+					if ( isset( $event->control_bundle['message'] ) && is_array( $event->control_bundle['message'] ) && ( $event->control_bundle['message']['mode'] ?? null ) === 'override' && isset( $event->control_bundle['message']['value'] ) && is_string( $event->control_bundle['message']['value'] ) ) {
+						$message_template = $event->control_bundle['message']['value'];
+					}
+
+					$schedule        = $this->schedules->resolve( $rule, $event->control_bundle );
+					$media           = $this->media->resolve( $rule, $event, $destination['destination']['capability_document'], ! $durable );
+					$payload_preview = $this->templates->payload_preview_v2(
+						$message_template,
+						$template_set,
+						$this->template_sets->provenance( $rule ),
+						$rule->custom_field_allowlist,
+						$event,
+						$destination['destination'],
+						$rule->public_id,
+						$rule->version,
+						$schedule,
+						$media,
+						$destination['destination']['capability_document']
+					);
 				} catch ( ValidationException $exception ) {
 					$blocked_destinations[ $channel_public_id ] = true;
 
@@ -364,7 +409,7 @@ final class Planner {
 						array_merge(
 							$entry['reasons'],
 							array(
-								ReasonFactory::make( 'render_policy_error', $exception->getMessage(), 'error', 'inline_template', 'render', $rule->inline_template, null ),
+								ReasonFactory::make( 'render_policy_error', $exception->getMessage(), 'error', 'payload', 'render', $rule->public_id, null ),
 							)
 						),
 						$destination['destination'],
@@ -606,7 +651,10 @@ final class Planner {
 		RuleDocuments::custom_field_allowlist( $rule->custom_field_allowlist );
 		RuleDocuments::condition_tree( $rule->condition_tree, $rule->custom_field_allowlist );
 		RuleDocuments::inline_template( $rule->inline_template );
+		RuleDocuments::template_set( $this->template_sets->effective_template_set( $rule ), $rule->custom_field_allowlist );
 		RuleDocuments::destination_set( $rule->effect, $rule->destination_set );
+		RuleDocuments::schedule_policy( $rule->schedule_policy_document );
+		RuleDocuments::media_policy( $rule->media_policy );
 	}
 
 	/**
@@ -802,6 +850,7 @@ final class Planner {
 			'channel_enabled'                   => $channel->enabled,
 			'channel_availability'              => $channel->availability,
 			'channel_capability_decision'       => $this->channel_capability_decision( $channel ),
+			'capability_document'               => $channel->capabilities,
 			'channel_capability_schema_version' => (int) ( $channel->capabilities['schema_version'] ?? 0 ),
 			'connection_id'                     => null === $connection ? 0 : $connection->id,
 			'connection_label'                  => null === $connection ? '' : $connection->label,
@@ -819,33 +868,10 @@ final class Planner {
 	 * Return the text immediate delivery capability decision for a channel.
 	 *
 	 * @param ChannelRecord $channel Channel.
-	 * @return array{schema_version:int,text:bool,schedule_slots:array<int,string>,supports_immediate:bool,compatible:bool}
+	 * @return array<string,mixed>
 	 */
 	private function channel_capability_decision( ChannelRecord $channel ): array {
-		$delivery = $channel->capabilities['delivery'] ?? null;
-		$slots    = array();
-
-		if ( is_array( $delivery ) && isset( $delivery['schedule_slots'] ) && is_array( $delivery['schedule_slots'] ) ) {
-			foreach ( $delivery['schedule_slots'] as $slot ) {
-				if ( is_string( $slot ) ) {
-					$slots[] = $slot;
-				}
-			}
-		}
-
-		$text               = is_array( $delivery ) && true === ( $delivery['text'] ?? false );
-		$supports_immediate = in_array( 'immediate', $slots, true );
-		$schema_version     = (int) ( $channel->capabilities['schema_version'] ?? 0 );
-
-		return array(
-			'compatible'         => 1 === $schema_version
-				&& $text
-				&& $supports_immediate,
-			'schedule_slots'     => $slots,
-			'schema_version'     => $schema_version,
-			'supports_immediate' => $supports_immediate,
-			'text'               => $text,
-		);
+		return DeliveryCapability::decision( $channel->capabilities );
 	}
 
 	/**
@@ -971,7 +997,10 @@ final class Planner {
 	 * @return array<string,mixed>
 	 */
 	private function delivery_summary( NormalizedEvent $event, PolicySettings $settings, array $decision, array $destination, array $payload_preview, bool $durable ): array {
-		$delivery_key = HashKeys::delivery_key(
+		$schedule_slot     = isset( $payload_preview['schedule_slot'] ) && is_string( $payload_preview['schedule_slot'] ) ? $payload_preview['schedule_slot'] : 'immediate';
+		$scheduled_for_utc = isset( $payload_preview['scheduled_for_utc'] ) && is_string( $payload_preview['scheduled_for_utc'] ) ? $payload_preview['scheduled_for_utc'] : null;
+		$media_hash        = isset( $payload_preview['media_identity_hash'] ) && is_string( $payload_preview['media_identity_hash'] ) ? $payload_preview['media_identity_hash'] : null;
+		$delivery_key      = HashKeys::delivery_key(
 			$settings->delivery_mode,
 			(string) $destination['provider'],
 			(string) $destination['connection_public_id'],
@@ -982,24 +1011,53 @@ final class Planner {
 			$event->trigger,
 			(string) $decision['rule_public_id'],
 			(int) $decision['rule_version'],
-			'immediate'
+			$schedule_slot,
+			$scheduled_for_utc,
+			$media_hash
 		);
 
-		$payload_hash = HashKeys::payload_hash(
+		$payload_hash_input    = array(
+			'canonical_url'          => $payload_preview['canonical_url'],
+			'channel_public_id'      => $destination['channel_public_id'],
+			'connection_public_id'   => $destination['connection_public_id'],
+			'final_encoded_text'     => $payload_preview['final_encoded_text'] ?? null,
+			'media_identity_hash'    => $media_hash,
+			'message'                => $payload_preview['message'],
+			'payload_schema_version' => $payload_preview['payload_schema_version'] ?? 1,
+			'provider'               => $destination['provider'],
+			'remote_channel_id'      => $destination['remote_channel_id'],
+			'revision_fingerprint'   => $event->revision_fingerprint,
+			'rule_public_id'         => $decision['rule_public_id'],
+			'rule_version'           => $decision['rule_version'],
+			'scheduled_for_utc'      => $scheduled_for_utc,
+			'schedule_slot'          => $schedule_slot,
+			'trigger'                => $event->trigger,
+		);
+		$intent_occurrence_key = CanonicalJson::hash(
+			'intent_occurrence',
 			array(
-				'canonical_url'        => $payload_preview['canonical_url'],
 				'channel_public_id'    => $destination['channel_public_id'],
 				'connection_public_id' => $destination['connection_public_id'],
-				'message'              => $payload_preview['message'],
+				'media_identity_hash'  => $media_hash,
+				'post_id'              => $event->post_id,
 				'provider'             => $destination['provider'],
 				'remote_channel_id'    => $destination['remote_channel_id'],
 				'revision_fingerprint' => $event->revision_fingerprint,
 				'rule_public_id'       => $decision['rule_public_id'],
 				'rule_version'         => $decision['rule_version'],
-				'schedule_slot'        => 'immediate',
+				'scheduled_for_utc'    => $scheduled_for_utc,
+				'schedule_slot'        => $schedule_slot,
 				'trigger'              => $event->trigger,
 			)
 		);
+		$payload_hash          = HashKeys::payload_hash( $payload_hash_input );
+
+		$payload_preview['delivery_key']          = $delivery_key;
+		$payload_preview['event_key']             = $event->event_key;
+		$payload_preview['intent_occurrence_key'] = $intent_occurrence_key;
+		$payload_preview['payload_hash']          = $payload_hash;
+		$payload_preview['payload_hash_input']    = $payload_hash_input;
+		$payload_preview['revision_fingerprint']  = $event->revision_fingerprint;
 
 		$record = null;
 
@@ -1012,7 +1070,7 @@ final class Planner {
 				'payload_preview'      => $payload_preview,
 				'provider'             => $destination['provider'],
 				'remote_channel_id'    => $destination['remote_channel_id'],
-				'schedule_slot'        => 'immediate',
+				'schedule_slot'        => $schedule_slot,
 				'state'                => $settings->delivery_state,
 			);
 

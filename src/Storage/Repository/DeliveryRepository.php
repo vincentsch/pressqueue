@@ -11,8 +11,11 @@ namespace PressQueue\Storage\Repository;
 
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\HashKeys;
+use PressQueue\Provider\Capability\DeliveryCapability;
+use PressQueue\Storage\DeliveryPayloadDocuments;
 use PressQueue\Storage\PublicIdCollisionException;
 use PressQueue\Storage\PublicIds;
+use PressQueue\Storage\Schema;
 use PressQueue\Storage\Record\ConnectionRecord;
 use PressQueue\Storage\Record\DeliveryRecord;
 use PressQueue\Storage\StorageEnums;
@@ -25,56 +28,62 @@ use PressQueue\Storage\ValidationException;
  */
 final class DeliveryRepository extends AbstractRepository {
 	private const FORMATS = array(
-		'id'                              => '%d',
-		'public_id'                       => '%s',
-		'decision_id'                     => '%d',
-		'decision_public_id'              => '%s',
-		'event_key'                       => '%s',
-		'delivery_key'                    => '%s',
-		'delivery_mode'                   => '%s',
-		'provider'                        => '%s',
-		'connection_id'                   => '%d',
-		'connection_public_id'            => '%s',
-		'channel_id'                      => '%d',
-		'channel_public_id'               => '%s',
-		'remote_channel_id'               => '%s',
-		'rule_public_id'                  => '%s',
-		'rule_version'                    => '%d',
-		'state'                           => '%s',
-		'schedule_slot'                   => '%s',
-		'payload_preview_json'            => '%s',
-		'payload_hash'                    => '%s',
-		'created_at'                      => '%s',
-		'updated_at'                      => '%s',
-		'bound_provider'                  => '%s',
-		'bound_connection_public_id'      => '%s',
-		'bound_channel_public_id'         => '%s',
-		'bound_remote_account_id'         => '%s',
-		'bound_remote_organization_id'    => '%s',
-		'bound_remote_channel_id'         => '%s',
-		'bound_capability_schema_version' => '%d',
-		'queued_at'                       => '%s',
-		'last_attempt_at'                 => '%s',
-		'attempt_count'                   => '%d',
-		'automatic_attempt_count'         => '%d',
-		'next_attempt_at'                 => '%s',
-		'lease_owner'                     => '%s',
-		'lease_expires_at'                => '%s',
-		'action_id'                       => '%d',
-		'provider_result'                 => '%s',
-		'retry_safety'                    => '%s',
-		'receipt_json'                    => '%s',
-		'remote_id'                       => '%s',
-		'remote_receipt_key'              => '%s',
-		'error_class'                     => '%s',
-		'error_detail_json'               => '%s',
-		'reconciliation_status'           => '%s',
-		'reconciled_at'                   => '%s',
-		'reconciled_by'                   => '%d',
-		'reconciliation_note'             => '%s',
-		'payload_schema_version'          => '%d',
-		'adapter_encoding_version'        => '%d',
-		'state_changed_at'                => '%s',
+		'id'                               => '%d',
+		'public_id'                        => '%s',
+		'decision_id'                      => '%d',
+		'decision_public_id'               => '%s',
+		'event_key'                        => '%s',
+		'delivery_key'                     => '%s',
+		'delivery_mode'                    => '%s',
+		'provider'                         => '%s',
+		'connection_id'                    => '%d',
+		'connection_public_id'             => '%s',
+		'channel_id'                       => '%d',
+		'channel_public_id'                => '%s',
+		'remote_channel_id'                => '%s',
+		'rule_public_id'                   => '%s',
+		'rule_version'                     => '%d',
+		'state'                            => '%s',
+		'schedule_slot'                    => '%s',
+		'scheduled_for_utc'                => '%s',
+		'schedule_timezone'                => '%s',
+		'payload_preview_json'             => '%s',
+		'payload_hash'                     => '%s',
+		'created_at'                       => '%s',
+		'updated_at'                       => '%s',
+		'bound_provider'                   => '%s',
+		'bound_connection_public_id'       => '%s',
+		'bound_channel_public_id'          => '%s',
+		'bound_remote_account_id'          => '%s',
+		'bound_remote_organization_id'     => '%s',
+		'bound_remote_channel_id'          => '%s',
+		'bound_capability_schema_version'  => '%d',
+		'bound_capability_hash'            => '%s',
+		'bound_capability_catalog_version' => '%s',
+		'media_snapshot_json'              => '%s',
+		'media_identity_hash'              => '%s',
+		'queued_at'                        => '%s',
+		'last_attempt_at'                  => '%s',
+		'attempt_count'                    => '%d',
+		'automatic_attempt_count'          => '%d',
+		'next_attempt_at'                  => '%s',
+		'lease_owner'                      => '%s',
+		'lease_expires_at'                 => '%s',
+		'action_id'                        => '%d',
+		'provider_result'                  => '%s',
+		'retry_safety'                     => '%s',
+		'receipt_json'                     => '%s',
+		'remote_id'                        => '%s',
+		'remote_receipt_key'               => '%s',
+		'error_class'                      => '%s',
+		'error_detail_json'                => '%s',
+		'reconciliation_status'            => '%s',
+		'reconciled_at'                    => '%s',
+		'reconciled_by'                    => '%d',
+		'reconciliation_note'              => '%s',
+		'payload_schema_version'           => '%d',
+		'adapter_encoding_version'         => '%d',
+		'state_changed_at'                 => '%s',
 	);
 
 	/**
@@ -95,55 +104,61 @@ final class DeliveryRepository extends AbstractRepository {
 				$this->database->insert_row(
 					$table,
 					array(
-						'public_id'                       => $public_id,
-						'decision_id'                     => $prepared['decision_id'],
-						'decision_public_id'              => $prepared['decision_public_id'],
-						'event_key'                       => $prepared['event_key'],
-						'delivery_key'                    => $prepared['delivery_key'],
-						'delivery_mode'                   => $prepared['delivery_mode'],
-						'provider'                        => $prepared['provider'],
-						'connection_id'                   => $prepared['connection_id'],
-						'connection_public_id'            => $prepared['connection_public_id'],
-						'channel_id'                      => $prepared['channel_id'],
-						'channel_public_id'               => $prepared['channel_public_id'],
-						'remote_channel_id'               => $prepared['remote_channel_id'],
-						'rule_public_id'                  => $prepared['rule_public_id'],
-						'rule_version'                    => $prepared['rule_version'],
-						'state'                           => $prepared['state'],
-						'schedule_slot'                   => $prepared['schedule_slot'],
-						'payload_preview_json'            => $prepared['payload_preview_json'],
-						'payload_hash'                    => $prepared['payload_hash'],
-						'created_at'                      => $now,
-						'updated_at'                      => $now,
-						'bound_provider'                  => $prepared['bound_provider'],
-						'bound_connection_public_id'      => $prepared['bound_connection_public_id'],
-						'bound_channel_public_id'         => $prepared['bound_channel_public_id'],
-						'bound_remote_account_id'         => $prepared['bound_remote_account_id'],
-						'bound_remote_organization_id'    => $prepared['bound_remote_organization_id'],
-						'bound_remote_channel_id'         => $prepared['bound_remote_channel_id'],
-						'bound_capability_schema_version' => $prepared['bound_capability_schema_version'],
-						'queued_at'                       => null,
-						'last_attempt_at'                 => null,
-						'attempt_count'                   => 0,
-						'automatic_attempt_count'         => 0,
-						'next_attempt_at'                 => null,
-						'lease_owner'                     => null,
-						'lease_expires_at'                => null,
-						'action_id'                       => null,
-						'provider_result'                 => null,
-						'retry_safety'                    => 'not_retryable',
-						'receipt_json'                    => null,
-						'remote_id'                       => null,
-						'remote_receipt_key'              => null,
-						'error_class'                     => null,
-						'error_detail_json'               => null,
-						'reconciliation_status'           => 'none',
-						'reconciled_at'                   => null,
-						'reconciled_by'                   => null,
-						'reconciliation_note'             => null,
-						'payload_schema_version'          => 1,
-						'adapter_encoding_version'        => 1,
-						'state_changed_at'                => $now,
+						'public_id'                        => $public_id,
+						'decision_id'                      => $prepared['decision_id'],
+						'decision_public_id'               => $prepared['decision_public_id'],
+						'event_key'                        => $prepared['event_key'],
+						'delivery_key'                     => $prepared['delivery_key'],
+						'delivery_mode'                    => $prepared['delivery_mode'],
+						'provider'                         => $prepared['provider'],
+						'connection_id'                    => $prepared['connection_id'],
+						'connection_public_id'             => $prepared['connection_public_id'],
+						'channel_id'                       => $prepared['channel_id'],
+						'channel_public_id'                => $prepared['channel_public_id'],
+						'remote_channel_id'                => $prepared['remote_channel_id'],
+						'rule_public_id'                   => $prepared['rule_public_id'],
+						'rule_version'                     => $prepared['rule_version'],
+						'state'                            => $prepared['state'],
+						'schedule_slot'                    => $prepared['schedule_slot'],
+						'scheduled_for_utc'                => $prepared['scheduled_for_utc'],
+						'schedule_timezone'                => $prepared['schedule_timezone'],
+						'payload_preview_json'             => $prepared['payload_preview_json'],
+						'payload_hash'                     => $prepared['payload_hash'],
+						'created_at'                       => $now,
+						'updated_at'                       => $now,
+						'bound_provider'                   => $prepared['bound_provider'],
+						'bound_connection_public_id'       => $prepared['bound_connection_public_id'],
+						'bound_channel_public_id'          => $prepared['bound_channel_public_id'],
+						'bound_remote_account_id'          => $prepared['bound_remote_account_id'],
+						'bound_remote_organization_id'     => $prepared['bound_remote_organization_id'],
+						'bound_remote_channel_id'          => $prepared['bound_remote_channel_id'],
+						'bound_capability_schema_version'  => $prepared['bound_capability_schema_version'],
+						'bound_capability_hash'            => $prepared['bound_capability_hash'],
+						'bound_capability_catalog_version' => $prepared['bound_capability_catalog_version'],
+						'media_snapshot_json'              => $prepared['media_snapshot_json'],
+						'media_identity_hash'              => $prepared['media_identity_hash'],
+						'queued_at'                        => null,
+						'last_attempt_at'                  => null,
+						'attempt_count'                    => 0,
+						'automatic_attempt_count'          => 0,
+						'next_attempt_at'                  => null,
+						'lease_owner'                      => null,
+						'lease_expires_at'                 => null,
+						'action_id'                        => null,
+						'provider_result'                  => null,
+						'retry_safety'                     => 'not_retryable',
+						'receipt_json'                     => null,
+						'remote_id'                        => null,
+						'remote_receipt_key'               => null,
+						'error_class'                      => null,
+						'error_detail_json'                => null,
+						'reconciliation_status'            => 'none',
+						'reconciled_at'                    => null,
+						'reconciled_by'                    => null,
+						'reconciliation_note'              => null,
+						'payload_schema_version'           => $prepared['payload_schema_version'],
+						'adapter_encoding_version'         => $prepared['adapter_encoding_version'],
+						'state_changed_at'                 => $now,
 					),
 					self::FORMATS
 				);
@@ -323,7 +338,7 @@ final class DeliveryRepository extends AbstractRepository {
 		$this->assert_mode_state( $delivery_mode, $state );
 
 		$schedule_slot = (string) ( $input['schedule_slot'] ?? 'immediate' );
-		StorageEnums::assert( 'Schedule slot', $schedule_slot, StorageEnums::SCHEDULE_POLICIES );
+		StorageEnums::assert_schedule_slot( $schedule_slot );
 
 		$provider = (string) ( $input['provider'] ?? '' );
 		StorageValidator::assert_text_key( 'Provider', $provider );
@@ -352,7 +367,6 @@ final class DeliveryRepository extends AbstractRepository {
 			! $channel->enabled
 			|| 'available' !== $channel->availability
 			|| $channel->remote_organization_id !== $connection->remote_organization_id
-			|| ! $this->channel_capability_allows_delivery( $channel->capabilities )
 		) {
 			throw new ValidationException( 'Delivery channel must be enabled and available.' );
 		}
@@ -372,51 +386,113 @@ final class DeliveryRepository extends AbstractRepository {
 			throw new ValidationException( 'Delivery payload preview needs message and canonical URL fields.' );
 		}
 
+		$payload_schema_version   = (int) ( $payload_preview['payload_schema_version'] ?? ( $input['payload_schema_version'] ?? 1 ) );
+		$adapter_encoding_version = (int) ( $payload_preview['adapter_encoding_version'] ?? ( $input['adapter_encoding_version'] ?? 1 ) );
+		$scheduled_for_utc        = isset( $payload_preview['scheduled_for_utc'] ) && is_string( $payload_preview['scheduled_for_utc'] ) && '' !== $payload_preview['scheduled_for_utc'] ? $payload_preview['scheduled_for_utc'] : null;
+		$schedule_timezone        = isset( $payload_preview['schedule_timezone'] ) && is_string( $payload_preview['schedule_timezone'] ) && '' !== $payload_preview['schedule_timezone'] ? $payload_preview['schedule_timezone'] : null;
+		$media_snapshot           = null;
+		$media_identity_hash      = isset( $payload_preview['media_identity_hash'] ) && is_string( $payload_preview['media_identity_hash'] ) && '' !== $payload_preview['media_identity_hash'] ? $payload_preview['media_identity_hash'] : null;
+		$final_text               = isset( $payload_preview['final_encoded_text'] ) && is_string( $payload_preview['final_encoded_text'] ) ? $payload_preview['final_encoded_text'] : trim( $payload_preview['message'] ) . "\n\n" . $payload_preview['canonical_url'];
+		$final_text_length        = isset( $payload_preview['final_encoded_text_length'] ) ? (int) $payload_preview['final_encoded_text_length'] : $this->length( $final_text );
+
+		if ( 1 === $payload_schema_version || 1 === $adapter_encoding_version ) {
+			if ( 1 !== $payload_schema_version || 1 !== $adapter_encoding_version ) {
+				throw new ValidationException( 'Legacy payload schema and encoder versions must match.' );
+			}
+
+			if ( ! $this->channel_capability_allows_legacy_display( $channel->capabilities ) ) {
+				throw new ValidationException( 'Legacy delivery channel must keep displayable schema version 1 capability.' );
+			}
+		} elseif ( 2 === $payload_schema_version && 2 === $adapter_encoding_version ) {
+			$expected_bound_capability_hash = DeliveryCapability::hash( $channel->capabilities );
+			$facts                          = DeliveryPayloadDocuments::schema_two_facts( $payload_preview, $schedule_slot, $scheduled_for_utc, $schedule_timezone, $media_identity_hash, $expected_bound_capability_hash );
+			$scheduled_for_utc              = $facts['scheduled_for_utc'];
+			$schedule_timezone              = $facts['schedule_timezone'];
+			$media_snapshot                 = $facts['media_snapshot'];
+			$media_identity_hash            = $facts['media_identity_hash'];
+			$final_text                     = $facts['final_encoded_text'];
+			$final_text_length              = $facts['final_encoded_text_length'];
+			$payload_preview                = array_merge(
+				$payload_preview,
+				array(
+					'final_encoded_text'        => $final_text,
+					'final_encoded_text_length' => $final_text_length,
+					'media_identity_hash'       => $media_identity_hash,
+					'media_snapshot'            => $media_snapshot,
+					'scheduled_for_utc'         => $scheduled_for_utc,
+					'schedule_timezone'         => $schedule_timezone,
+				)
+			);
+
+			if ( ! DeliveryCapability::supports_payload( $channel->capabilities, $schedule_slot, $final_text_length, $media_snapshot ) ) {
+				throw new ValidationException( 'Delivery channel capability does not support the payload.' );
+			}
+		} else {
+			throw new ValidationException( 'Delivery payload or adapter version is unsupported.' );
+		}
+
 		$payload_preview_json = CanonicalJson::encode_object( $payload_preview );
-		CanonicalJson::assert_maximum_size( $payload_preview_json, 65536 );
+		CanonicalJson::assert_maximum_size( $payload_preview_json, Schema::PAYLOAD_PREVIEW_MAX_BYTES );
+		$media_snapshot_json = null;
+		if ( null !== $media_snapshot ) {
+			$media_snapshot_json = CanonicalJson::encode_object( $media_snapshot );
+			CanonicalJson::assert_maximum_size( $media_snapshot_json, Schema::MEDIA_SNAPSHOT_MAX_BYTES );
+		}
 
 		$payload_hash = HashKeys::payload_hash(
 			array(
-				'canonical_url'        => $payload_preview['canonical_url'],
-				'channel_public_id'    => $channel->public_id,
-				'connection_public_id' => $connection->public_id,
-				'message'              => $payload_preview['message'],
-				'provider'             => $provider,
-				'remote_channel_id'    => $remote_channel_id,
-				'revision_fingerprint' => $decision->revision_fingerprint,
-				'rule_public_id'       => $decision->rule_public_id,
-				'rule_version'         => $decision->rule_version,
-				'schedule_slot'        => $schedule_slot,
-				'trigger'              => $decision->trigger,
+				'canonical_url'          => $payload_preview['canonical_url'],
+				'channel_public_id'      => $channel->public_id,
+				'connection_public_id'   => $connection->public_id,
+				'final_encoded_text'     => 2 === $payload_schema_version ? $final_text : null,
+				'media_identity_hash'    => $media_identity_hash,
+				'message'                => $payload_preview['message'],
+				'payload_schema_version' => $payload_schema_version,
+				'provider'               => $provider,
+				'remote_channel_id'      => $remote_channel_id,
+				'revision_fingerprint'   => $decision->revision_fingerprint,
+				'rule_public_id'         => $decision->rule_public_id,
+				'rule_version'           => $decision->rule_version,
+				'scheduled_for_utc'      => $scheduled_for_utc,
+				'schedule_slot'          => $schedule_slot,
+				'trigger'                => $decision->trigger,
 			)
 		);
 
 		return array(
-			'decision_id'                     => $decision->id,
-			'decision_public_id'              => $decision->public_id,
-			'event_key'                       => $decision->event_key,
-			'delivery_key'                    => HashKeys::delivery_key( $delivery_mode, $provider, $connection->public_id, $channel->public_id, $remote_channel_id, $decision->post_id, $decision->revision_fingerprint, $decision->trigger, $decision->rule_public_id, $decision->rule_version, $schedule_slot ),
-			'delivery_mode'                   => $delivery_mode,
-			'provider'                        => $provider,
-			'connection_id'                   => $connection->id,
-			'connection_public_id'            => $connection->public_id,
-			'channel_id'                      => $channel->id,
-			'channel_public_id'               => $channel->public_id,
-			'remote_channel_id'               => $remote_channel_id,
-			'bound_provider'                  => 'live' === $delivery_mode ? $provider : null,
-			'bound_connection_public_id'      => 'live' === $delivery_mode ? $connection->public_id : null,
-			'bound_channel_public_id'         => 'live' === $delivery_mode ? $channel->public_id : null,
-			'bound_remote_account_id'         => 'live' === $delivery_mode ? $connection->remote_account_id : null,
-			'bound_remote_organization_id'    => 'live' === $delivery_mode ? $connection->remote_organization_id : null,
-			'bound_remote_channel_id'         => 'live' === $delivery_mode ? $remote_channel_id : null,
-			'bound_capability_schema_version' => 'live' === $delivery_mode ? (int) ( $channel->capabilities['schema_version'] ?? 0 ) : null,
-			'rule_public_id'                  => $decision->rule_public_id,
-			'rule_version'                    => $decision->rule_version,
-			'state'                           => $state,
-			'schedule_slot'                   => $schedule_slot,
-			'payload_preview'                 => $payload_preview,
-			'payload_preview_json'            => $payload_preview_json,
-			'payload_hash'                    => $payload_hash,
+			'decision_id'                      => $decision->id,
+			'decision_public_id'               => $decision->public_id,
+			'event_key'                        => $decision->event_key,
+			'delivery_key'                     => HashKeys::delivery_key( $delivery_mode, $provider, $connection->public_id, $channel->public_id, $remote_channel_id, $decision->post_id, $decision->revision_fingerprint, $decision->trigger, $decision->rule_public_id, $decision->rule_version, $schedule_slot, $scheduled_for_utc, $media_identity_hash ),
+			'delivery_mode'                    => $delivery_mode,
+			'provider'                         => $provider,
+			'connection_id'                    => $connection->id,
+			'connection_public_id'             => $connection->public_id,
+			'channel_id'                       => $channel->id,
+			'channel_public_id'                => $channel->public_id,
+			'remote_channel_id'                => $remote_channel_id,
+			'bound_provider'                   => 'live' === $delivery_mode ? $provider : null,
+			'bound_connection_public_id'       => 'live' === $delivery_mode ? $connection->public_id : null,
+			'bound_channel_public_id'          => 'live' === $delivery_mode ? $channel->public_id : null,
+			'bound_remote_account_id'          => 'live' === $delivery_mode ? $connection->remote_account_id : null,
+			'bound_remote_organization_id'     => 'live' === $delivery_mode ? $connection->remote_organization_id : null,
+			'bound_remote_channel_id'          => 'live' === $delivery_mode ? $remote_channel_id : null,
+			'bound_capability_schema_version'  => 'live' === $delivery_mode ? (int) ( $channel->capabilities['schema_version'] ?? 0 ) : null,
+			'bound_capability_hash'            => 'live' === $delivery_mode && 2 === (int) ( $channel->capabilities['schema_version'] ?? 0 ) ? DeliveryCapability::hash( $channel->capabilities ) : null,
+			'bound_capability_catalog_version' => 'live' === $delivery_mode ? DeliveryCapability::catalog_version( $channel->capabilities ) : null,
+			'rule_public_id'                   => $decision->rule_public_id,
+			'rule_version'                     => $decision->rule_version,
+			'state'                            => $state,
+			'schedule_slot'                    => $schedule_slot,
+			'scheduled_for_utc'                => $scheduled_for_utc,
+			'schedule_timezone'                => $schedule_timezone,
+			'media_snapshot_json'              => $media_snapshot_json,
+			'media_identity_hash'              => $media_identity_hash,
+			'payload_preview'                  => $payload_preview,
+			'payload_preview_json'             => $payload_preview_json,
+			'payload_hash'                     => $payload_hash,
+			'payload_schema_version'           => $payload_schema_version,
+			'adapter_encoding_version'         => $adapter_encoding_version,
 		);
 	}
 
@@ -444,7 +520,7 @@ final class DeliveryRepository extends AbstractRepository {
 	 * @param array<string,mixed> $capabilities Capability document.
 	 * @return bool
 	 */
-	private function channel_capability_allows_delivery( array $capabilities ): bool {
+	private function channel_capability_allows_legacy_display( array $capabilities ): bool {
 		$delivery = $capabilities['delivery'] ?? null;
 
 		return 1 === (int) ( $capabilities['schema_version'] ?? 0 )
@@ -453,6 +529,22 @@ final class DeliveryRepository extends AbstractRepository {
 			&& isset( $delivery['schedule_slots'] )
 			&& is_array( $delivery['schedule_slots'] )
 			&& in_array( 'immediate', $delivery['schedule_slots'], true );
+	}
+
+	/**
+	 * Return Unicode character length.
+	 *
+	 * @param string $value Value.
+	 * @return int
+	 */
+	private function length( string $value ): int {
+		if ( function_exists( 'mb_strlen' ) ) {
+			return mb_strlen( $value, 'UTF-8' );
+		}
+
+		preg_match_all( '/./us', $value, $matches );
+
+		return count( $matches[0] );
 	}
 
 	/**
@@ -497,6 +589,8 @@ final class DeliveryRepository extends AbstractRepository {
 			(int) $row->rule_version,
 			(string) $row->state,
 			(string) $row->schedule_slot,
+			StorageValidator::parse_date_time( property_exists( $row, 'scheduled_for_utc' ) && null !== $row->scheduled_for_utc ? (string) $row->scheduled_for_utc : null ),
+			property_exists( $row, 'schedule_timezone' ) && null !== $row->schedule_timezone ? (string) $row->schedule_timezone : null,
 			CanonicalJson::decode_object( (string) $row->payload_preview_json ),
 			(string) $row->payload_hash,
 			StorageValidator::parse_required_date_time( (string) $row->created_at ),
@@ -508,6 +602,10 @@ final class DeliveryRepository extends AbstractRepository {
 			null === $row->bound_remote_organization_id ? null : (string) $row->bound_remote_organization_id,
 			null === $row->bound_remote_channel_id ? null : (string) $row->bound_remote_channel_id,
 			null === $row->bound_capability_schema_version ? null : (int) $row->bound_capability_schema_version,
+			property_exists( $row, 'bound_capability_hash' ) && null !== $row->bound_capability_hash ? (string) $row->bound_capability_hash : null,
+			property_exists( $row, 'bound_capability_catalog_version' ) && null !== $row->bound_capability_catalog_version ? (string) $row->bound_capability_catalog_version : null,
+			property_exists( $row, 'media_snapshot_json' ) && null !== $row->media_snapshot_json ? CanonicalJson::decode_object( (string) $row->media_snapshot_json ) : null,
+			property_exists( $row, 'media_identity_hash' ) && null !== $row->media_identity_hash ? (string) $row->media_identity_hash : null,
 			StorageValidator::parse_date_time( null === $row->queued_at ? null : (string) $row->queued_at ),
 			StorageValidator::parse_date_time( null === $row->last_attempt_at ? null : (string) $row->last_attempt_at ),
 			(int) $row->attempt_count,

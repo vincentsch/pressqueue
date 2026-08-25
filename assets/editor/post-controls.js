@@ -14,12 +14,23 @@
 	var CheckboxControl = wp.components.CheckboxControl;
 	var Notice = wp.components.Notice;
 	var SelectControl = wp.components.SelectControl;
+	var TextareaControl = wp.components.TextareaControl;
+	var TextControl = wp.components.TextControl;
 
 	function inheritedBundle() {
 		return {
-			schema_version: 1,
+			schema_version: 2,
 			policy: 'inherit',
 			channels: {
+				mode: 'inherit'
+			},
+			message: {
+				mode: 'inherit'
+			},
+			schedule: {
+				mode: 'inherit'
+			},
+			media: {
 				mode: 'inherit'
 			}
 		};
@@ -30,6 +41,19 @@
 			return inheritedBundle();
 		}
 		return controls;
+	}
+
+	function mergeControls( controls, changes ) {
+		var base = normalizeControls( controls );
+		return Object.assign( {}, base, changes, { schema_version: 2 } );
+	}
+
+	function attachmentIdsFromText( value ) {
+		return String( value || '' ).split( ',' ).map( function ( item ) {
+			return item.trim();
+		} ).filter( function ( item ) {
+			return item !== '';
+		} );
 	}
 
 	function PanelContent() {
@@ -59,26 +83,23 @@
 		var controls = normalizeControls( state.controls );
 		var channels = state.effectiveFacts.channels || [];
 		var selected = controls.channels.channel_public_ids || [];
+		var message = controls.message || { mode: 'inherit' };
+		var schedule = controls.schedule || { mode: 'inherit' };
+		var media = controls.media || { mode: 'inherit' };
 
 		function setPolicy( policy ) {
-			state.setControls( {
-				schema_version: 1,
-				policy: policy,
-				channels: controls.channels
-			} );
+			state.setControls( mergeControls( controls, { policy: policy } ) );
 		}
 
 		function setMode( mode ) {
-			state.setControls( {
-				schema_version: 1,
-				policy: controls.policy,
+			state.setControls( mergeControls( controls, {
 				channels: mode === 'override' ? {
 					mode: 'override',
 					channel_public_ids: selected
 				} : {
 					mode: 'inherit'
 				}
-			} );
+			} ) );
 		}
 
 		function toggleChannel( publicId, checked ) {
@@ -89,14 +110,84 @@
 				next.push( publicId );
 			}
 			next.sort();
-			state.setControls( {
-				schema_version: 1,
-				policy: controls.policy,
+			state.setControls( mergeControls( controls, {
 				channels: {
 					mode: 'override',
 					channel_public_ids: next
 				}
-			} );
+			} ) );
+		}
+
+		function setMessageMode( mode ) {
+			state.setControls( mergeControls( controls, {
+				message: mode === 'override' ? {
+					mode: 'override',
+					value: message.value || ''
+				} : {
+					mode: 'inherit'
+				}
+			} ) );
+		}
+
+		function setMessageValue( value ) {
+			state.setControls( mergeControls( controls, {
+				message: {
+					mode: 'override',
+					value: value
+				}
+			} ) );
+		}
+
+		function setScheduleMode( mode ) {
+			var explicit = {
+				mode: 'explicit_time',
+				local_date: schedule.local_date || '',
+				local_time: schedule.local_time || '',
+				timezone: schedule.timezone || ''
+			};
+			if ( schedule.utc_offset ) {
+				explicit.utc_offset = schedule.utc_offset;
+			}
+
+			state.setControls( mergeControls( controls, {
+				schedule: mode === 'explicit_time' ? explicit : {
+					mode: mode
+				}
+			} ) );
+		}
+
+		function setScheduleField( key, value ) {
+			var next = Object.assign( {}, schedule, { mode: 'explicit_time' } );
+			if ( key === 'utc_offset' && value === '' ) {
+				delete next.utc_offset;
+			} else {
+				next[ key ] = value;
+			}
+			state.setControls( mergeControls( controls, { schedule: next } ) );
+		}
+
+		function setMediaMode( mode ) {
+			state.setControls( mergeControls( controls, {
+				media: mode === 'post_media' ? {
+					mode: 'post_media',
+					post_media: {
+						attachment_ids: media.post_media && media.post_media.attachment_ids ? media.post_media.attachment_ids : []
+					}
+				} : {
+					mode: mode
+				}
+			} ) );
+		}
+
+		function setMediaIds( value ) {
+			state.setControls( mergeControls( controls, {
+				media: {
+					mode: 'post_media',
+					post_media: {
+						attachment_ids: attachmentIdsFromText( value )
+					}
+				}
+			} ) );
 		}
 
 		function save() {
@@ -158,6 +249,78 @@
 						toggleChannel( channel.public_id, checked );
 					}
 				} );
+			} ) : null,
+			createElement( SelectControl, {
+				label: 'Message',
+				value: message.mode,
+				options: [
+					{ label: 'Inherit', value: 'inherit' },
+					{ label: 'Override', value: 'override' }
+				],
+				onChange: setMessageMode
+			} ),
+			message.mode === 'override' ? createElement( TextareaControl, {
+				label: 'Message text',
+				value: message.value || '',
+				onChange: setMessageValue
+			} ) : null,
+			createElement( SelectControl, {
+				label: 'Schedule',
+				value: schedule.mode,
+				options: [
+					{ label: 'Inherit', value: 'inherit' },
+					{ label: 'Immediate', value: 'immediate' },
+					{ label: 'Queue next', value: 'queue_next' },
+					{ label: 'Queue end', value: 'queue_end' },
+					{ label: 'Explicit time', value: 'explicit_time' }
+				],
+				onChange: setScheduleMode
+			} ),
+			schedule.mode === 'explicit_time' ? createElement( TextControl, {
+				label: 'Local date',
+				type: 'date',
+				value: schedule.local_date || '',
+				onChange: function ( value ) {
+					setScheduleField( 'local_date', value );
+				}
+			} ) : null,
+			schedule.mode === 'explicit_time' ? createElement( TextControl, {
+				label: 'Local time',
+				type: 'time',
+				value: schedule.local_time || '',
+				onChange: function ( value ) {
+					setScheduleField( 'local_time', value );
+				}
+			} ) : null,
+			schedule.mode === 'explicit_time' ? createElement( TextControl, {
+				label: 'Timezone',
+				value: schedule.timezone || '',
+				onChange: function ( value ) {
+					setScheduleField( 'timezone', value );
+				}
+			} ) : null,
+			schedule.mode === 'explicit_time' ? createElement( TextControl, {
+				label: 'UTC offset',
+				value: schedule.utc_offset || '',
+				onChange: function ( value ) {
+					setScheduleField( 'utc_offset', value );
+				}
+			} ) : null,
+			createElement( SelectControl, {
+				label: 'Media',
+				value: media.mode,
+				options: [
+					{ label: 'Inherit', value: 'inherit' },
+					{ label: 'None', value: 'none' },
+					{ label: 'Featured image', value: 'featured_image' },
+					{ label: 'Post media', value: 'post_media' }
+				],
+				onChange: setMediaMode
+			} ),
+			media.mode === 'post_media' ? createElement( TextControl, {
+				label: 'Attachment IDs',
+				value: media.post_media && media.post_media.attachment_ids ? media.post_media.attachment_ids.join( ',' ) : '',
+				onChange: setMediaIds
 			} ) : null,
 			state.preview ? createElement( 'pre', {}, JSON.stringify( state.preview, null, 2 ) ) : null,
 			createElement( Button, { variant: 'secondary', onClick: preview, isBusy: state.busy }, 'Preview' ),

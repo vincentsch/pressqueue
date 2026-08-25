@@ -13,20 +13,26 @@ namespace PressQueue\Storage;
  * Defines the current storage schema.
  */
 final class Schema {
-	public const TARGET_VERSION          = 3;
-	public const VERSION_OPTION          = 'pressqueue_schema_version';
-	public const MIGRATION_LOCK_OPTION   = 'pressqueue_migration_lock';
-	public const MIGRATION_FAILED_OPTION = 'pressqueue_migration_failed';
-	public const LOCK_TTL_SECONDS        = 900;
-	public const ACCOUNT_JSON_MAX_BYTES  = 65536;
-	public const PROVIDER_JSON_MAX_BYTES = 16384;
-	public const RECEIPT_JSON_MAX_BYTES  = 65536;
-	public const ERROR_JSON_MAX_BYTES    = 16384;
-	public const EVENT_JSON_MAX_BYTES    = 16384;
+	public const TARGET_VERSION            = 4;
+	public const VERSION_OPTION            = 'pressqueue_schema_version';
+	public const MIGRATION_LOCK_OPTION     = 'pressqueue_migration_lock';
+	public const MIGRATION_FAILED_OPTION   = 'pressqueue_migration_failed';
+	public const LOCK_TTL_SECONDS          = 900;
+	public const ACCOUNT_JSON_MAX_BYTES    = 65536;
+	public const PROVIDER_JSON_MAX_BYTES   = 16384;
+	public const RECEIPT_JSON_MAX_BYTES    = 65536;
+	public const ERROR_JSON_MAX_BYTES      = 16384;
+	public const EVENT_JSON_MAX_BYTES      = 16384;
+	public const TEMPLATE_SET_MAX_BYTES    = 65536;
+	public const SCHEDULE_JSON_MAX_BYTES   = 16384;
+	public const MEDIA_POLICY_MAX_BYTES    = 32768;
+	public const MEDIA_SNAPSHOT_MAX_BYTES  = 65536;
+	public const PAYLOAD_PREVIEW_MAX_BYTES = 131072;
 
 	public const CONNECTIONS     = 'connections';
 	public const CHANNELS        = 'channels';
 	public const RULES           = 'rules';
+	public const TEMPLATES       = 'templates';
 	public const DECISIONS       = 'decisions';
 	public const DELIVERIES      = 'deliveries';
 	public const DELIVERY_EVENTS = 'delivery_events';
@@ -41,6 +47,7 @@ final class Schema {
 			self::CONNECTIONS,
 			self::CHANNELS,
 			self::RULES,
+			self::TEMPLATES,
 			self::DECISIONS,
 			self::DELIVERIES,
 			self::DELIVERY_EVENTS,
@@ -58,6 +65,7 @@ final class Schema {
 		$connections = $database->table( self::CONNECTIONS );
 		$channels    = $database->table( self::CHANNELS );
 		$rules       = $database->table( self::RULES );
+		$templates   = $database->table( self::TEMPLATES );
 		$decisions   = $database->table( self::DECISIONS );
 		$deliveries  = $database->table( self::DELIVERIES );
 		$events      = $database->table( self::DELIVERY_EVENTS );
@@ -133,9 +141,14 @@ final class Schema {
 				triggers_json LONGTEXT NOT NULL,
 				condition_tree_json LONGTEXT NOT NULL,
 				inline_template_json LONGTEXT NOT NULL,
+				source_template_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL,
+				source_template_version INT UNSIGNED NULL,
+				template_set_json LONGTEXT NULL,
 				destination_set_json LONGTEXT NOT NULL,
 				custom_field_allowlist_json LONGTEXT NOT NULL,
 				schedule_policy VARCHAR(32) NOT NULL DEFAULT 'immediate',
+				schedule_policy_json LONGTEXT NULL,
+				media_policy_json LONGTEXT NULL,
 				enabled TINYINT(1) NOT NULL DEFAULT 0,
 				last_previewed_version INT UNSIGNED NULL,
 				version INT UNSIGNED NOT NULL DEFAULT 1,
@@ -146,7 +159,23 @@ final class Schema {
 				UNIQUE KEY public_id (public_id),
 				KEY enabled_priority_public_id (enabled, priority, public_id),
 				KEY effect (effect),
+				KEY source_template_version (source_template_public_id, source_template_version),
 				KEY version (version)
+			) $collate;",
+			"CREATE TABLE $templates (
+				id BIGINT UNSIGNED AUTO_INCREMENT NOT NULL,
+				public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				name VARCHAR(191) NOT NULL,
+				template_set_json LONGTEXT NOT NULL,
+				enabled TINYINT(1) NOT NULL DEFAULT 0,
+				version INT UNSIGNED NOT NULL DEFAULT 1,
+				lock_version INT UNSIGNED NOT NULL DEFAULT 1,
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				PRIMARY KEY  (id),
+				UNIQUE KEY public_id (public_id),
+				KEY enabled_name (enabled, name),
+				KEY updated_at (updated_at)
 			) $collate;",
 			"CREATE TABLE $decisions (
 				id BIGINT UNSIGNED AUTO_INCREMENT NOT NULL,
@@ -199,6 +228,8 @@ final class Schema {
 				rule_version INT UNSIGNED NOT NULL,
 				state VARCHAR(32) NOT NULL,
 				schedule_slot VARCHAR(64) NOT NULL DEFAULT 'immediate',
+				scheduled_for_utc DATETIME NULL,
+				schedule_timezone VARCHAR(64) NULL,
 				payload_preview_json LONGTEXT NOT NULL,
 				payload_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
 				created_at DATETIME NOT NULL,
@@ -210,6 +241,10 @@ final class Schema {
 				bound_remote_organization_id VARCHAR(191) NULL,
 				bound_remote_channel_id VARCHAR(191) NULL,
 				bound_capability_schema_version SMALLINT UNSIGNED NULL,
+				bound_capability_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
+				bound_capability_catalog_version VARCHAR(64) NULL,
+				media_snapshot_json LONGTEXT NULL,
+				media_identity_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
 				queued_at DATETIME NULL,
 				last_attempt_at DATETIME NULL,
 				attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
@@ -243,6 +278,7 @@ final class Schema {
 				KEY channel_id (channel_id),
 				KEY channel_public_id (channel_public_id),
 				KEY state (state),
+				KEY scheduled_for_utc (scheduled_for_utc),
 				KEY state_next_attempt (state, next_attempt_at),
 				KEY lease_expires_at (lease_expires_at),
 				KEY action_id (action_id),
@@ -365,9 +401,14 @@ final class Schema {
 					'triggers_json'               => self::column( 'longtext' ),
 					'condition_tree_json'         => self::column( 'longtext' ),
 					'inline_template_json'        => self::column( 'longtext' ),
+					'source_template_public_id'   => self::ascii_column( 'char(26)', true ),
+					'source_template_version'     => self::column( 'int unsigned', true ),
+					'template_set_json'           => self::column( 'longtext', true ),
 					'destination_set_json'        => self::column( 'longtext' ),
 					'custom_field_allowlist_json' => self::column( 'longtext' ),
 					'schedule_policy'             => self::column( 'varchar(32)', false, 'immediate' ),
+					'schedule_policy_json'        => self::column( 'longtext', true ),
+					'media_policy_json'           => self::column( 'longtext', true ),
 					'enabled'                     => self::column( 'tinyint', false, '0' ),
 					'last_previewed_version'      => self::column( 'int unsigned', true ),
 					'version'                     => self::column( 'int unsigned', false, '1' ),
@@ -380,7 +421,27 @@ final class Schema {
 					'public_id'                  => self::index( array( 'public_id' ), true ),
 					'enabled_priority_public_id' => self::index( array( 'enabled', 'priority', 'public_id' ) ),
 					'effect'                     => self::index( array( 'effect' ) ),
+					'source_template_version'    => self::index( array( 'source_template_public_id', 'source_template_version' ) ),
 					'version'                    => self::index( array( 'version' ) ),
+				),
+			),
+			self::TEMPLATES       => array(
+				'columns' => array(
+					'id'                => self::column( 'bigint unsigned', false, null, 'auto_increment' ),
+					'public_id'         => self::ascii_column( 'char(26)' ),
+					'name'              => self::column( 'varchar(191)' ),
+					'template_set_json' => self::column( 'longtext' ),
+					'enabled'           => self::column( 'tinyint', false, '0' ),
+					'version'           => self::column( 'int unsigned', false, '1' ),
+					'lock_version'      => self::column( 'int unsigned', false, '1' ),
+					'created_at'        => self::column( 'datetime' ),
+					'updated_at'        => self::column( 'datetime' ),
+				),
+				'indexes' => array(
+					'PRIMARY'      => self::index( array( 'id' ), true ),
+					'public_id'    => self::index( array( 'public_id' ), true ),
+					'enabled_name' => self::index( array( 'enabled', 'name' ) ),
+					'updated_at'   => self::index( array( 'updated_at' ) ),
 				),
 			),
 			self::DECISIONS       => array(
@@ -422,56 +483,62 @@ final class Schema {
 			),
 			self::DELIVERIES      => array(
 				'columns' => array(
-					'id'                              => self::column( 'bigint unsigned', false, null, 'auto_increment' ),
-					'public_id'                       => self::ascii_column( 'char(26)' ),
-					'decision_id'                     => self::column( 'bigint unsigned' ),
-					'decision_public_id'              => self::ascii_column( 'char(26)' ),
-					'event_key'                       => self::ascii_column( 'char(64)' ),
-					'delivery_key'                    => self::ascii_column( 'char(64)' ),
-					'delivery_mode'                   => self::column( 'varchar(16)' ),
-					'provider'                        => self::column( 'varchar(64)' ),
-					'connection_id'                   => self::column( 'bigint unsigned' ),
-					'connection_public_id'            => self::ascii_column( 'char(26)' ),
-					'channel_id'                      => self::column( 'bigint unsigned' ),
-					'channel_public_id'               => self::ascii_column( 'char(26)' ),
-					'remote_channel_id'               => self::column( 'varchar(191)' ),
-					'rule_public_id'                  => self::ascii_column( 'char(26)' ),
-					'rule_version'                    => self::column( 'int unsigned' ),
-					'state'                           => self::column( 'varchar(32)' ),
-					'schedule_slot'                   => self::column( 'varchar(64)', false, 'immediate' ),
-					'payload_preview_json'            => self::column( 'longtext' ),
-					'payload_hash'                    => self::ascii_column( 'char(64)' ),
-					'created_at'                      => self::column( 'datetime' ),
-					'updated_at'                      => self::column( 'datetime' ),
-					'bound_provider'                  => self::column( 'varchar(32)', true ),
-					'bound_connection_public_id'      => self::ascii_column( 'char(26)', true ),
-					'bound_channel_public_id'         => self::ascii_column( 'char(26)', true ),
-					'bound_remote_account_id'         => self::column( 'varchar(191)', true ),
-					'bound_remote_organization_id'    => self::column( 'varchar(191)', true ),
-					'bound_remote_channel_id'         => self::column( 'varchar(191)', true ),
-					'bound_capability_schema_version' => self::column( 'smallint unsigned', true ),
-					'queued_at'                       => self::column( 'datetime', true ),
-					'last_attempt_at'                 => self::column( 'datetime', true ),
-					'attempt_count'                   => self::column( 'int unsigned', false, '0' ),
-					'automatic_attempt_count'         => self::column( 'int unsigned', false, '0' ),
-					'next_attempt_at'                 => self::column( 'datetime', true ),
-					'lease_owner'                     => self::ascii_column( 'char(32)', true ),
-					'lease_expires_at'                => self::column( 'datetime', true ),
-					'action_id'                       => self::column( 'bigint unsigned', true ),
-					'provider_result'                 => self::column( 'varchar(32)', true ),
-					'retry_safety'                    => self::column( 'varchar(32)', false, 'not_retryable' ),
-					'receipt_json'                    => self::column( 'longtext', true ),
-					'remote_id'                       => self::column( 'varchar(191)', true ),
-					'remote_receipt_key'              => self::ascii_column( 'char(64)', true ),
-					'error_class'                     => self::column( 'varchar(64)', true ),
-					'error_detail_json'               => self::column( 'longtext', true ),
-					'reconciliation_status'           => self::column( 'varchar(32)', false, 'none' ),
-					'reconciled_at'                   => self::column( 'datetime', true ),
-					'reconciled_by'                   => self::column( 'bigint unsigned', true ),
-					'reconciliation_note'             => self::column( 'varchar(500)', true ),
-					'payload_schema_version'          => self::column( 'smallint unsigned', false, '1' ),
-					'adapter_encoding_version'        => self::column( 'smallint unsigned', false, '1' ),
-					'state_changed_at'                => self::column( 'datetime', true ),
+					'id'                               => self::column( 'bigint unsigned', false, null, 'auto_increment' ),
+					'public_id'                        => self::ascii_column( 'char(26)' ),
+					'decision_id'                      => self::column( 'bigint unsigned' ),
+					'decision_public_id'               => self::ascii_column( 'char(26)' ),
+					'event_key'                        => self::ascii_column( 'char(64)' ),
+					'delivery_key'                     => self::ascii_column( 'char(64)' ),
+					'delivery_mode'                    => self::column( 'varchar(16)' ),
+					'provider'                         => self::column( 'varchar(64)' ),
+					'connection_id'                    => self::column( 'bigint unsigned' ),
+					'connection_public_id'             => self::ascii_column( 'char(26)' ),
+					'channel_id'                       => self::column( 'bigint unsigned' ),
+					'channel_public_id'                => self::ascii_column( 'char(26)' ),
+					'remote_channel_id'                => self::column( 'varchar(191)' ),
+					'rule_public_id'                   => self::ascii_column( 'char(26)' ),
+					'rule_version'                     => self::column( 'int unsigned' ),
+					'state'                            => self::column( 'varchar(32)' ),
+					'schedule_slot'                    => self::column( 'varchar(64)', false, 'immediate' ),
+					'scheduled_for_utc'                => self::column( 'datetime', true ),
+					'schedule_timezone'                => self::column( 'varchar(64)', true ),
+					'payload_preview_json'             => self::column( 'longtext' ),
+					'payload_hash'                     => self::ascii_column( 'char(64)' ),
+					'created_at'                       => self::column( 'datetime' ),
+					'updated_at'                       => self::column( 'datetime' ),
+					'bound_provider'                   => self::column( 'varchar(32)', true ),
+					'bound_connection_public_id'       => self::ascii_column( 'char(26)', true ),
+					'bound_channel_public_id'          => self::ascii_column( 'char(26)', true ),
+					'bound_remote_account_id'          => self::column( 'varchar(191)', true ),
+					'bound_remote_organization_id'     => self::column( 'varchar(191)', true ),
+					'bound_remote_channel_id'          => self::column( 'varchar(191)', true ),
+					'bound_capability_schema_version'  => self::column( 'smallint unsigned', true ),
+					'bound_capability_hash'            => self::ascii_column( 'char(64)', true ),
+					'bound_capability_catalog_version' => self::column( 'varchar(64)', true ),
+					'media_snapshot_json'              => self::column( 'longtext', true ),
+					'media_identity_hash'              => self::ascii_column( 'char(64)', true ),
+					'queued_at'                        => self::column( 'datetime', true ),
+					'last_attempt_at'                  => self::column( 'datetime', true ),
+					'attempt_count'                    => self::column( 'int unsigned', false, '0' ),
+					'automatic_attempt_count'          => self::column( 'int unsigned', false, '0' ),
+					'next_attempt_at'                  => self::column( 'datetime', true ),
+					'lease_owner'                      => self::ascii_column( 'char(32)', true ),
+					'lease_expires_at'                 => self::column( 'datetime', true ),
+					'action_id'                        => self::column( 'bigint unsigned', true ),
+					'provider_result'                  => self::column( 'varchar(32)', true ),
+					'retry_safety'                     => self::column( 'varchar(32)', false, 'not_retryable' ),
+					'receipt_json'                     => self::column( 'longtext', true ),
+					'remote_id'                        => self::column( 'varchar(191)', true ),
+					'remote_receipt_key'               => self::ascii_column( 'char(64)', true ),
+					'error_class'                      => self::column( 'varchar(64)', true ),
+					'error_detail_json'                => self::column( 'longtext', true ),
+					'reconciliation_status'            => self::column( 'varchar(32)', false, 'none' ),
+					'reconciled_at'                    => self::column( 'datetime', true ),
+					'reconciled_by'                    => self::column( 'bigint unsigned', true ),
+					'reconciliation_note'              => self::column( 'varchar(500)', true ),
+					'payload_schema_version'           => self::column( 'smallint unsigned', false, '1' ),
+					'adapter_encoding_version'         => self::column( 'smallint unsigned', false, '1' ),
+					'state_changed_at'                 => self::column( 'datetime', true ),
 				),
 				'indexes' => array(
 					'PRIMARY'               => self::index( array( 'id' ), true ),
@@ -485,6 +552,7 @@ final class Schema {
 					'channel_id'            => self::index( array( 'channel_id' ) ),
 					'channel_public_id'     => self::index( array( 'channel_public_id' ) ),
 					'state'                 => self::index( array( 'state' ) ),
+					'scheduled_for_utc'     => self::index( array( 'scheduled_for_utc' ) ),
 					'state_next_attempt'    => self::index( array( 'state', 'next_attempt_at' ) ),
 					'lease_expires_at'      => self::index( array( 'lease_expires_at' ) ),
 					'action_id'             => self::index( array( 'action_id' ) ),

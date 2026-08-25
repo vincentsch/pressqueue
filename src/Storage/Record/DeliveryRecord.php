@@ -34,6 +34,8 @@ final class DeliveryRecord {
 	public int $rule_version;
 	public string $state;
 	public string $schedule_slot;
+	public ?DateTimeImmutable $scheduled_for_utc;
+	public ?string $schedule_timezone;
 	/** @var array<string,mixed> */
 	public array $payload_preview;
 	public string $payload_hash;
@@ -46,6 +48,11 @@ final class DeliveryRecord {
 	public ?string $bound_remote_organization_id;
 	public ?string $bound_remote_channel_id;
 	public ?int $bound_capability_schema_version;
+	public ?string $bound_capability_hash;
+	public ?string $bound_capability_catalog_version;
+	/** @var array<string,mixed>|null */
+	public ?array $media_snapshot;
+	public ?string $media_identity_hash;
 	public ?DateTimeImmutable $queued_at;
 	public ?DateTimeImmutable $last_attempt_at;
 	public int $attempt_count;
@@ -91,6 +98,8 @@ final class DeliveryRecord {
 	 * @param int                      $rule_version Rule version.
 	 * @param string                   $state Delivery state.
 	 * @param string                   $schedule_slot Schedule slot.
+	 * @param DateTimeImmutable|null   $scheduled_for_utc Scheduled UTC time.
+	 * @param string|null              $schedule_timezone Schedule source timezone.
 	 * @param array<string,mixed>      $payload_preview Payload preview document.
 	 * @param string                   $payload_hash Payload hash.
 	 * @param DateTimeImmutable        $created_at Creation timestamp.
@@ -102,6 +111,10 @@ final class DeliveryRecord {
 	 * @param string|null              $bound_remote_organization_id Bound remote organization ID.
 	 * @param string|null              $bound_remote_channel_id Bound remote channel ID.
 	 * @param int|null                 $bound_capability_schema_version Bound capability schema version.
+	 * @param string|null              $bound_capability_hash Bound capability hash.
+	 * @param string|null              $bound_capability_catalog_version Bound capability catalog version.
+	 * @param array<string,mixed>|null $media_snapshot Media snapshot.
+	 * @param string|null              $media_identity_hash Media identity hash.
 	 * @param DateTimeImmutable|null   $queued_at Queue timestamp.
 	 * @param DateTimeImmutable|null   $last_attempt_at Last attempt timestamp.
 	 * @param int                      $attempt_count Total provider submission attempts.
@@ -143,6 +156,8 @@ final class DeliveryRecord {
 		int $rule_version,
 		string $state,
 		string $schedule_slot,
+		?DateTimeImmutable $scheduled_for_utc,
+		?string $schedule_timezone,
 		array $payload_preview,
 		string $payload_hash,
 		DateTimeImmutable $created_at,
@@ -154,6 +169,10 @@ final class DeliveryRecord {
 		?string $bound_remote_organization_id = null,
 		?string $bound_remote_channel_id = null,
 		?int $bound_capability_schema_version = null,
+		?string $bound_capability_hash = null,
+		?string $bound_capability_catalog_version = null,
+		?array $media_snapshot = null,
+		?string $media_identity_hash = null,
 		?DateTimeImmutable $queued_at = null,
 		?DateTimeImmutable $last_attempt_at = null,
 		int $attempt_count = 0,
@@ -177,55 +196,61 @@ final class DeliveryRecord {
 		int $adapter_encoding_version = 1,
 		?DateTimeImmutable $state_changed_at = null
 	) {
-		$this->id                              = $id;
-		$this->public_id                       = $public_id;
-		$this->decision_id                     = $decision_id;
-		$this->decision_public_id              = $decision_public_id;
-		$this->event_key                       = $event_key;
-		$this->delivery_key                    = $delivery_key;
-		$this->delivery_mode                   = $delivery_mode;
-		$this->provider                        = $provider;
-		$this->connection_id                   = $connection_id;
-		$this->connection_public_id            = $connection_public_id;
-		$this->channel_id                      = $channel_id;
-		$this->channel_public_id               = $channel_public_id;
-		$this->remote_channel_id               = $remote_channel_id;
-		$this->rule_public_id                  = $rule_public_id;
-		$this->rule_version                    = $rule_version;
-		$this->state                           = $state;
-		$this->schedule_slot                   = $schedule_slot;
-		$this->payload_preview                 = $payload_preview;
-		$this->payload_hash                    = $payload_hash;
-		$this->created_at                      = $created_at;
-		$this->updated_at                      = $updated_at;
-		$this->bound_provider                  = $bound_provider;
-		$this->bound_connection_public_id      = $bound_connection_public_id;
-		$this->bound_channel_public_id         = $bound_channel_public_id;
-		$this->bound_remote_account_id         = $bound_remote_account_id;
-		$this->bound_remote_organization_id    = $bound_remote_organization_id;
-		$this->bound_remote_channel_id         = $bound_remote_channel_id;
-		$this->bound_capability_schema_version = $bound_capability_schema_version;
-		$this->queued_at                       = $queued_at;
-		$this->last_attempt_at                 = $last_attempt_at;
-		$this->attempt_count                   = $attempt_count;
-		$this->automatic_attempt_count         = $automatic_attempt_count;
-		$this->next_attempt_at                 = $next_attempt_at;
-		$this->lease_owner                     = $lease_owner;
-		$this->lease_expires_at                = $lease_expires_at;
-		$this->action_id                       = $action_id;
-		$this->provider_result                 = $provider_result;
-		$this->retry_safety                    = $retry_safety;
-		$this->receipt                         = $receipt;
-		$this->remote_id                       = $remote_id;
-		$this->remote_receipt_key              = $remote_receipt_key;
-		$this->error_class                     = $error_class;
-		$this->error_detail                    = $error_detail;
-		$this->reconciliation_status           = $reconciliation_status;
-		$this->reconciled_at                   = $reconciled_at;
-		$this->reconciled_by                   = $reconciled_by;
-		$this->reconciliation_note             = $reconciliation_note;
-		$this->payload_schema_version          = $payload_schema_version;
-		$this->adapter_encoding_version        = $adapter_encoding_version;
-		$this->state_changed_at                = $state_changed_at;
+		$this->id                               = $id;
+		$this->public_id                        = $public_id;
+		$this->decision_id                      = $decision_id;
+		$this->decision_public_id               = $decision_public_id;
+		$this->event_key                        = $event_key;
+		$this->delivery_key                     = $delivery_key;
+		$this->delivery_mode                    = $delivery_mode;
+		$this->provider                         = $provider;
+		$this->connection_id                    = $connection_id;
+		$this->connection_public_id             = $connection_public_id;
+		$this->channel_id                       = $channel_id;
+		$this->channel_public_id                = $channel_public_id;
+		$this->remote_channel_id                = $remote_channel_id;
+		$this->rule_public_id                   = $rule_public_id;
+		$this->rule_version                     = $rule_version;
+		$this->state                            = $state;
+		$this->schedule_slot                    = $schedule_slot;
+		$this->scheduled_for_utc                = $scheduled_for_utc;
+		$this->schedule_timezone                = $schedule_timezone;
+		$this->payload_preview                  = $payload_preview;
+		$this->payload_hash                     = $payload_hash;
+		$this->created_at                       = $created_at;
+		$this->updated_at                       = $updated_at;
+		$this->bound_provider                   = $bound_provider;
+		$this->bound_connection_public_id       = $bound_connection_public_id;
+		$this->bound_channel_public_id          = $bound_channel_public_id;
+		$this->bound_remote_account_id          = $bound_remote_account_id;
+		$this->bound_remote_organization_id     = $bound_remote_organization_id;
+		$this->bound_remote_channel_id          = $bound_remote_channel_id;
+		$this->bound_capability_schema_version  = $bound_capability_schema_version;
+		$this->bound_capability_hash            = $bound_capability_hash;
+		$this->bound_capability_catalog_version = $bound_capability_catalog_version;
+		$this->media_snapshot                   = $media_snapshot;
+		$this->media_identity_hash              = $media_identity_hash;
+		$this->queued_at                        = $queued_at;
+		$this->last_attempt_at                  = $last_attempt_at;
+		$this->attempt_count                    = $attempt_count;
+		$this->automatic_attempt_count          = $automatic_attempt_count;
+		$this->next_attempt_at                  = $next_attempt_at;
+		$this->lease_owner                      = $lease_owner;
+		$this->lease_expires_at                 = $lease_expires_at;
+		$this->action_id                        = $action_id;
+		$this->provider_result                  = $provider_result;
+		$this->retry_safety                     = $retry_safety;
+		$this->receipt                          = $receipt;
+		$this->remote_id                        = $remote_id;
+		$this->remote_receipt_key               = $remote_receipt_key;
+		$this->error_class                      = $error_class;
+		$this->error_detail                     = $error_detail;
+		$this->reconciliation_status            = $reconciliation_status;
+		$this->reconciled_at                    = $reconciled_at;
+		$this->reconciled_by                    = $reconciled_by;
+		$this->reconciliation_note              = $reconciliation_note;
+		$this->payload_schema_version           = $payload_schema_version;
+		$this->adapter_encoding_version         = $adapter_encoding_version;
+		$this->state_changed_at                 = $state_changed_at;
 	}
 }

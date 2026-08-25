@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Planning;
 
+use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Storage\ValidationException;
 
 /**
@@ -91,6 +92,92 @@ final class TemplateRenderer {
 			'schedule_slot'        => 'immediate',
 			'service'              => (string) $destination['service'],
 			'trigger'              => $event->trigger,
+		);
+	}
+
+	/**
+	 * Build a payload schema version 2 preview document.
+	 *
+	 * @param string              $message_template Resolved message template.
+	 * @param array<string,mixed> $template_set Template set snapshot.
+	 * @param array<string,mixed> $template_provenance Template source provenance.
+	 * @param array<int,string>   $custom_field_allowlist Rule custom field allowlist.
+	 * @param NormalizedEvent     $event Event.
+	 * @param array<string,mixed> $destination Destination facts.
+	 * @param string              $rule_public_id Rule public ID.
+	 * @param int                 $rule_version Rule version.
+	 * @param SchedulePolicy      $schedule Resolved schedule.
+	 * @param MediaSnapshot       $media Resolved media.
+	 * @param array<string,mixed> $capability Channel capability document.
+	 * @return array<string,mixed>
+	 */
+	public function payload_preview_v2(
+		string $message_template,
+		array $template_set,
+		array $template_provenance,
+		array $custom_field_allowlist,
+		NormalizedEvent $event,
+		array $destination,
+		string $rule_public_id,
+		int $rule_version,
+		SchedulePolicy $schedule,
+		MediaSnapshot $media,
+		array $capability
+	): array {
+		$canonical_url = $event->canonical_url;
+
+		if ( ! $this->is_valid_url( $canonical_url ) ) {
+			throw new ValidationException( 'Canonical URL is invalid.' );
+		}
+
+		$template = array(
+			'custom_field_allowlist' => $custom_field_allowlist,
+			'message'                => $message_template,
+			'schema_version'         => 1,
+		);
+
+		$rendered_message    = $this->render( $template, $event );
+		$final_text          = trim( $rendered_message ) . "\n\n" . $canonical_url;
+		$final_length        = $this->length( $final_text );
+		$media_document      = $media->document();
+		$capability_decision = DeliveryCapability::decision( $capability, $schedule->slot, $final_length, $media_document );
+
+		if ( ! $capability_decision['compatible'] ) {
+			throw new ValidationException( 'Destination capability does not support the rendered payload.' );
+		}
+
+		return array(
+			'adapter_encoding_version'         => 2,
+			'bound_capability_catalog_version' => DeliveryCapability::catalog_version( $capability ),
+			'bound_capability_hash'            => DeliveryCapability::hash( $capability ),
+			'canonical_url'                    => $canonical_url,
+			'capability_decision'              => $capability_decision,
+			'capability_schema_version'        => (int) ( $capability['schema_version'] ?? 0 ),
+			'channel_id'                       => (int) $destination['channel_id'],
+			'channel_label'                    => (string) $destination['channel_label'],
+			'channel_public_id'                => (string) $destination['channel_public_id'],
+			'connection_id'                    => (int) $destination['connection_id'],
+			'connection_label'                 => (string) $destination['connection_label'],
+			'connection_public_id'             => (string) $destination['connection_public_id'],
+			'event_mode'                       => $event->mode,
+			'final_encoded_text'               => $final_text,
+			'final_encoded_text_length'        => $final_length,
+			'media_identity_hash'              => $media->identity_hash(),
+			'media_snapshot'                   => $media_document,
+			'message'                          => $rendered_message,
+			'payload_schema_version'           => 2,
+			'post_id'                          => $event->post_id,
+			'provider'                         => (string) $destination['provider'],
+			'remote_channel_id'                => (string) $destination['remote_channel_id'],
+			'rule_public_id'                   => $rule_public_id,
+			'rule_version'                     => $rule_version,
+			'schedule_slot'                    => $schedule->slot,
+			'schedule_timezone'                => $schedule->timezone,
+			'scheduled_for_utc'                => $schedule->scheduled_for_storage(),
+			'service'                          => (string) $destination['service'],
+			'template_provenance'              => $template_provenance,
+			'template_snapshot'                => $template_set,
+			'trigger'                          => $event->trigger,
 		);
 	}
 

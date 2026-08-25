@@ -83,10 +83,10 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 	}
 
 	public function test_matching_preview_includes_skipped_nonmatching_rule_explanation(): void {
-		$matching = $this->createEnabledRule( $this->excludePostTypeRuleInput( 'post', 5, 'Exclude posts' ) );
-		$skipped  = $this->createEnabledRule( $this->excludePostTypeRuleInput( 'page', 10, 'Exclude pages' ) );
-		$post_id  = $this->publishedPost();
-		$rules    = array( $matching, $skipped );
+		$matching   = $this->createEnabledRule( $this->excludePostTypeRuleInput( 'post', 5, 'Exclude posts' ) );
+		$skipped    = $this->createEnabledRule( $this->excludePostTypeRuleInput( 'page', 10, 'Exclude pages' ) );
+		$post_id    = $this->publishedPost();
+		$rules      = array( $matching, $skipped );
 		$normalizer = new EventNormalizer();
 		$event      = $normalizer->from_post_id( $post_id, 'preview', 'integration', 'first_publish', $normalizer->metadata_allowlist_for_rules( $rules ) );
 
@@ -293,7 +293,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( 'unsupported_channel_capability', $reason['code'] );
 		self::assertSame( 'available', $record->snapshot['destination']['channel_availability'] );
 		self::assertFalse( $record->snapshot['destination']['channel_capability_decision']['compatible'] );
-		self::assertFalse( $record->snapshot['destination']['channel_capability_decision']['text'] );
+		self::assertSame( 0, $record->snapshot['destination']['channel_capability_decision']['text_limit'] );
 		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
 	}
 
@@ -432,7 +432,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 	/**
 	 * Run planning for a post and specific rules.
 	 *
-	 * @param int               $post_id Post ID.
+	 * @param int                                              $post_id Post ID.
 	 * @param array<int,\PressQueue\Storage\Record\RuleRecord> $rules Rules.
 	 * @return \PressQueue\Planning\PlanningResult
 	 */
@@ -557,18 +557,31 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Return a v1 text immediate channel capability document.
+	 * Return a schema 2 text and image channel capability document.
 	 *
 	 * @return array<string,mixed>
 	 */
 	private function channelCapabilities(): array {
 		return array(
-			'delivery'       => array(
-				'schedule_slots' => array( 'immediate' ),
-				'text'           => true,
+			'catalog_version' => '2026-08-25.1',
+			'delivery'        => array(
+				'image'               => array(
+					'alt_text_required' => false,
+					'max_bytes'         => 5 * 1024 * 1024,
+					'max_height'        => 4096,
+					'max_items'         => 1,
+					'max_width'         => 4096,
+					'mime_types'        => array( 'image/gif', 'image/jpeg', 'image/png' ),
+					'min_height'        => 1,
+					'min_width'         => 1,
+				),
+				'max_text_characters' => 280,
+				'schedule_slots'      => array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' ),
+				'text'                => true,
 			),
-			'schema_version' => 1,
-			'service'        => 'mastodon',
+			'schema_version'  => 2,
+			'service'         => 'mastodon',
+			'supported'       => true,
 		);
 	}
 

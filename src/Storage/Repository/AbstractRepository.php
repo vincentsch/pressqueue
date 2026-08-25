@@ -119,6 +119,15 @@ abstract class AbstractRepository {
 	}
 
 	/**
+	 * Return the templates table.
+	 *
+	 * @return string
+	 */
+	protected function templates_table(): string {
+		return $this->table( Schema::TEMPLATES );
+	}
+
+	/**
 	 * Return the decisions table.
 	 *
 	 * @return string

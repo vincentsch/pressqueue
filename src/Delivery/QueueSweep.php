@@ -12,8 +12,10 @@ namespace PressQueue\Delivery;
 // phpcs:disable Squiz.Commenting.VariableComment.Missing -- Constructor wires service dependencies.
 
 use PressQueue\Provider\ProviderRegistry;
+use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Storage\Database;
+use PressQueue\Storage\DeliveryPayloadDocuments;
 use PressQueue\Storage\Record\ChannelRecord;
 use PressQueue\Storage\Record\ConnectionRecord;
 use PressQueue\Storage\Record\DeliveryRecord;
@@ -139,6 +141,17 @@ final class QueueSweep {
 	 * @param DeliveryRecord $delivery Delivery.
 	 */
 	private function process_proposed( DeliveryRecord $delivery ): void {
+		$compatibility = $this->delivery_submission_compatibility( $delivery );
+		if ( null !== $compatibility ) {
+			$this->transitions->fail_proposed_preflight(
+				$delivery->public_id,
+				$compatibility['error_class'],
+				$compatibility['retry_safety'],
+				$compatibility['detail']
+			);
+			return;
+		}
+
 		$connection = $this->connections->find_by_public_id( $delivery->connection_public_id );
 		$channel    = $this->channels->find_by_public_id( $delivery->channel_public_id );
 
@@ -318,13 +331,15 @@ final class QueueSweep {
 			return false;
 		}
 
-		$delivery_capability = $channel->capabilities['delivery'] ?? null;
-		$capability_ok       = 1 === (int) ( $channel->capabilities['schema_version'] ?? 0 )
-			&& is_array( $delivery_capability )
-			&& true === ( $delivery_capability['text'] ?? false )
-			&& isset( $delivery_capability['schedule_slots'] )
-			&& is_array( $delivery_capability['schedule_slots'] )
-			&& in_array( 'immediate', $delivery_capability['schedule_slots'], true );
+		try {
+			$facts = $this->schema_two_facts( $delivery );
+		} catch ( ValidationException $exception ) {
+			unset( $exception );
+
+			return false;
+		}
+
+		$capability_ok = DeliveryCapability::supports_payload( $channel->capabilities, $delivery->schedule_slot, $facts['final_encoded_text_length'], $facts['media_snapshot'] );
 
 		$current_ok = 'live' === $delivery->delivery_mode
 			&& $delivery->provider === $connection->provider
@@ -360,7 +375,83 @@ final class QueueSweep {
 			&& $delivery->bound_remote_account_id === $connection->remote_account_id
 			&& $delivery->bound_remote_organization_id === $connection->remote_organization_id
 			&& $delivery->bound_remote_channel_id === $channel->remote_channel_id
-			&& (int) ( $channel->capabilities['schema_version'] ?? 0 ) === $delivery->bound_capability_schema_version;
+			&& (int) ( $channel->capabilities['schema_version'] ?? 0 ) === $delivery->bound_capability_schema_version
+			&& DeliveryCapability::supports_payload( $channel->capabilities, $delivery->schedule_slot, $facts['final_encoded_text_length'], $facts['media_snapshot'] );
+	}
+
+	/**
+	 * Return a fail-closed compatibility issue before queueing.
+	 *
+	 * @param DeliveryRecord $delivery Delivery.
+	 * @return array{error_class:string,retry_safety:string,detail:array<string,mixed>}|null
+	 */
+	private function delivery_submission_compatibility( DeliveryRecord $delivery ): ?array {
+		if ( 1 === $delivery->payload_schema_version && 1 === $delivery->adapter_encoding_version ) {
+			return array(
+				'detail'       => array(
+					'classification' => 'legacy_encoder_retired',
+					'schema_version' => 1,
+				),
+				'error_class'  => 'legacy_encoder_retired',
+				'retry_safety' => 'not_retryable',
+			);
+		}
+
+		if ( 2 !== $delivery->payload_schema_version ) {
+			return array(
+				'detail'       => array(
+					'classification' => 'unsupported_payload_version',
+					'schema_version' => 1,
+				),
+				'error_class'  => 'unsupported_payload_version',
+				'retry_safety' => 'not_retryable',
+			);
+		}
+
+		if ( 2 !== $delivery->adapter_encoding_version ) {
+			return array(
+				'detail'       => array(
+					'classification' => 'unsupported_encoder_version',
+					'schema_version' => 1,
+				),
+				'error_class'  => 'unsupported_encoder_version',
+				'retry_safety' => 'not_retryable',
+			);
+		}
+
+		try {
+			$this->schema_two_facts( $delivery );
+		} catch ( ValidationException $exception ) {
+			unset( $exception );
+
+			return array(
+				'detail'       => array(
+					'classification' => 'payload_preview_invalid',
+					'schema_version' => 1,
+				),
+				'error_class'  => 'payload_preview_invalid',
+				'retry_safety' => 'not_retryable',
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Validate schema version 2 payload facts.
+	 *
+	 * @param DeliveryRecord $delivery Delivery.
+	 * @return array{final_encoded_text:string,final_encoded_text_length:int,media_identity_hash:string|null,media_snapshot:array<string,mixed>,scheduled_for_utc:string|null,schedule_timezone:string|null}
+	 */
+	private function schema_two_facts( DeliveryRecord $delivery ): array {
+		return DeliveryPayloadDocuments::schema_two_facts(
+			$delivery->payload_preview,
+			$delivery->schedule_slot,
+			null === $delivery->scheduled_for_utc ? null : $delivery->scheduled_for_utc->format( 'Y-m-d H:i:s' ),
+			$delivery->schedule_timezone,
+			$delivery->media_identity_hash,
+			$delivery->bound_capability_hash
+		);
 	}
 
 	/**

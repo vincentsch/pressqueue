@@ -61,17 +61,19 @@ final class HashKeys {
 	/**
 	 * Calculate a delivery key.
 	 *
-	 * @param string $delivery_mode Delivery mode.
-	 * @param string $provider Provider key.
-	 * @param string $connection_public_id Connection public ID.
-	 * @param string $channel_public_id Channel public ID.
-	 * @param string $remote_channel_id Provider channel ID.
-	 * @param int    $post_id WordPress post ID.
-	 * @param string $revision_fingerprint Revision fingerprint.
-	 * @param string $trigger Rule trigger.
-	 * @param string $rule_public_id Winning rule public ID.
-	 * @param int    $rule_version Winning rule version.
-	 * @param string $schedule_slot Schedule slot.
+	 * @param string      $delivery_mode Delivery mode.
+	 * @param string      $provider Provider key.
+	 * @param string      $connection_public_id Connection public ID.
+	 * @param string      $channel_public_id Channel public ID.
+	 * @param string      $remote_channel_id Provider channel ID.
+	 * @param int         $post_id WordPress post ID.
+	 * @param string      $revision_fingerprint Revision fingerprint.
+	 * @param string      $trigger Rule trigger.
+	 * @param string      $rule_public_id Winning rule public ID.
+	 * @param int         $rule_version Winning rule version.
+	 * @param string      $schedule_slot Schedule slot.
+	 * @param string|null $scheduled_for_utc Explicit due time.
+	 * @param string|null $media_identity_hash Media identity hash.
 	 * @return string
 	 */
 	public static function delivery_key(
@@ -85,24 +87,33 @@ final class HashKeys {
 		string $trigger,
 		string $rule_public_id,
 		int $rule_version,
-		string $schedule_slot = 'immediate'
+		string $schedule_slot = 'immediate',
+		?string $scheduled_for_utc = null,
+		?string $media_identity_hash = null
 	): string {
-		return CanonicalJson::hash(
-			'delivery_key',
-			array(
-				'channel_public_id'    => $channel_public_id,
-				'connection_public_id' => $connection_public_id,
-				'delivery_mode'        => $delivery_mode,
-				'post_id'              => $post_id,
-				'provider'             => $provider,
-				'remote_channel_id'    => $remote_channel_id,
-				'revision_fingerprint' => $revision_fingerprint,
-				'rule_public_id'       => $rule_public_id,
-				'rule_version'         => $rule_version,
-				'schedule_slot'        => $schedule_slot,
-				'trigger'              => $trigger,
-			)
+		$data = array(
+			'channel_public_id'    => $channel_public_id,
+			'connection_public_id' => $connection_public_id,
+			'delivery_mode'        => $delivery_mode,
+			'post_id'              => $post_id,
+			'provider'             => $provider,
+			'remote_channel_id'    => $remote_channel_id,
+			'revision_fingerprint' => $revision_fingerprint,
+			'rule_public_id'       => $rule_public_id,
+			'rule_version'         => $rule_version,
+			'schedule_slot'        => $schedule_slot,
+			'trigger'              => $trigger,
 		);
+
+		if ( null !== $scheduled_for_utc ) {
+			$data['scheduled_for_utc'] = $scheduled_for_utc;
+		}
+
+		if ( null !== $media_identity_hash ) {
+			$data['media_identity_hash'] = $media_identity_hash;
+		}
+
+		return CanonicalJson::hash( 'delivery_key', $data );
 	}
 
 	/**

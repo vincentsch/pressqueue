@@ -9,59 +9,75 @@ if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', dirname( __DIR__, 2 ) . '/' );
 }
 
-$GLOBALS['wp_version']                         = $GLOBALS['wp_version'] ?? '6.8.8';
-$GLOBALS['pressqueue_test_actions']            = array();
-$GLOBALS['pressqueue_test_hooks']              = array();
-$GLOBALS['pressqueue_test_http_requests']      = array();
-$GLOBALS['pressqueue_test_http_post_response'] = null;
-$GLOBALS['pressqueue_test_deactivated']        = array();
-$GLOBALS['pressqueue_test_is_multisite']       = false;
-$GLOBALS['pressqueue_test_loaded_textdomains'] = array();
-$GLOBALS['pressqueue_test_options']            = array();
-$GLOBALS['pressqueue_test_option_autoloads']   = array();
-$GLOBALS['pressqueue_test_roles']              = array();
-$GLOBALS['pressqueue_test_current_user_caps']  = array();
-$GLOBALS['pressqueue_test_valid_nonces']       = array();
-$GLOBALS['pressqueue_test_as_next_action_id']  = 1000;
-$GLOBALS['pressqueue_test_as_supports']        = array();
-$GLOBALS['pressqueue_test_as_actions']         = array();
-$GLOBALS['pressqueue_test_posts']              = array();
-$GLOBALS['pressqueue_test_post_meta']          = array();
-$GLOBALS['pressqueue_test_registered_meta']    = array();
-$GLOBALS['pressqueue_test_rest_routes']        = array();
-$GLOBALS['pressqueue_test_meta_boxes']         = array();
-$GLOBALS['pressqueue_test_logged_in']          = true;
+if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
+	define( 'MINUTE_IN_SECONDS', 60 );
+}
+
+if ( ! defined( 'DAY_IN_SECONDS' ) ) {
+	define( 'DAY_IN_SECONDS', 86400 );
+}
+
+$GLOBALS['wp_version']                          = $GLOBALS['wp_version'] ?? '6.8.8';
+$GLOBALS['pressqueue_test_actions']             = array();
+$GLOBALS['pressqueue_test_hooks']               = array();
+$GLOBALS['pressqueue_test_http_requests']       = array();
+$GLOBALS['pressqueue_test_http_post_response']  = null;
+$GLOBALS['pressqueue_test_deactivated']         = array();
+$GLOBALS['pressqueue_test_is_multisite']        = false;
+$GLOBALS['pressqueue_test_loaded_textdomains']  = array();
+$GLOBALS['pressqueue_test_options']             = array();
+$GLOBALS['pressqueue_test_option_autoloads']    = array();
+$GLOBALS['pressqueue_test_roles']               = array();
+$GLOBALS['pressqueue_test_current_user_caps']   = array();
+$GLOBALS['pressqueue_test_valid_nonces']        = array();
+$GLOBALS['pressqueue_test_as_next_action_id']   = 1000;
+$GLOBALS['pressqueue_test_as_supports']         = array();
+$GLOBALS['pressqueue_test_as_actions']          = array();
+$GLOBALS['pressqueue_test_posts']               = array();
+$GLOBALS['pressqueue_test_post_meta']           = array();
+$GLOBALS['pressqueue_test_attachment_urls']     = array();
+$GLOBALS['pressqueue_test_attachment_metadata'] = array();
+$GLOBALS['pressqueue_test_featured_images']     = array();
+$GLOBALS['pressqueue_test_transients']          = array();
+$GLOBALS['pressqueue_test_registered_meta']     = array();
+$GLOBALS['pressqueue_test_rest_routes']         = array();
+$GLOBALS['pressqueue_test_meta_boxes']          = array();
+$GLOBALS['pressqueue_test_logged_in']           = true;
 
 /**
  * Reset test hook state.
  */
 function pressqueue_test_reset_wordpress_stubs(): void {
-	$GLOBALS['pressqueue_test_actions']            = array();
-	$GLOBALS['pressqueue_test_hooks']              = array();
-	$GLOBALS['pressqueue_test_http_requests']      = array();
-	$GLOBALS['pressqueue_test_http_post_response'] = null;
-	$GLOBALS['pressqueue_test_deactivated']        = array();
-	$GLOBALS['pressqueue_test_is_multisite']       = false;
-	$GLOBALS['pressqueue_test_loaded_textdomains'] = array();
-	$GLOBALS['pressqueue_test_options']            = array();
-	$GLOBALS['pressqueue_test_option_autoloads']   = array();
-	$GLOBALS['pressqueue_test_roles']              = array(
+	$GLOBALS['pressqueue_test_actions']             = array();
+	$GLOBALS['pressqueue_test_hooks']               = array();
+	$GLOBALS['pressqueue_test_http_requests']       = array();
+	$GLOBALS['pressqueue_test_http_post_response']  = null;
+	$GLOBALS['pressqueue_test_deactivated']         = array();
+	$GLOBALS['pressqueue_test_is_multisite']        = false;
+	$GLOBALS['pressqueue_test_loaded_textdomains']  = array();
+	$GLOBALS['pressqueue_test_options']             = array();
+	$GLOBALS['pressqueue_test_option_autoloads']    = array();
+	$GLOBALS['pressqueue_test_roles']               = array(
 		'administrator' => new PressQueue_Test_Role(),
 		'editor'        => new PressQueue_Test_Role(),
 	);
-	$GLOBALS['pressqueue_test_current_user_caps']  = array();
-	$GLOBALS['pressqueue_test_valid_nonces']       = array();
-	$GLOBALS['pressqueue_test_as_next_action_id']  = 1000;
-	$GLOBALS['pressqueue_test_as_supports']        = array();
-	$GLOBALS['pressqueue_test_as_actions']         = array();
-	$GLOBALS['pressqueue_test_posts']              = array();
-	$GLOBALS['pressqueue_test_post_meta']          = array();
-	$GLOBALS['pressqueue_test_registered_meta']    = array();
-	$GLOBALS['pressqueue_test_rest_routes']        = array();
-	$GLOBALS['pressqueue_test_meta_boxes']         = array();
-	$GLOBALS['pressqueue_test_logged_in']          = true;
-	$GLOBALS['pressqueue_runtime_notice']          = null;
-	$GLOBALS['wp_version']                         = '6.8.8';
+	$GLOBALS['pressqueue_test_current_user_caps']   = array();
+	$GLOBALS['pressqueue_test_valid_nonces']        = array();
+	$GLOBALS['pressqueue_test_as_next_action_id']   = 1000;
+	$GLOBALS['pressqueue_test_as_supports']         = array();
+	$GLOBALS['pressqueue_test_as_actions']          = array();
+	$GLOBALS['pressqueue_test_posts']               = array();
+	$GLOBALS['pressqueue_test_post_meta']           = array();
+	$GLOBALS['pressqueue_test_attachment_urls']     = array();
+	$GLOBALS['pressqueue_test_attachment_metadata'] = array();
+	$GLOBALS['pressqueue_test_featured_images']     = array();
+	$GLOBALS['pressqueue_test_transients']          = array();
+	$GLOBALS['pressqueue_test_registered_meta']     = array();
+	$GLOBALS['pressqueue_test_rest_routes']         = array();
+	$GLOBALS['pressqueue_test_meta_boxes']          = array();
+	$GLOBALS['pressqueue_test_logged_in']           = true;
+	$GLOBALS['pressqueue_runtime_notice']           = null;
+	$GLOBALS['wp_version']                          = '6.8.8';
 }
 
 /**
@@ -487,20 +503,66 @@ function delete_option( $option ): bool {
 }
 
 /**
+ * Store a test transient.
+ *
+ * @param string $transient Transient name.
+ * @param mixed  $value Transient value.
+ * @param int    $expiration Expiration seconds.
+ * @return bool
+ */
+function set_transient( $transient, $value, $expiration = 0 ): bool {
+	$GLOBALS['pressqueue_test_transients'][ (string) $transient ] = array(
+		'expiration' => (int) $expiration,
+		'value'      => $value,
+	);
+
+	return true;
+}
+
+/**
+ * Read a test transient.
+ *
+ * @param string $transient Transient name.
+ * @return mixed
+ */
+function get_transient( $transient ) {
+	return array_key_exists( (string) $transient, $GLOBALS['pressqueue_test_transients'] )
+		? $GLOBALS['pressqueue_test_transients'][ (string) $transient ]['value']
+		: false;
+}
+
+/**
+ * Delete a test transient.
+ *
+ * @param string $transient Transient name.
+ * @return bool
+ */
+function delete_transient( $transient ): bool {
+	$transient = (string) $transient;
+	$existed   = array_key_exists( $transient, $GLOBALS['pressqueue_test_transients'] );
+
+	unset( $GLOBALS['pressqueue_test_transients'][ $transient ] );
+
+	return $existed;
+}
+
+/**
  * Minimal WordPress post object.
  */
 class WP_Post {
-	public int $ID = 0;
-	public string $post_type = 'post';
-	public string $post_status = 'publish';
-	public int $post_author = 1;
-	public string $post_title = '';
-	public string $post_excerpt = '';
-	public string $post_content = '';
-	public string $post_date = '2026-08-24 12:00:00';
-	public string $post_date_gmt = '2026-08-24 12:00:00';
-	public string $post_modified = '2026-08-24 12:00:00';
+	public int $ID                   = 0;
+	public string $post_type         = 'post';
+	public string $post_status       = 'publish';
+	public int $post_author          = 1;
+	public string $post_title        = '';
+	public string $post_excerpt      = '';
+	public string $post_content      = '';
+	public string $post_date         = '2026-08-24 12:00:00';
+	public string $post_date_gmt     = '2026-08-24 12:00:00';
+	public string $post_modified     = '2026-08-24 12:00:00';
 	public string $post_modified_gmt = '2026-08-24 12:00:00';
+	public string $post_mime_type    = '';
+	public int $post_parent          = 0;
 
 	/**
 	 * Constructor.
@@ -601,6 +663,48 @@ function get_permalink( $post ): string {
 }
 
 /**
+ * Return a test featured image ID.
+ *
+ * @param int $post_id Post ID.
+ * @return int
+ */
+function get_post_thumbnail_id( $post_id ): int {
+	return (int) ( $GLOBALS['pressqueue_test_featured_images'][ (int) $post_id ] ?? 0 );
+}
+
+/**
+ * Return a test attachment URL.
+ *
+ * @param int $attachment_id Attachment ID.
+ * @return string|false
+ */
+function wp_get_attachment_url( $attachment_id ) {
+	return $GLOBALS['pressqueue_test_attachment_urls'][ (int) $attachment_id ] ?? false;
+}
+
+/**
+ * Return test attachment metadata.
+ *
+ * @param int $attachment_id Attachment ID.
+ * @return array<string,mixed>|false
+ */
+function wp_get_attachment_metadata( $attachment_id ) {
+	return $GLOBALS['pressqueue_test_attachment_metadata'][ (int) $attachment_id ] ?? false;
+}
+
+/**
+ * Return test attachment MIME type.
+ *
+ * @param int $attachment_id Attachment ID.
+ * @return string|false
+ */
+function get_post_mime_type( $attachment_id ) {
+	$post = get_post( (int) $attachment_id );
+
+	return $post instanceof WP_Post && '' !== $post->post_mime_type ? $post->post_mime_type : false;
+}
+
+/**
  * Return test taxonomies.
  *
  * @param string $post_type Post type.
@@ -614,8 +718,8 @@ function get_object_taxonomies( $post_type ): array {
 /**
  * Return no test terms.
  *
- * @param int               $post_id Post ID.
- * @param array<int,string> $taxonomies Taxonomies.
+ * @param int                 $post_id Post ID.
+ * @param array<int,string>   $taxonomies Taxonomies.
  * @param array<string,mixed> $args Args.
  * @return array<int,mixed>
  */
@@ -947,6 +1051,23 @@ function wp_remote_post( $url, $args = array() ) {
 }
 
 /**
+ * Generic HTTP request stub that makes accidental external access visible.
+ *
+ * @param string              $url URL.
+ * @param array<string,mixed> $args Request arguments.
+ * @return mixed
+ */
+function wp_remote_request( $url, $args = array() ) {
+	$GLOBALS['pressqueue_test_http_requests'][] = array(
+		'args'   => $args,
+		'method' => $args['method'] ?? 'GET',
+		'url'    => $url,
+	);
+
+	throw new RuntimeException( 'External HTTP request attempted: ' . $url );
+}
+
+/**
  * Minimal WordPress error object for transport tests.
  */
 class WP_Error {
@@ -1051,7 +1172,7 @@ function as_schedule_recurring_action( $timestamp, $interval, $hook, $args = arr
 		}
 	}
 
-	$id = $GLOBALS['pressqueue_test_as_next_action_id']++;
+	$id                                      = $GLOBALS['pressqueue_test_as_next_action_id']++;
 	$GLOBALS['pressqueue_test_as_actions'][] = array(
 		'args'      => $args,
 		'group'     => $group,
@@ -1083,7 +1204,7 @@ function as_schedule_single_action( $timestamp, $hook, $args = array(), $group =
 		}
 	}
 
-	$id = $GLOBALS['pressqueue_test_as_next_action_id']++;
+	$id                                      = $GLOBALS['pressqueue_test_as_next_action_id']++;
 	$GLOBALS['pressqueue_test_as_actions'][] = array(
 		'args'      => $args,
 		'group'     => $group,

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue\Storage\Repository;
 
 use PressQueue\Provider\Dto\ProviderChannel;
+use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\PublicIdCollisionException;
 use PressQueue\Storage\PublicIds;
@@ -246,7 +247,7 @@ final class ChannelRepository extends AbstractRepository {
 		StorageValidator::assert_utc_timestamp( 'Expected update timestamp', $expected_updated_at );
 
 		if ( $enabled && ! $this->can_enable( $channel ) ) {
-			throw new ValidationException( 'Channel must be available with text immediate delivery before it can be enabled.' );
+			throw new ValidationException( 'Channel must be available with schema version 2 delivery capability before it can be enabled.' );
 		}
 
 		$now     = StorageValidator::now();
@@ -687,15 +688,8 @@ final class ChannelRepository extends AbstractRepository {
 	 * @return bool
 	 */
 	private function can_enable( ChannelRecord $channel ): bool {
-		$delivery = $channel->capabilities['delivery'] ?? null;
-
 		return 'available' === $channel->availability
-			&& 1 === (int) ( $channel->capabilities['schema_version'] ?? 0 )
-			&& is_array( $delivery )
-			&& true === ( $delivery['text'] ?? false )
-			&& isset( $delivery['schedule_slots'] )
-			&& is_array( $delivery['schedule_slots'] )
-			&& in_array( 'immediate', $delivery['schedule_slots'], true );
+			&& DeliveryCapability::can_enable( $channel->capabilities );
 	}
 
 	/**

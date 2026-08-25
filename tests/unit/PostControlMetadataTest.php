@@ -134,6 +134,65 @@ final class PostControlMetadataTest extends TestCase {
 		);
 	}
 
+	public function test_schema_two_message_schedule_and_media_sections_normalize(): void {
+		$bundle = PostControlMetadata::normalize_bundle(
+			array(
+				'channels'       => array(
+					'mode' => 'inherit',
+				),
+				'media'          => array(
+					'mode'       => 'post_media',
+					'post_media' => array(
+						'attachment_ids' => array( '12', 7 ),
+					),
+				),
+				'message'        => array(
+					'mode'  => 'override',
+					'value' => '<strong>Hello</strong> editor',
+				),
+				'policy'         => 'include',
+				'schedule'       => array(
+					'local_date' => '2026-09-15',
+					'local_time' => '09:30',
+					'mode'       => 'explicit_time',
+					'timezone'   => 'Europe/Berlin',
+				),
+				'schema_version' => 2,
+			)
+		);
+
+		self::assertSame( 2, $bundle['schema_version'] );
+		self::assertSame( 'Hello editor', $bundle['message']['value'] );
+		self::assertSame( 'explicit_time', $bundle['schedule']['mode'] );
+		self::assertSame( array( 12, 7 ), $bundle['media']['post_media']['attachment_ids'] );
+	}
+
+	public function test_duplicate_media_attachment_ids_are_rejected_before_normalization(): void {
+		$this->expectException( ValidationException::class );
+
+		PostControlMetadata::normalize_bundle(
+			array(
+				'channels'       => array(
+					'mode' => 'inherit',
+				),
+				'media'          => array(
+					'mode'       => 'post_media',
+					'post_media' => array(
+						'attachment_ids' => array( '12', 12 ),
+					),
+				),
+				'message'        => array(
+					'mode' => 'inherit',
+				),
+				'policy'         => 'inherit',
+				'schedule'       => array(
+					'mode' => 'inherit',
+				),
+				'schema_version' => 2,
+			)
+		);
+	}
+
 	public function test_stale_replacement_is_refused_and_invalid_replacement_preserves_prior_bundle(): void {
 		$base = PostControlMetadata::read_for_post( 42 );
 		PostControlMetadata::replace_for_post(

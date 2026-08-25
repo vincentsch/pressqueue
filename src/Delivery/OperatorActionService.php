@@ -11,9 +11,11 @@ namespace PressQueue\Delivery;
 
 // phpcs:disable Squiz.Commenting.VariableComment.Missing -- Constructor wires service dependencies.
 
+use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\CredentialEnvelope;
 use PressQueue\Storage\Database;
+use PressQueue\Storage\DeliveryPayloadDocuments;
 use PressQueue\Storage\Record\ChannelRecord;
 use PressQueue\Storage\Record\ConnectionRecord;
 use PressQueue\Storage\Record\DeliveryRecord;
@@ -202,15 +204,20 @@ final class OperatorActionService {
 			$this->refuse( $delivery, $actor_user_id, $action . '_kill_switch_enabled' );
 		}
 
-		if ( 'live' !== $delivery->delivery_mode || 1 !== $delivery->payload_schema_version || 1 !== $delivery->adapter_encoding_version || ! $this->has_bound_identity( $delivery ) ) {
+		if ( 'live' !== $delivery->delivery_mode || ! $this->has_bound_identity( $delivery ) ) {
 			$this->refuse( $delivery, $actor_user_id, $action . '_immutable_delivery_incompatible' );
+		}
+
+		$compatibility = $this->submission_compatibility( $delivery );
+		if ( null !== $compatibility ) {
+			$this->refuse( $delivery, $actor_user_id, $compatibility );
 		}
 
 		$connection = $this->connections->find_by_public_id( (string) $delivery->bound_connection_public_id );
 		$channel    = $this->channels->find_by_public_id( (string) $delivery->bound_channel_public_id );
 
 		if ( null === $connection || null === $channel || ! $this->destination_matches_bound_identity( $delivery, $connection, $channel ) ) {
-			$this->refuse( $delivery, $actor_user_id, $action . '_destination_unavailable' );
+			$this->refuse( $delivery, $actor_user_id, 'capability_mismatch' );
 		}
 
 		if ( null === $connection || ! $this->credential_is_decryptable( $connection ) ) {
@@ -277,6 +284,36 @@ final class OperatorActionService {
 	}
 
 	/**
+	 * Return a fail-closed submission compatibility error, if any.
+	 *
+	 * @param DeliveryRecord $delivery Delivery.
+	 * @return string|null
+	 */
+	private function submission_compatibility( DeliveryRecord $delivery ): ?string {
+		if ( 1 === $delivery->payload_schema_version && 1 === $delivery->adapter_encoding_version ) {
+			return 'legacy_encoder_retired';
+		}
+
+		if ( 2 !== $delivery->payload_schema_version ) {
+			return 'unsupported_payload_version';
+		}
+
+		if ( 2 !== $delivery->adapter_encoding_version ) {
+			return 'unsupported_encoder_version';
+		}
+
+		try {
+			$this->schema_two_facts( $delivery );
+		} catch ( ValidationException $exception ) {
+			unset( $exception );
+
+			return 'payload_preview_invalid';
+		}
+
+		return null;
+	}
+
+	/**
 	 * Recheck current destination records against immutable delivery identity.
 	 *
 	 * @param DeliveryRecord   $delivery Delivery.
@@ -285,7 +322,13 @@ final class OperatorActionService {
 	 * @return bool
 	 */
 	private function destination_matches_bound_identity( DeliveryRecord $delivery, ConnectionRecord $connection, ChannelRecord $channel ): bool {
-		$delivery_capability = $channel->capabilities['delivery'] ?? null;
+		try {
+			$facts = $this->schema_two_facts( $delivery );
+		} catch ( ValidationException $exception ) {
+			unset( $exception );
+
+			return false;
+		}
 
 		return $connection->enabled
 			&& 'verified' === $connection->connection_status
@@ -306,13 +349,26 @@ final class OperatorActionService {
 			&& $delivery->bound_remote_organization_id === $connection->remote_organization_id
 			&& $delivery->bound_remote_organization_id === $channel->remote_organization_id
 			&& $delivery->bound_remote_channel_id === $channel->remote_channel_id
-			&& 1 === $delivery->bound_capability_schema_version
-			&& 1 === (int) ( $channel->capabilities['schema_version'] ?? 0 )
-			&& is_array( $delivery_capability )
-			&& true === ( $delivery_capability['text'] ?? false )
-			&& isset( $delivery_capability['schedule_slots'] )
-			&& is_array( $delivery_capability['schedule_slots'] )
-			&& in_array( 'immediate', $delivery_capability['schedule_slots'], true );
+			&& 2 === $delivery->bound_capability_schema_version
+			&& 2 === (int) ( $channel->capabilities['schema_version'] ?? 0 )
+			&& DeliveryCapability::supports_payload( $channel->capabilities, $delivery->schedule_slot, $facts['final_encoded_text_length'], $facts['media_snapshot'] );
+	}
+
+	/**
+	 * Validate schema version 2 payload facts.
+	 *
+	 * @param DeliveryRecord $delivery Delivery.
+	 * @return array{final_encoded_text:string,final_encoded_text_length:int,media_identity_hash:string|null,media_snapshot:array<string,mixed>,scheduled_for_utc:string|null,schedule_timezone:string|null}
+	 */
+	private function schema_two_facts( DeliveryRecord $delivery ): array {
+		return DeliveryPayloadDocuments::schema_two_facts(
+			$delivery->payload_preview,
+			$delivery->schedule_slot,
+			null === $delivery->scheduled_for_utc ? null : $delivery->scheduled_for_utc->format( 'Y-m-d H:i:s' ),
+			$delivery->schedule_timezone,
+			$delivery->media_identity_hash,
+			$delivery->bound_capability_hash
+		);
 	}
 
 	/**

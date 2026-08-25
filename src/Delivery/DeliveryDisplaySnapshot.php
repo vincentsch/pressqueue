@@ -99,6 +99,27 @@ final class DeliveryDisplaySnapshot {
 	}
 
 	/**
+	 * Return local submission compatibility for immutable payload versions.
+	 *
+	 * @return string
+	 */
+	public function submission_compatibility_label(): string {
+		if ( 1 === $this->delivery->payload_schema_version && 1 === $this->delivery->adapter_encoding_version ) {
+			return $this->label_with_code( 'legacy_encoder_retired' );
+		}
+
+		if ( 2 !== $this->delivery->payload_schema_version ) {
+			return $this->label_with_code( 'unsupported_payload_version' );
+		}
+
+		if ( 2 !== $this->delivery->adapter_encoding_version ) {
+			return $this->label_with_code( 'unsupported_encoder_version' );
+		}
+
+		return $this->label_with_code( 'compatible' );
+	}
+
+	/**
 	 * Return a human-readable error class while keeping the canonical value.
 	 *
 	 * @param string|null $error_class Error class.

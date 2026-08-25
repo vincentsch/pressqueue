@@ -27,7 +27,10 @@ final class StorageEnums {
 	public const CONNECTION_STATUSES     = array( 'disconnected', 'unverified', 'verified', 'credential_invalid' );
 	public const CHANNEL_AVAILABILITIES  = array( 'unverified', 'available', 'missing', 'unsupported' );
 	public const RULE_TRIGGERS           = array( 'first_publish', 'update', 'scheduled_publication' );
-	public const SCHEDULE_POLICIES       = array( 'immediate' );
+	public const SCHEDULE_SLOTS          = array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' );
+	public const RULE_SCHEDULE_SLOTS     = array( 'immediate', 'queue_next', 'queue_end' );
+	public const SCHEDULE_POLICIES       = self::SCHEDULE_SLOTS;
+	public const MEDIA_MODES             = array( 'none', 'featured_image', 'post_media' );
 	public const SCOPE_TYPES             = array( 'global', 'channel' );
 
 	/**
@@ -169,6 +172,33 @@ final class StorageEnums {
 	 */
 	public static function assert_rule_trigger( string $value ): void {
 		self::assert( 'Rule trigger', $value, self::RULE_TRIGGERS );
+	}
+
+	/**
+	 * Assert a provider-neutral schedule slot.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_schedule_slot( string $value ): void {
+		self::assert( 'Schedule slot', $value, self::SCHEDULE_SLOTS );
+	}
+
+	/**
+	 * Assert a rule-level schedule slot.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_rule_schedule_slot( string $value ): void {
+		self::assert( 'Rule schedule slot', $value, self::RULE_SCHEDULE_SLOTS );
+	}
+
+	/**
+	 * Assert an image media mode.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_media_mode( string $value ): void {
+		self::assert( 'Media mode', $value, self::MEDIA_MODES );
 	}
 
 	/**

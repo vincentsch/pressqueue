@@ -181,7 +181,9 @@ final class PostControlsController {
 				throw new ValidationException( 'A complete PressQueue control bundle is required.' );
 			}
 
-			PostControlMetadata::replace_for_post( $post_id, $params['controls'], $params['base_control_bundle_hash'] );
+			$controls = PostControlMetadata::normalize_bundle( $params['controls'] );
+			self::assert_media_control_authority( $post_id, $controls );
+			PostControlMetadata::replace_for_post( $post_id, $controls, $params['base_control_bundle_hash'] );
 
 			return self::rest_response( self::controls_response( $post_id ), 200 );
 		} catch ( StaleRecordException $exception ) {
@@ -262,6 +264,43 @@ final class PostControlsController {
 			echo '<label><input type="checkbox" name="pressqueue_channel_public_ids[]" value="' . esc_attr( $channel['public_id'] ) . '" ' . checked( $checked, true, false ) . ' /> ' . esc_html( $channel['label'] ) . '</label><br />';
 		}
 		echo '</fieldset>';
+
+		$message      = is_array( $bundle['message'] ?? null ) ? $bundle['message'] : array( 'mode' => 'inherit' );
+		$message_mode = (string) ( $message['mode'] ?? 'inherit' );
+		echo '<p><label for="pressqueue-message-mode">' . esc_html__( 'Message', 'pressqueue' ) . '</label><br />';
+		echo '<select id="pressqueue-message-mode" name="pressqueue_message_mode">';
+		echo '<option value="inherit" ' . selected( $message_mode, 'inherit', false ) . '>' . esc_html__( 'Inherit', 'pressqueue' ) . '</option>';
+		echo '<option value="override" ' . selected( $message_mode, 'override', false ) . '>' . esc_html__( 'Override', 'pressqueue' ) . '</option>';
+		echo '</select></p>';
+		echo '<p><textarea name="pressqueue_message_value" class="widefat" rows="3">' . esc_textarea( (string) ( $message['value'] ?? '' ) ) . '</textarea></p>';
+
+		$schedule      = is_array( $bundle['schedule'] ?? null ) ? $bundle['schedule'] : array( 'mode' => 'inherit' );
+		$schedule_mode = (string) ( $schedule['mode'] ?? 'inherit' );
+		echo '<p><label for="pressqueue-schedule-mode">' . esc_html__( 'Schedule', 'pressqueue' ) . '</label><br />';
+		echo '<select id="pressqueue-schedule-mode" name="pressqueue_schedule_mode">';
+		foreach ( array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time' ) as $schedule_option ) {
+			echo '<option value="' . esc_attr( $schedule_option ) . '" ' . selected( $schedule_mode, $schedule_option, false ) . '>' . esc_html( $schedule_option ) . '</option>';
+		}
+		echo '</select></p>';
+		echo '<p><label>' . esc_html__( 'Local date', 'pressqueue' ) . '<br /><input name="pressqueue_schedule_local_date" type="date" value="' . esc_attr( (string) ( $schedule['local_date'] ?? '' ) ) . '" /></label></p>';
+		echo '<p><label>' . esc_html__( 'Local time', 'pressqueue' ) . '<br /><input name="pressqueue_schedule_local_time" type="time" value="' . esc_attr( (string) ( $schedule['local_time'] ?? '' ) ) . '" /></label></p>';
+		echo '<p><label>' . esc_html__( 'Timezone', 'pressqueue' ) . '<br /><input name="pressqueue_schedule_timezone" type="text" class="widefat" value="' . esc_attr( (string) ( $schedule['timezone'] ?? '' ) ) . '" placeholder="Europe/Berlin" /></label></p>';
+		echo '<p><label>' . esc_html__( 'UTC offset', 'pressqueue' ) . '<br /><input name="pressqueue_schedule_utc_offset" type="text" class="widefat" value="' . esc_attr( (string) ( $schedule['utc_offset'] ?? '' ) ) . '" placeholder="+01:00" /></label></p>';
+
+		$media      = is_array( $bundle['media'] ?? null ) ? $bundle['media'] : array( 'mode' => 'inherit' );
+		$media_mode = (string) ( $media['mode'] ?? 'inherit' );
+		$media_ids  = '';
+		if ( isset( $media['post_media']['attachment_ids'] ) && is_array( $media['post_media']['attachment_ids'] ) ) {
+			$media_ids = implode( ',', array_map( 'strval', $media['post_media']['attachment_ids'] ) );
+		}
+
+		echo '<p><label for="pressqueue-media-mode">' . esc_html__( 'Media', 'pressqueue' ) . '</label><br />';
+		echo '<select id="pressqueue-media-mode" name="pressqueue_media_mode">';
+		foreach ( array( 'inherit', 'none', 'featured_image', 'post_media' ) as $media_option ) {
+			echo '<option value="' . esc_attr( $media_option ) . '" ' . selected( $media_mode, $media_option, false ) . '>' . esc_html( $media_option ) . '</option>';
+		}
+		echo '</select></p>';
+		echo '<p><label>' . esc_html__( 'Attachment IDs', 'pressqueue' ) . '<br /><input name="pressqueue_media_attachment_ids" type="text" class="widefat" value="' . esc_attr( $media_ids ) . '" /></label></p>';
 	}
 
 	/**
@@ -300,7 +339,9 @@ final class PostControlsController {
 			$base_hash = isset( $_POST['pressqueue_base_control_bundle_hash'] ) ? sanitize_text_field( wp_unslash( $_POST['pressqueue_base_control_bundle_hash'] ) ) : '';
 			StorageValidator::assert_hash( $base_hash );
 
-			PostControlMetadata::replace_for_post( $post_id, PostControlMetadata::bundle_from_form( $input ), $base_hash );
+			$controls = PostControlMetadata::bundle_from_form( $input );
+			self::assert_media_control_authority( $post_id, $controls );
+			PostControlMetadata::replace_for_post( $post_id, $controls, $base_hash );
 		} catch ( \Throwable $throwable ) {
 			if ( function_exists( 'wp_die' ) ) {
 				wp_die( esc_html( $throwable->getMessage() ) );
@@ -349,6 +390,8 @@ final class PostControlsController {
 				'rule_relevant_metadata_keys' => self::rule_metadata_allowlist(),
 				'rule_relevant_taxonomies'    => self::rule_taxonomies(),
 				'selected_rule_destinations'  => self::selected_rule_destinations(),
+				'supported_media_modes'       => array( 'inherit', 'none', 'featured_image', 'post_media' ),
+				'supported_schedule_modes'    => array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time' ),
 			),
 			'supported_next_actions' => array(
 				'preview' => PostControlAuthorization::current_user_can_access( $post_id ),
@@ -381,6 +424,35 @@ final class PostControlsController {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Validate selected attachment IDs against the current editor's authority.
+	 *
+	 * @param int                 $post_id Post ID.
+	 * @param array<string,mixed> $bundle Normalized controls.
+	 */
+	private static function assert_media_control_authority( int $post_id, array $bundle ): void {
+		$media = isset( $bundle['media'] ) && is_array( $bundle['media'] ) ? $bundle['media'] : array();
+		if ( 'post_media' !== ( $media['mode'] ?? null ) ) {
+			return;
+		}
+
+		$ids = isset( $media['post_media']['attachment_ids'] ) && is_array( $media['post_media']['attachment_ids'] ) ? $media['post_media']['attachment_ids'] : array();
+		foreach ( $ids as $attachment_id ) {
+			$attachment = function_exists( 'get_post' ) ? get_post( (int) $attachment_id ) : null;
+			if ( ! $attachment instanceof \WP_Post || 'attachment' !== (string) $attachment->post_type ) {
+				throw new ValidationException( 'Selected media attachment does not exist.' );
+			}
+
+			if ( current_user_can( 'edit_post', (int) $attachment_id ) ) {
+				continue;
+			}
+
+			if ( (int) $attachment->post_parent !== $post_id ) {
+				throw new ValidationException( 'Selected media attachment is outside the authority boundary.' );
+			}
+		}
 	}
 
 	/**

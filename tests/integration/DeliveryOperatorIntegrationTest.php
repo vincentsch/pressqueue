@@ -15,6 +15,7 @@ use PressQueue\Delivery\DeliveryQueryRepository;
 use PressQueue\Delivery\DeliveryWorker;
 use PressQueue\Delivery\OperatorActionService;
 use PressQueue\Delivery\ReconciliationService;
+use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Provider\DeliveryProvider;
 use PressQueue\Provider\Dto\ProviderDeliveryRequest;
 use PressQueue\Provider\Dto\ProviderDeliveryResult;
@@ -62,8 +63,8 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 	protected function setUp(): void {
 		parent::setUp();
 
-		$_GET  = array();
-		$_POST = array();
+		$_GET                       = array();
+		$_POST                      = array();
 		$this->destination_sequence = 0;
 		$this->resetStorage();
 		( new SchemaMigrator( Database::from_globals() ) )->migrate();
@@ -92,7 +93,7 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 			)
 		);
 
-		$scheduler = $this->fakeScheduler();
+		$scheduler              = $this->fakeScheduler();
 		$scheduler->scheduled[] = array(
 			'public_id' => $delivery->public_id,
 			'timestamp' => null,
@@ -104,7 +105,7 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertNull( $cancelled->action_id );
 		self::assertSame( array( $delivery->public_id ), $scheduler->unscheduled );
 
-		$events = ( new DeliveryEventRepository() )->find_by_delivery_id( $delivery->id );
+		$events     = ( new DeliveryEventRepository() )->find_by_delivery_id( $delivery->id );
 		$last_event = $events[ count( $events ) - 1 ];
 		self::assertSame( 'cancelled', $last_event->event_type );
 		self::assertSame( 123, $last_event->actor_user_id );
@@ -149,7 +150,7 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		);
 
 		$scheduler = $this->fakeScheduler();
-		$retried = ( new OperatorActionService( Database::from_globals(), $scheduler, static fn (): bool => true ) )->retry( $delivery->public_id, 123 );
+		$retried   = ( new OperatorActionService( Database::from_globals(), $scheduler, static fn (): bool => true ) )->retry( $delivery->public_id, 123 );
 
 		self::assertSame( $delivery->id, $retried->id );
 		self::assertSame( $delivery->public_id, $retried->public_id );
@@ -157,13 +158,45 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( $delivery->payload_hash, $retried->payload_hash );
 		self::assertSame( 5, $retried->attempt_count );
 		self::assertSame( 5, $retried->automatic_attempt_count );
-		self::assertSame( 1, $retried->payload_schema_version );
-		self::assertSame( 1, $retried->adapter_encoding_version );
+		self::assertSame( 2, $retried->payload_schema_version );
+		self::assertSame( 2, $retried->adapter_encoding_version );
 		self::assertSame( 'queued', $retried->state );
 		self::assertSame( array( $delivery->public_id ), array_column( $scheduler->scheduled, 'public_id' ) );
 
 		$events = ( new DeliveryEventRepository() )->find_by_delivery_id( $delivery->id );
 		self::assertContains( 'manual_retry', array_column( $events, 'event_type' ) );
+	}
+
+	public function test_manual_retry_refuses_retired_legacy_encoder_rows(): void {
+		$delivery = $this->liveDelivery();
+		$this->updateDelivery(
+			$delivery->public_id,
+			array(
+				'adapter_encoding_version'        => 1,
+				'bound_capability_schema_version' => 1,
+				'error_class'                     => 'automatic_budget_exhausted',
+				'payload_preview_json'            => CanonicalJson::encode_object(
+					array(
+						'canonical_url' => 'https://example.test/post',
+						'message'       => 'Legacy payload',
+					)
+				),
+				'payload_schema_version'          => 1,
+				'provider_result'                 => 'retryable_failure',
+				'retry_safety'                    => 'manual_allowed',
+				'state'                           => 'failed',
+				'state_changed_at'                => '2026-08-24 12:00:00',
+			)
+		);
+
+		$this->expectException( ValidationException::class );
+
+		try {
+			( new OperatorActionService( Database::from_globals(), $this->fakeScheduler(), static fn (): bool => true ) )->retry( $delivery->public_id, 123 );
+		} finally {
+			$events = ( new DeliveryEventRepository() )->find_by_delivery_id( $delivery->id );
+			self::assertSame( 'legacy_encoder_retired', $events[ count( $events ) - 1 ]->detail['classification'] ?? null );
+		}
 	}
 
 	public function test_worker_counts_operator_retry_as_manual_attempt(): void {
@@ -215,23 +248,23 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 	}
 
 	public function test_manual_retry_after_confirmed_not_accepted_clears_reconciliation_projection(): void {
-		$delivery = $this->liveDelivery();
+		$delivery    = $this->liveDelivery();
 		$receipt_key = HashKeys::remote_receipt_key( 'buffer', $delivery->connection_public_id, 'remote-ambiguous' );
 		$this->updateDelivery(
 			$delivery->public_id,
 			array(
-				'action_id'               => 700,
-				'error_detail_json'       => CanonicalJson::encode_object( array( 'classification' => 'ambiguous' ) ),
-				'receipt_json'            => CanonicalJson::encode_object( array( 'remote_id' => 'remote-ambiguous' ) ),
-				'reconciled_at'           => '2026-08-24 12:05:00',
-				'reconciled_by'           => 123,
-				'reconciliation_note'     => 'Not visible in Buffer',
-				'reconciliation_status'   => 'confirmed_not_accepted',
-				'remote_id'               => 'remote-ambiguous',
-				'remote_receipt_key'      => $receipt_key,
-				'retry_safety'            => 'manual_allowed',
-				'state'                   => 'ambiguous',
-				'state_changed_at'        => '2026-08-24 12:00:00',
+				'action_id'             => 700,
+				'error_detail_json'     => CanonicalJson::encode_object( array( 'classification' => 'ambiguous' ) ),
+				'receipt_json'          => CanonicalJson::encode_object( array( 'remote_id' => 'remote-ambiguous' ) ),
+				'reconciled_at'         => '2026-08-24 12:05:00',
+				'reconciled_by'         => 123,
+				'reconciliation_note'   => 'Not visible in Buffer',
+				'reconciliation_status' => 'confirmed_not_accepted',
+				'remote_id'             => 'remote-ambiguous',
+				'remote_receipt_key'    => $receipt_key,
+				'retry_safety'          => 'manual_allowed',
+				'state'                 => 'ambiguous',
+				'state_changed_at'      => '2026-08-24 12:00:00',
 			)
 		);
 
@@ -253,10 +286,10 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		$this->updateDelivery(
 			$delivery->public_id,
 			array(
-				'provider_result'         => 'ambiguous',
-				'retry_safety'            => 'reconcile_first',
-				'state'                   => 'ambiguous',
-				'state_changed_at'        => '2026-08-24 12:00:00',
+				'provider_result'  => 'ambiguous',
+				'retry_safety'     => 'reconcile_first',
+				'state'            => 'ambiguous',
+				'state_changed_at' => '2026-08-24 12:00:00',
 			)
 		);
 
@@ -266,8 +299,8 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 
 	public function test_reconciliation_outcomes_and_duplicate_remote_id_refusal(): void {
 		$destination = $this->enabledDestination();
-		$first = $this->ambiguousDelivery( 42, $destination );
-		$accepted = ( new ReconciliationService() )->reconcile( $first->public_id, 'confirmed_remote_id', 'remote-post-1', 'Buffer dashboard check', 123 );
+		$first       = $this->ambiguousDelivery( 42, $destination );
+		$accepted    = ( new ReconciliationService() )->reconcile( $first->public_id, 'confirmed_remote_id', 'remote-post-1', 'Buffer dashboard check', 123 );
 
 		self::assertSame( 'accepted', $accepted->state );
 		self::assertSame( 'ambiguous', $accepted->provider_result );
@@ -289,14 +322,14 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( 'ambiguous', $stored_second->state );
 		self::assertContains( 'refused_transition', array_column( ( new DeliveryEventRepository() )->find_by_delivery_id( $second->id ), 'event_type' ) );
 
-		$third = $this->ambiguousDelivery( 44 );
+		$third        = $this->ambiguousDelivery( 44 );
 		$not_accepted = ( new ReconciliationService() )->reconcile( $third->public_id, 'confirmed_not_accepted', null, str_repeat( 'a', 700 ), 123 );
 		self::assertSame( 'ambiguous', $not_accepted->state );
 		self::assertSame( 'confirmed_not_accepted', $not_accepted->reconciliation_status );
 		self::assertSame( 'manual_allowed', $not_accepted->retry_safety );
 		self::assertSame( 500, strlen( (string) $not_accepted->reconciliation_note ) );
 
-		$fourth = $this->ambiguousDelivery( 45 );
+		$fourth    = $this->ambiguousDelivery( 45 );
 		$cancelled = ( new ReconciliationService() )->reconcile( $fourth->public_id, 'cancelled', null, 'No remote post exists', 123 );
 		self::assertSame( 'cancelled', $cancelled->state );
 		self::assertSame( 'cancelled', $cancelled->reconciliation_status );
@@ -306,7 +339,7 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		update_option( 'timezone_string', 'Europe/Berlin', true );
 		update_option( 'gmt_offset', 2, true );
 
-		$first = $this->liveDelivery( 42 );
+		$first  = $this->liveDelivery( 42 );
 		$second = $this->liveDelivery( 43 );
 		$this->updateDelivery(
 			$first->public_id,
@@ -333,7 +366,15 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		$lowercase_remote = $query->query( array( 'identifier' => 'remote-filter-1' ) );
 		self::assertSame( 1, $lowercase_remote['total'] );
 		self::assertSame( $second->public_id, $lowercase_remote['rows'][0]->public_id );
-		self::assertSame( $first->public_id, $query->query( array( 'state_changed_from' => '2026-08-24', 'state_changed_to' => '2026-08-24' ) )['rows'][0]->public_id );
+		self::assertSame(
+			$first->public_id,
+			$query->query(
+				array(
+					'state_changed_from' => '2026-08-24',
+					'state_changed_to'   => '2026-08-24',
+				)
+			)['rows'][0]->public_id
+		);
 
 		$page_one = $query->query( array(), 1, 1 );
 		$page_two = $query->query( array(), 2, 1 );
@@ -455,6 +496,7 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		$destination = $destination ?? $this->enabledDestination();
 		$rule        = ( new RuleRepository() )->create( $this->ruleInput( $destination['channel']->public_id ) );
 		$decision    = ( new DecisionRepository() )->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $destination, $post_id ) );
+		$final_text  = "Hello from integration\n\nhttps://example.test/post-" . (string) $post_id;
 
 		return ( new DeliveryRepository() )->create(
 			array(
@@ -463,15 +505,28 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 				'decision_public_id'   => $decision->public_id,
 				'delivery_mode'        => 'live',
 				'payload_preview'      => array(
-					'canonical_url'        => 'https://example.test/post-' . (string) $post_id,
-					'channel_label'        => 'Example Social',
-					'channel_public_id'    => $destination['channel']->public_id,
-					'connection_label'     => 'Local account',
-					'connection_public_id' => $destination['connection']->public_id,
-					'message'              => 'Hello from integration',
-					'provider'             => 'buffer',
-					'remote_channel_id'    => $destination['channel']->remote_channel_id,
-					'service'              => 'mastodon',
+					'adapter_encoding_version'         => 2,
+					'bound_capability_catalog_version' => '2026-08-25.1',
+					'bound_capability_hash'            => DeliveryCapability::hash( $destination['channel']->capabilities ),
+					'capability_schema_version'        => 2,
+					'canonical_url'                    => 'https://example.test/post-' . (string) $post_id,
+					'channel_label'                    => 'Example Social',
+					'channel_public_id'                => $destination['channel']->public_id,
+					'connection_label'                 => 'Local account',
+					'connection_public_id'             => $destination['connection']->public_id,
+					'final_encoded_text'               => $final_text,
+					'final_encoded_text_length'        => strlen( $final_text ),
+					'media_snapshot'                   => array(
+						'items'          => array(),
+						'mode'           => 'none',
+						'schema_version' => 1,
+					),
+					'message'                          => 'Hello from integration',
+					'payload_schema_version'           => 2,
+					'provider'                         => 'buffer',
+					'remote_channel_id'                => $destination['channel']->remote_channel_id,
+					'schedule_slot'                    => 'immediate',
+					'service'                          => 'mastodon',
 				),
 				'provider'             => 'buffer',
 				'remote_channel_id'    => $destination['channel']->remote_channel_id,
@@ -536,9 +591,9 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 			'scope_type'           => 'channel',
 			'snapshot'             => array(
 				'destination' => array(
-					'channel_label'     => 'Example Social',
-					'connection_label'  => 'Local account',
-					'service'           => 'mastodon',
+					'channel_label'    => 'Example Social',
+					'connection_label' => 'Local account',
+					'service'          => 'mastodon',
 				),
 				'post'        => array( 'id' => $post_id ),
 				'settings'    => array( 'dry_run' => false ),
@@ -610,12 +665,25 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 	 */
 	private function channelCapabilities(): array {
 		return array(
-			'delivery'       => array(
-				'schedule_slots' => array( 'immediate' ),
-				'text'           => true,
+			'catalog_version' => '2026-08-25.1',
+			'delivery'        => array(
+				'image'               => array(
+					'alt_text_required' => false,
+					'max_bytes'         => 5 * 1024 * 1024,
+					'max_height'        => 4096,
+					'max_items'         => 1,
+					'max_width'         => 4096,
+					'mime_types'        => array( 'image/gif', 'image/jpeg', 'image/png' ),
+					'min_height'        => 1,
+					'min_width'         => 1,
+				),
+				'max_text_characters' => 280,
+				'schedule_slots'      => array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' ),
+				'text'                => true,
 			),
-			'schema_version' => 1,
-			'service'        => 'mastodon',
+			'schema_version'  => 2,
+			'service'         => 'mastodon',
+			'supported'       => true,
 		);
 	}
 
@@ -630,26 +698,30 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 			$values,
 			array( 'public_id' => $delivery_public_id ),
 			array(
-				'action_id'                 => '%d',
-				'attempt_count'             => '%d',
-				'automatic_attempt_count'   => '%d',
-				'error_class'               => '%s',
-				'error_detail_json'         => '%s',
-				'next_attempt_at'           => '%s',
-				'provider_result'           => '%s',
-				'public_id'                 => '%s',
-				'queued_at'                 => '%s',
-				'receipt_json'              => '%s',
-				'reconciled_at'             => '%s',
-				'reconciled_by'             => '%d',
-				'reconciliation_note'       => '%s',
-				'reconciliation_status'     => '%s',
-				'remote_id'                 => '%s',
-				'remote_receipt_key'        => '%s',
-				'retry_safety'              => '%s',
-				'state'                     => '%s',
-				'state_changed_at'          => '%s',
-				'updated_at'                => '%s',
+				'action_id'                       => '%d',
+				'adapter_encoding_version'        => '%d',
+				'attempt_count'                   => '%d',
+				'automatic_attempt_count'         => '%d',
+				'bound_capability_schema_version' => '%d',
+				'error_class'                     => '%s',
+				'error_detail_json'               => '%s',
+				'next_attempt_at'                 => '%s',
+				'payload_preview_json'            => '%s',
+				'payload_schema_version'          => '%d',
+				'provider_result'                 => '%s',
+				'public_id'                       => '%s',
+				'queued_at'                       => '%s',
+				'receipt_json'                    => '%s',
+				'reconciled_at'                   => '%s',
+				'reconciled_by'                   => '%d',
+				'reconciliation_note'             => '%s',
+				'reconciliation_status'           => '%s',
+				'remote_id'                       => '%s',
+				'remote_receipt_key'              => '%s',
+				'retry_safety'                    => '%s',
+				'state'                           => '%s',
+				'state_changed_at'                => '%s',
+				'updated_at'                      => '%s',
 			)
 		);
 	}
@@ -662,7 +734,7 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 			/** @var array<int,array{public_id:string,timestamp:int|null}> */
 			public array $scheduled = array();
 			/** @var array<int,string> */
-			public array $unscheduled = array();
+			public array $unscheduled   = array();
 			private int $next_action_id = 900;
 
 			public function is_ready(): bool {

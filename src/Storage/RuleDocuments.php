@@ -13,13 +13,16 @@ namespace PressQueue\Storage;
  * Validates and canonicalizes rule JSON documents.
  */
 final class RuleDocuments {
-	private const SCHEMA_VERSION           = 1;
-	private const MAX_CONDITION_TREE_BYTES = 65536;
-	private const MAX_DESTINATION_BYTES    = 16384;
-	private const MAX_TEMPLATE_BYTES       = 16384;
-	private const MAX_TEMPLATE_LENGTH      = 2000;
-	private const MAX_TREE_DEPTH           = 5;
-	private const MAX_TREE_NODES           = 50;
+	private const SCHEMA_VERSION               = 1;
+	private const MAX_CONDITION_TREE_BYTES     = 65536;
+	private const MAX_DESTINATION_BYTES        = 16384;
+	private const MAX_INLINE_TEMPLATE_BYTES    = 16384;
+	private const MAX_TEMPLATE_LENGTH          = 2000;
+	private const MAX_TEMPLATE_METADATA_BYTES  = 2048;
+	private const MAX_TEMPLATE_METADATA_LENGTH = 500;
+	private const MAX_TREE_DEPTH               = 5;
+	private const MAX_TREE_NODES               = 50;
+	private const TEMPLATE_METADATA_KEYS       = array( 'description', 'audience', 'tone', 'internal_note' );
 
 	/**
 	 * Build the canonical triggers document.
@@ -75,7 +78,7 @@ final class RuleDocuments {
 			throw new ValidationException( 'Inline template message is required.' );
 		}
 
-		if ( strlen( $template['message'] ) > self::MAX_TEMPLATE_LENGTH ) {
+		if ( self::length( $template['message'] ) > self::MAX_TEMPLATE_LENGTH ) {
 			throw new ValidationException( 'Inline template message exceeds the allowed length.' );
 		}
 
@@ -91,6 +94,183 @@ final class RuleDocuments {
 		$template['custom_field_allowlist'] = $allowlist;
 
 		return $template;
+	}
+
+	/**
+	 * Validate and return a reusable template set snapshot.
+	 *
+	 * @param array<string,mixed>    $template_set Template set document.
+	 * @param array<int,string>|null $custom_field_allowlist Destination rule allowlist.
+	 * @return array<string,mixed>
+	 */
+	public static function template_set( array $template_set, ?array $custom_field_allowlist = null ): array {
+		self::assert_schema_version( $template_set, 'template set' );
+		self::assert_no_unknown_keys( $template_set, array( 'schema_version', 'default_message', 'service_messages', 'metadata' ), 'Template set' );
+
+		$allowlist = null === $custom_field_allowlist ? null : self::custom_field_allowlist( $custom_field_allowlist );
+
+		if ( ! isset( $template_set['default_message'] ) || ! is_string( $template_set['default_message'] ) ) {
+			throw new ValidationException( 'Template set default message is required.' );
+		}
+
+		$default_message = self::normalize_template_message( $template_set['default_message'] );
+		self::assert_template_meta_tags_allowed( $default_message, $allowlist );
+
+		$service_messages = array();
+		if ( isset( $template_set['service_messages'] ) ) {
+			if ( ! is_array( $template_set['service_messages'] ) || array_is_list( $template_set['service_messages'] ) ) {
+				throw new ValidationException( 'Template set service messages must be an object.' );
+			}
+
+			foreach ( $template_set['service_messages'] as $service => $message ) {
+				if ( ! is_string( $service ) ) {
+					throw new ValidationException( 'Template service keys must be strings.' );
+				}
+
+				StorageValidator::assert_text_key( 'Service', $service );
+
+				if ( ! is_string( $message ) ) {
+					throw new ValidationException( 'Template service message must be a string.' );
+				}
+
+					$message = self::normalize_template_message( $message );
+					self::assert_template_meta_tags_allowed( $message, $allowlist );
+				$service_messages[ $service ] = $message;
+			}
+
+			ksort( $service_messages, SORT_STRING );
+		}
+
+		$metadata = array();
+		if ( isset( $template_set['metadata'] ) ) {
+			if ( ! is_array( $template_set['metadata'] ) || array_is_list( $template_set['metadata'] ) ) {
+				throw new ValidationException( 'Template set metadata must be an object.' );
+			}
+
+			self::assert_no_unknown_keys( $template_set['metadata'], self::TEMPLATE_METADATA_KEYS, 'Template set metadata' );
+
+			foreach ( self::TEMPLATE_METADATA_KEYS as $key ) {
+				if ( ! array_key_exists( $key, $template_set['metadata'] ) ) {
+					continue;
+				}
+
+				$value = $template_set['metadata'][ $key ];
+				if ( ! is_string( $value ) ) {
+					throw new ValidationException( 'Template set metadata values must be strings.' );
+				}
+
+				$value = self::normalize_plain_text( $value );
+				if ( self::length( $value ) > self::MAX_TEMPLATE_METADATA_LENGTH ) {
+					throw new ValidationException( 'Template set metadata value exceeds the allowed length.' );
+				}
+
+				$metadata[ $key ] = $value;
+			}
+
+			CanonicalJson::assert_maximum_size( CanonicalJson::encode_object( $metadata ), self::MAX_TEMPLATE_METADATA_BYTES );
+		}
+
+		$normalized = array(
+			'default_message' => $default_message,
+			'schema_version'  => self::SCHEMA_VERSION,
+		);
+
+		if ( array() !== $service_messages ) {
+			$normalized['service_messages'] = $service_messages;
+		}
+
+		if ( array() !== $metadata ) {
+			$normalized['metadata'] = $metadata;
+		}
+
+		return $normalized;
+	}
+
+	/**
+	 * Build a reusable-template adapter over a legacy inline template.
+	 *
+	 * @param array<string,mixed> $inline_template Inline template document.
+	 * @param array<int,string>   $custom_field_allowlist Destination rule allowlist.
+	 * @return array<string,mixed>
+	 */
+	public static function template_set_from_inline( array $inline_template, array $custom_field_allowlist ): array {
+		$inline_template = self::inline_template( $inline_template );
+
+		return self::template_set(
+			array(
+				'default_message' => (string) $inline_template['message'],
+				'schema_version'  => self::SCHEMA_VERSION,
+			),
+			$custom_field_allowlist
+		);
+	}
+
+	/**
+	 * Validate and return a rule schedule policy document.
+	 *
+	 * @param array<string,mixed>|string|null $policy Policy document or legacy string.
+	 * @return array<string,mixed>
+	 */
+	public static function schedule_policy( $policy ): array {
+		if ( null === $policy || '' === $policy ) {
+			$policy = 'immediate';
+		}
+
+		if ( is_string( $policy ) ) {
+			StorageEnums::assert_rule_schedule_slot( $policy );
+
+			return array(
+				'mode'           => $policy,
+				'schema_version' => self::SCHEMA_VERSION,
+			);
+		}
+
+		if ( ! is_array( $policy ) || array_is_list( $policy ) ) {
+			throw new ValidationException( 'Schedule policy must be an object.' );
+		}
+
+		self::assert_schema_version( $policy, 'schedule policy' );
+		self::assert_no_unknown_keys( $policy, array( 'schema_version', 'mode' ), 'Schedule policy' );
+
+		if ( ! isset( $policy['mode'] ) || ! is_string( $policy['mode'] ) ) {
+			throw new ValidationException( 'Schedule policy mode is required.' );
+		}
+
+		StorageEnums::assert_rule_schedule_slot( $policy['mode'] );
+
+		return array(
+			'mode'           => $policy['mode'],
+			'schema_version' => self::SCHEMA_VERSION,
+		);
+	}
+
+	/**
+	 * Validate and return an image media policy document.
+	 *
+	 * @param array<string,mixed>|null $policy Policy document.
+	 * @return array<string,mixed>
+	 */
+	public static function media_policy( ?array $policy ): array {
+		if ( null === $policy || array() === $policy ) {
+			$policy = array(
+				'mode'           => 'none',
+				'schema_version' => self::SCHEMA_VERSION,
+			);
+		}
+
+		self::assert_schema_version( $policy, 'media policy' );
+		self::assert_no_unknown_keys( $policy, array( 'schema_version', 'mode' ), 'Media policy' );
+
+		if ( ! isset( $policy['mode'] ) || ! is_string( $policy['mode'] ) ) {
+			throw new ValidationException( 'Media policy mode is required.' );
+		}
+
+		StorageEnums::assert_media_mode( $policy['mode'] );
+
+		return array(
+			'mode'           => $policy['mode'],
+			'schema_version' => self::SCHEMA_VERSION,
+		);
 	}
 
 	/**
@@ -191,7 +371,46 @@ final class RuleDocuments {
 	 */
 	public static function encode_inline_template( array $template ): string {
 		$json = CanonicalJson::encode_object( $template );
-		CanonicalJson::assert_maximum_size( $json, self::MAX_TEMPLATE_BYTES );
+		CanonicalJson::assert_maximum_size( $json, self::MAX_INLINE_TEMPLATE_BYTES );
+
+		return $json;
+	}
+
+	/**
+	 * Encode a template set with size validation.
+	 *
+	 * @param array<string,mixed> $template_set Template set.
+	 * @return string
+	 */
+	public static function encode_template_set( array $template_set ): string {
+		$json = CanonicalJson::encode_object( $template_set );
+		CanonicalJson::assert_maximum_size( $json, Schema::TEMPLATE_SET_MAX_BYTES );
+
+		return $json;
+	}
+
+	/**
+	 * Encode a schedule policy with size validation.
+	 *
+	 * @param array<string,mixed> $schedule_policy Schedule policy.
+	 * @return string
+	 */
+	public static function encode_schedule_policy( array $schedule_policy ): string {
+		$json = CanonicalJson::encode_object( $schedule_policy );
+		CanonicalJson::assert_maximum_size( $json, Schema::SCHEDULE_JSON_MAX_BYTES );
+
+		return $json;
+	}
+
+	/**
+	 * Encode a media policy with size validation.
+	 *
+	 * @param array<string,mixed> $media_policy Media policy.
+	 * @return string
+	 */
+	public static function encode_media_policy( array $media_policy ): string {
+		$json = CanonicalJson::encode_object( $media_policy );
+		CanonicalJson::assert_maximum_size( $json, Schema::MEDIA_POLICY_MAX_BYTES );
 
 		return $json;
 	}
@@ -654,5 +873,78 @@ final class RuleDocuments {
 				throw new ValidationException( 'Condition document contains an unsupported field.' );
 			}
 		}
+	}
+
+	/**
+	 * Normalize a template message.
+	 *
+	 * @param string $message Message.
+	 * @return string
+	 */
+	private static function normalize_template_message( string $message ): string {
+		$message = self::normalize_plain_text( $message );
+
+		if ( '' === $message || self::length( $message ) > self::MAX_TEMPLATE_LENGTH ) {
+			throw new ValidationException( 'Template message must be a non-empty bounded string.' );
+		}
+
+		return $message;
+	}
+
+	/**
+	 * Validate every meta tag against the rule allowlist.
+	 *
+	 * @param string                 $message Template message.
+	 * @param array<int,string>|null $allowlist Rule allowlist.
+	 */
+	private static function assert_template_meta_tags_allowed( string $message, ?array $allowlist ): void {
+		$matched = preg_match_all( '/\{\{\s*meta:([^}| ]+)/', $message, $matches );
+
+		if ( false === $matched || 0 === $matched || null === $allowlist ) {
+			return;
+		}
+
+		foreach ( $matches[1] as $key ) {
+			if ( ! in_array( $key, $allowlist, true ) ) {
+				throw new ValidationException( 'Template custom field tag is not allowlisted by the rule.' );
+			}
+		}
+	}
+
+	/**
+	 * Normalize plain text without executing shortcodes.
+	 *
+	 * @param string $value Raw text.
+	 * @return string
+	 */
+	private static function normalize_plain_text( string $value ): string {
+		if ( function_exists( 'wp_strip_all_tags' ) ) {
+			$value = wp_strip_all_tags( $value, true );
+		} else {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags -- Unit-test fallback.
+			$value = strip_tags( $value );
+		}
+
+		$value = html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$value = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $value );
+		$value = preg_replace( '/\s+/u', ' ', null === $value ? '' : $value );
+
+		return trim( null === $value ? '' : $value );
+	}
+
+	/**
+	 * Return Unicode character length.
+	 *
+	 * @param string $value Value.
+	 * @return int
+	 */
+	private static function length( string $value ): int {
+		if ( function_exists( 'mb_strlen' ) ) {
+			return mb_strlen( $value, 'UTF-8' );
+		}
+
+		preg_match_all( '/./us', $value, $matches );
+
+		return count( $matches[0] );
 	}
 }

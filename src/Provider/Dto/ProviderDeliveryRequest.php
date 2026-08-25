@@ -27,6 +27,11 @@ final class ProviderDeliveryRequest {
 	public int $adapter_encoding_version;
 	public string $message;
 	public string $canonical_url;
+	public string $final_encoded_text;
+	public string $schedule_slot;
+	public ?string $scheduled_for_utc;
+	/** @var array<string,mixed> */
+	public array $media_snapshot;
 	/** @var array<string,mixed> */
 	public array $redaction_context;
 
@@ -45,6 +50,10 @@ final class ProviderDeliveryRequest {
 	 * @param int                 $adapter_encoding_version Adapter encoding version.
 	 * @param string              $message Immutable rendered message.
 	 * @param string              $canonical_url Canonical URL.
+	 * @param string|null         $final_encoded_text Final encoded provider text.
+	 * @param string              $schedule_slot Schedule slot.
+	 * @param string|null         $scheduled_for_utc Scheduled UTC time.
+	 * @param array<string,mixed> $media_snapshot Media snapshot.
 	 * @param array<string,mixed> $redaction_context Redaction context.
 	 */
 	public function __construct(
@@ -60,6 +69,10 @@ final class ProviderDeliveryRequest {
 		int $adapter_encoding_version,
 		string $message,
 		string $canonical_url,
+		?string $final_encoded_text = null,
+		string $schedule_slot = 'immediate',
+		?string $scheduled_for_utc = null,
+		array $media_snapshot = array(),
 		array $redaction_context = array()
 	) {
 		$this->provider                     = $provider;
@@ -74,6 +87,10 @@ final class ProviderDeliveryRequest {
 		$this->adapter_encoding_version     = $adapter_encoding_version;
 		$this->message                      = $message;
 		$this->canonical_url                = $canonical_url;
+		$this->final_encoded_text           = $final_encoded_text ?? trim( $message ) . "\n\n" . $canonical_url;
+		$this->schedule_slot                = $schedule_slot;
+		$this->scheduled_for_utc            = $scheduled_for_utc;
+		$this->media_snapshot               = $media_snapshot;
 		$this->redaction_context            = $redaction_context;
 	}
 }

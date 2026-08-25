@@ -16,6 +16,7 @@ use PressQueue\Provider\ProviderException;
 
 /**
  * @covers \PressQueue\Provider\Buffer\BufferDiscoveryProvider
+ * @covers \PressQueue\Provider\Buffer\BufferCapabilityCatalog
  * @covers \PressQueue\Provider\Buffer\BufferGraphqlClient
  * @covers \PressQueue\Provider\DiscoveryProvider
  * @covers \PressQueue\Provider\Dto\ProviderAccount
@@ -83,6 +84,9 @@ final class BufferDiscoveryProviderTest extends TestCase {
 									'isDisconnected' => false,
 									'isLocked'       => false,
 									'isQueuePaused'  => false,
+									'metadata'       => array(
+										'maxCharacters' => 500,
+									),
 									'name'           => 'PressQueue',
 									'organizationId' => 'org_1',
 									'service'        => 'mastodon',
@@ -95,6 +99,9 @@ final class BufferDiscoveryProviderTest extends TestCase {
 									'isDisconnected' => false,
 									'isLocked'       => false,
 									'isQueuePaused'  => false,
+									'metadata'       => array(
+										'maxCharacters' => 500,
+									),
 									'name'           => 'Read Only',
 									'organizationId' => 'org_1',
 									'service'        => 'mastodon',
@@ -111,9 +118,13 @@ final class BufferDiscoveryProviderTest extends TestCase {
 
 		self::assertSame( array( 'input' => array( 'organizationId' => 'org_1' ) ), $body['variables'] );
 		self::assertStringContainsString( '$input', $body['query'] );
+		self::assertStringContainsString( 'maxCharacters', $body['query'] );
 		self::assertSame( 'available', $channels[0]->availability );
-		self::assertSame( array( 'immediate' ), $channels[0]->capability_document['delivery']['schedule_slots'] );
+		self::assertSame( 2, $channels[0]->capability_document['schema_version'] );
+		self::assertSame( array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' ), $channels[0]->capability_document['delivery']['schedule_slots'] );
+		self::assertSame( 280, $channels[0]->capability_document['delivery']['max_text_characters'] );
 		self::assertTrue( $channels[0]->capability_document['delivery']['text'] );
+		self::assertSame( 1, $channels[0]->capability_document['delivery']['image']['max_items'] );
 		self::assertSame( 'unsupported', $channels[1]->availability );
 		self::assertSame( 'missing_manage_updates', $channels[1]->unavailable_reason );
 		self::assertFalse( $channels[1]->capability_document['delivery']['text'] );

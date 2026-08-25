@@ -11,6 +11,7 @@ namespace PressQueue\Tests\Integration;
 
 use PressQueue\Delivery\DeliveryWorker;
 use PressQueue\Delivery\QueueSweep;
+use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Provider\DeliveryProvider;
 use PressQueue\Provider\Dto\ProviderDeliveryRequest;
 use PressQueue\Provider\Dto\ProviderDeliveryResult;
@@ -61,10 +62,10 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	}
 
 	public function test_sweep_and_worker_accept_delivery_once_with_event_history(): void {
-		$delivery = $this->liveDelivery();
+		$delivery  = $this->liveDelivery();
 		$scheduler = $this->fakeScheduler();
-		$provider = $this->acceptedProvider();
-		$registry = new ProviderRegistry( array(), array( 'buffer' => $provider ) );
+		$provider  = $this->acceptedProvider();
+		$registry  = new ProviderRegistry( array(), array( 'buffer' => $provider ) );
 
 		$sweep = new QueueSweep( Database::from_globals(), $scheduler, $registry );
 		self::assertSame( 1, $sweep->run() );
@@ -95,7 +96,7 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 		self::assertNotNull( $accepted->remote_receipt_key );
 		self::assertSame( 'remote-post-1', $accepted->receipt['remote_id'] ?? null );
 		self::assertCount( 1, $provider->requests );
-		self::assertSame( "Hello from integration\n\nhttps://example.test/post", $provider->requests[0]->message . "\n\n" . $provider->requests[0]->canonical_url );
+		self::assertSame( "Hello from integration\n\nhttps://example.test/post", $provider->requests[0]->final_encoded_text );
 
 		$events = ( new DeliveryEventRepository() )->find_by_delivery_public_id( $delivery->public_id );
 		self::assertSame(
@@ -113,10 +114,10 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	}
 
 	public function test_kill_switch_holds_queued_delivery_without_attempt_or_provider_request(): void {
-		$delivery = $this->liveDelivery();
+		$delivery  = $this->liveDelivery();
 		$scheduler = $this->fakeScheduler();
-		$provider = $this->acceptedProvider();
-		$registry = new ProviderRegistry( array(), array( 'buffer' => $provider ) );
+		$provider  = $this->acceptedProvider();
+		$registry  = new ProviderRegistry( array(), array( 'buffer' => $provider ) );
 
 		( new QueueSweep( Database::from_globals(), $scheduler, $registry ) )->run();
 		( new SettingsRepository() )->set_kill_switch_enabled( true );
@@ -142,10 +143,10 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	}
 
 	public function test_due_retry_worker_action_submits_without_waiting_for_sweep(): void {
-		$delivery = $this->liveDelivery();
+		$delivery  = $this->liveDelivery();
 		$scheduler = $this->fakeScheduler();
-		$provider = $this->retryThenAcceptedProvider();
-		$registry = new ProviderRegistry( array(), array( 'buffer' => $provider ) );
+		$provider  = $this->retryThenAcceptedProvider();
+		$registry  = new ProviderRegistry( array(), array( 'buffer' => $provider ) );
 
 		( new QueueSweep( Database::from_globals(), $scheduler, $registry ) )->run();
 
@@ -185,10 +186,10 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	}
 
 	public function test_sweep_repairs_queued_delivery_with_stale_action_id(): void {
-		$delivery = $this->liveDelivery();
+		$delivery  = $this->liveDelivery();
 		$scheduler = $this->fakeScheduler();
-		$registry = new ProviderRegistry( array(), array( 'buffer' => $this->acceptedProvider() ) );
-		$sweep = new QueueSweep( Database::from_globals(), $scheduler, $registry );
+		$registry  = new ProviderRegistry( array(), array( 'buffer' => $this->acceptedProvider() ) );
+		$sweep     = new QueueSweep( Database::from_globals(), $scheduler, $registry );
 
 		$sweep->run();
 
@@ -218,6 +219,7 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 		$destination = $this->enabledDestination();
 		$rule        = ( new RuleRepository() )->create( $this->ruleInput( $destination['channel']->public_id ) );
 		$decision    = ( new DecisionRepository() )->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $destination['channel']->public_id ) );
+		$final_text  = "Hello from integration\n\nhttps://example.test/post";
 
 		return ( new DeliveryRepository() )->create(
 			array(
@@ -226,8 +228,20 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 				'decision_public_id'   => $decision->public_id,
 				'delivery_mode'        => 'live',
 				'payload_preview'      => array(
-					'canonical_url' => 'https://example.test/post',
-					'message'       => 'Hello from integration',
+					'adapter_encoding_version'  => 2,
+					'bound_capability_hash'     => DeliveryCapability::hash( $destination['channel']->capabilities ),
+					'capability_schema_version' => 2,
+					'canonical_url'             => 'https://example.test/post',
+					'final_encoded_text'        => $final_text,
+					'final_encoded_text_length' => strlen( $final_text ),
+					'media_snapshot'            => array(
+						'items'          => array(),
+						'mode'           => 'none',
+						'schema_version' => 1,
+					),
+					'message'                   => 'Hello from integration',
+					'payload_schema_version'    => 2,
+					'schedule_slot'             => 'immediate',
 				),
 				'provider'             => 'buffer',
 				'remote_channel_id'    => $destination['channel']->remote_channel_id,
@@ -272,7 +286,7 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	private function fakeScheduler(): ActionSchedulerQueue {
 		return new class() extends ActionSchedulerQueue {
 			/** @var array<int,array{public_id:string,timestamp:int|null}> */
-			public array $scheduled = array();
+			public array $scheduled     = array();
 			private int $next_action_id = 500;
 
 			public function is_ready(): bool {
@@ -281,8 +295,8 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 
 			public function schedule_delivery( string $delivery_public_id, ?int $timestamp = null ): int {
 				$this->scheduled[] = array(
-					'public_id'  => $delivery_public_id,
-					'timestamp'  => $timestamp,
+					'public_id' => $delivery_public_id,
+					'timestamp' => $timestamp,
 				);
 
 				return $this->next_action_id++;
@@ -496,12 +510,25 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	 */
 	private function channelCapabilities(): array {
 		return array(
-			'delivery'       => array(
-				'schedule_slots' => array( 'immediate' ),
-				'text'           => true,
+			'catalog_version' => '2026-08-25.1',
+			'delivery'        => array(
+				'image'               => array(
+					'alt_text_required' => false,
+					'max_bytes'         => 5 * 1024 * 1024,
+					'max_height'        => 4096,
+					'max_items'         => 1,
+					'max_width'         => 4096,
+					'mime_types'        => array( 'image/gif', 'image/jpeg', 'image/png' ),
+					'min_height'        => 1,
+					'min_width'         => 1,
+				),
+				'max_text_characters' => 280,
+				'schedule_slots'      => array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' ),
+				'text'                => true,
 			),
-			'schema_version' => 1,
-			'service'        => 'mastodon',
+			'schema_version'  => 2,
+			'service'         => 'mastodon',
+			'supported'       => true,
 		);
 	}
 
