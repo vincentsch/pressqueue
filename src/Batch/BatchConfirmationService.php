@@ -19,9 +19,10 @@ use PressQueue\Storage\Record\BatchRecord;
 use PressQueue\Storage\Repository\BatchItemRepository;
 use PressQueue\Storage\Repository\BatchRepository;
 use PressQueue\Storage\Schema;
-use PressQueue\Storage\StorageException;
+use PressQueue\Storage\StaleRecordException;
 use PressQueue\Storage\StorageValidator;
 use PressQueue\Storage\ValidationException;
+use Throwable;
 
 /**
  * Confirms unchanged previews and reserves queueable items.
@@ -84,8 +85,6 @@ final class BatchConfirmationService {
 
 		$this->assert_items_unchanged( $stored_items, $evaluation['items'] );
 
-		$this->scheduler->schedule_batch_queue( $batch->public_id, $batch->preview_snapshot_hash );
-
 		$confirmed = $this->database->transaction(
 			function () use ( $batch, $actor_user_id ): BatchRecord {
 				$confirming = $this->batches->transition(
@@ -96,7 +95,7 @@ final class BatchConfirmationService {
 				);
 
 				if ( null === $confirming ) {
-					throw new StorageException( 'Batch confirmation lost the status race.' );
+					throw new StaleRecordException( 'Batch confirmation lost the status race.' );
 				}
 
 				foreach ( $this->items->find_by_batch( $batch->public_id ) as $item ) {
@@ -106,7 +105,7 @@ final class BatchConfirmationService {
 
 					$reserved = $this->items->reserve( $item );
 					if ( null === $reserved ) {
-						throw new StorageException( 'Batch item reservation lost the status race.' );
+						throw new StaleRecordException( 'Batch item reservation lost the status race.' );
 					}
 				}
 
@@ -123,13 +122,19 @@ final class BatchConfirmationService {
 				);
 
 				if ( null === $queueing ) {
-					throw new StorageException( 'Batch queue handoff lost the status race.' );
+					throw new StaleRecordException( 'Batch queue handoff lost the status race.' );
 				}
 
 				return $queueing;
 			},
 			array( Schema::BATCHES, Schema::BATCH_ITEMS )
 		);
+
+		try {
+			$this->scheduler->schedule_batch_queue( $confirmed->public_id, $confirmed->preview_snapshot_hash );
+		} catch ( Throwable $throwable ) {
+			unset( $throwable );
+		}
 
 		return $confirmed;
 	}

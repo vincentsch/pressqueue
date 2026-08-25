@@ -15,25 +15,25 @@ namespace PressQueue\Provider\Dto;
  * Immutable provider delivery input.
  */
 final class ProviderDeliveryRequest {
-	public string $provider;
-	public string $delivery_public_id;
-	public string $delivery_key;
-	public int $attempt_number;
-	public string $bound_connection_public_id;
-	public string $bound_remote_account_id;
-	public string $bound_remote_organization_id;
-	public string $bound_remote_channel_id;
-	public int $payload_schema_version;
-	public int $adapter_encoding_version;
-	public string $message;
-	public string $canonical_url;
-	public string $final_encoded_text;
-	public string $schedule_slot;
-	public ?string $scheduled_for_utc;
+	public readonly string $provider;
+	public readonly string $delivery_public_id;
+	public readonly string $delivery_key;
+	public readonly int $attempt_number;
+	public readonly string $bound_connection_public_id;
+	public readonly string $bound_remote_account_id;
+	public readonly string $bound_remote_organization_id;
+	public readonly string $bound_remote_channel_id;
+	public readonly int $payload_schema_version;
+	public readonly int $adapter_encoding_version;
+	public readonly string $message;
+	public readonly string $canonical_url;
+	public readonly string $final_encoded_text;
+	public readonly string $schedule_slot;
+	public readonly ?string $scheduled_for_utc;
 	/** @var array<string,mixed> */
-	public array $media_snapshot;
+	public readonly array $media_snapshot;
 	/** @var array<string,mixed> */
-	public array $redaction_context;
+	public readonly array $redaction_context;
 
 	/**
 	 * Constructor.

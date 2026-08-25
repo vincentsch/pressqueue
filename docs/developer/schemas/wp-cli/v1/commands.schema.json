@@ -1,0 +1,387 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pressqueue.local/schemas/wp-cli/v1/commands.schema.json",
+  "title": "PressQueue WP-CLI command response schemas",
+  "$defs": {
+    "status": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        {
+          "properties": {
+            "command": { "const": "status" },
+            "data": { "$ref": "root.schema.json#/$defs/status" },
+            "pagination": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "connections.list": { "$ref": "#/$defs/list_connection_envelope" },
+    "connections.show": { "$ref": "#/$defs/connection_envelope" },
+    "channels.list": { "$ref": "#/$defs/list_channel_envelope" },
+    "rules.list": { "$ref": "#/$defs/list_rule_envelope" },
+    "rules.show": { "$ref": "#/$defs/rule_envelope" },
+    "preview.post": { "$ref": "#/$defs/preview_post_envelope" },
+    "preview.rule": { "$ref": "#/$defs/preview_rule_envelope" },
+    "decisions.list": { "$ref": "#/$defs/list_decision_envelope" },
+    "decisions.show": { "$ref": "#/$defs/decision_envelope" },
+    "deliveries.list": { "$ref": "#/$defs/list_delivery_envelope" },
+    "deliveries.show": { "$ref": "#/$defs/delivery_envelope" },
+    "deliveries.retry": { "$ref": "#/$defs/delivery_retry_envelope" },
+    "deliveries.cancel": { "$ref": "#/$defs/delivery_cancel_envelope" },
+    "deliveries.resume": { "$ref": "#/$defs/delivery_resume_envelope" },
+    "deliveries.reconcile": { "$ref": "#/$defs/delivery_reconcile_envelope" },
+    "queue.status": { "$ref": "#/$defs/queue_status_envelope" },
+    "batches.preview": { "$ref": "#/$defs/batch_preview_envelope" },
+    "batches.confirm": { "$ref": "#/$defs/batch_confirm_envelope" },
+    "batches.cancel": { "$ref": "#/$defs/batch_cancel_envelope" },
+    "batches.list": { "$ref": "#/$defs/list_batch_envelope" },
+    "batches.show": { "$ref": "#/$defs/batch_envelope" },
+    "error": { "$ref": "root.schema.json#/$defs/error_envelope" },
+    "list_connection_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/list_connection_command" }
+      ]
+    },
+    "connection_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/connection_command" }
+      ]
+    },
+    "list_channel_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/list_channel_command" }
+      ]
+    },
+    "list_rule_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/list_rule_command" }
+      ]
+    },
+    "rule_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/rule_command" }
+      ]
+    },
+    "preview_post_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/preview_post_command" }
+      ]
+    },
+    "preview_rule_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/preview_rule_command" }
+      ]
+    },
+    "list_decision_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/list_decision_command" }
+      ]
+    },
+    "decision_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/decision_command" }
+      ]
+    },
+    "list_delivery_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/list_delivery_command" }
+      ]
+    },
+    "delivery_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/delivery_command" }
+      ]
+    },
+    "delivery_retry_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/delivery_retry_command" }
+      ]
+    },
+    "delivery_cancel_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/delivery_cancel_command" }
+      ]
+    },
+    "delivery_resume_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/delivery_resume_command" }
+      ]
+    },
+    "delivery_reconcile_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/delivery_reconcile_command" }
+      ]
+    },
+    "queue_status_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/queue_status_command" }
+      ]
+    },
+    "batch_preview_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/batch_preview_command" }
+      ]
+    },
+    "batch_confirm_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/batch_confirm_command" }
+      ]
+    },
+    "batch_cancel_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/batch_cancel_command" }
+      ]
+    },
+    "list_batch_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/list_batch_command" }
+      ]
+    },
+    "batch_envelope": {
+      "allOf": [
+        { "$ref": "root.schema.json#/$defs/success_envelope" },
+        { "$ref": "#/$defs/batch_command" }
+      ]
+    },
+    "list_connection_command": {
+      "properties": {
+        "command": { "const": "connections.list" },
+        "data": { "$ref": "#/$defs/connection_list_data" },
+        "pagination": { "$ref": "root.schema.json#/$defs/pagination" }
+      }
+    },
+    "connection_command": {
+      "properties": {
+        "command": { "const": "connections.show" },
+        "data": { "$ref": "root.schema.json#/$defs/connection" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "list_channel_command": {
+      "properties": {
+        "command": { "const": "channels.list" },
+        "data": { "$ref": "#/$defs/channel_list_data" },
+        "pagination": { "$ref": "root.schema.json#/$defs/pagination" }
+      }
+    },
+    "list_rule_command": {
+      "properties": {
+        "command": { "const": "rules.list" },
+        "data": { "$ref": "#/$defs/rule_list_data" },
+        "pagination": { "$ref": "root.schema.json#/$defs/pagination" }
+      }
+    },
+    "rule_command": {
+      "properties": {
+        "command": { "const": "rules.show" },
+        "data": { "$ref": "root.schema.json#/$defs/rule" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "preview_post_command": {
+      "properties": {
+        "command": { "const": "preview.post" },
+        "data": { "$ref": "root.schema.json#/$defs/preview" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "preview_rule_command": {
+      "properties": {
+        "command": { "const": "preview.rule" },
+        "data": { "$ref": "root.schema.json#/$defs/preview" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "list_decision_command": {
+      "properties": {
+        "command": { "const": "decisions.list" },
+        "data": { "$ref": "#/$defs/decision_list_data" },
+        "pagination": { "$ref": "root.schema.json#/$defs/pagination" }
+      }
+    },
+    "decision_command": {
+      "properties": {
+        "command": { "const": "decisions.show" },
+        "data": { "$ref": "root.schema.json#/$defs/decision" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "list_delivery_command": {
+      "properties": {
+        "command": { "const": "deliveries.list" },
+        "data": { "$ref": "#/$defs/delivery_list_data" },
+        "pagination": { "$ref": "root.schema.json#/$defs/pagination" }
+      }
+    },
+    "delivery_command": {
+      "properties": {
+        "command": { "const": "deliveries.show" },
+        "data": { "$ref": "root.schema.json#/$defs/delivery" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "delivery_retry_command": {
+      "properties": {
+        "command": { "const": "deliveries.retry" },
+        "data": { "$ref": "root.schema.json#/$defs/mutation_assessment" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "delivery_cancel_command": {
+      "properties": {
+        "command": { "const": "deliveries.cancel" },
+        "data": { "$ref": "root.schema.json#/$defs/mutation_assessment" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "delivery_resume_command": {
+      "properties": {
+        "command": { "const": "deliveries.resume" },
+        "data": { "$ref": "root.schema.json#/$defs/mutation_assessment" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "delivery_reconcile_command": {
+      "properties": {
+        "command": { "const": "deliveries.reconcile" },
+        "data": { "$ref": "root.schema.json#/$defs/mutation_assessment" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "queue_status_command": {
+      "properties": {
+        "command": { "const": "queue.status" },
+        "data": { "$ref": "root.schema.json#/$defs/queue_status" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "batch_preview_command": {
+      "properties": {
+        "command": { "const": "batches.preview" },
+        "data": { "$ref": "root.schema.json#/$defs/batch_mutation_assessment" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "batch_confirm_command": {
+      "properties": {
+        "command": { "const": "batches.confirm" },
+        "data": { "$ref": "root.schema.json#/$defs/batch_mutation_assessment" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "batch_cancel_command": {
+      "properties": {
+        "command": { "const": "batches.cancel" },
+        "data": { "$ref": "root.schema.json#/$defs/batch_mutation_assessment" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "list_batch_command": {
+      "properties": {
+        "command": { "const": "batches.list" },
+        "data": { "$ref": "#/$defs/batch_list_data" },
+        "pagination": { "$ref": "root.schema.json#/$defs/pagination" }
+      }
+    },
+    "batch_command": {
+      "properties": {
+        "command": { "const": "batches.show" },
+        "data": { "$ref": "root.schema.json#/$defs/batch" },
+        "pagination": { "type": "null" }
+      }
+    },
+    "connection_list_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "root.schema.json#/$defs/connection" } }
+      }
+    },
+    "channel_list_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "root.schema.json#/$defs/channel" } }
+      }
+    },
+    "rule_list_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "root.schema.json#/$defs/rule" } }
+      }
+    },
+    "decision_list_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "root.schema.json#/$defs/decision" } }
+      }
+    },
+    "delivery_list_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "root.schema.json#/$defs/delivery" } }
+      }
+    },
+    "batch_list_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "root.schema.json#/$defs/batch" } }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/status" },
+    { "$ref": "#/$defs/connections.list" },
+    { "$ref": "#/$defs/connections.show" },
+    { "$ref": "#/$defs/channels.list" },
+    { "$ref": "#/$defs/rules.list" },
+    { "$ref": "#/$defs/rules.show" },
+    { "$ref": "#/$defs/preview.post" },
+    { "$ref": "#/$defs/preview.rule" },
+    { "$ref": "#/$defs/decisions.list" },
+    { "$ref": "#/$defs/decisions.show" },
+    { "$ref": "#/$defs/deliveries.list" },
+    { "$ref": "#/$defs/deliveries.show" },
+    { "$ref": "#/$defs/deliveries.retry" },
+    { "$ref": "#/$defs/deliveries.cancel" },
+    { "$ref": "#/$defs/deliveries.resume" },
+    { "$ref": "#/$defs/deliveries.reconcile" },
+    { "$ref": "#/$defs/queue.status" },
+    { "$ref": "#/$defs/batches.preview" },
+    { "$ref": "#/$defs/batches.confirm" },
+    { "$ref": "#/$defs/batches.cancel" },
+    { "$ref": "#/$defs/batches.list" },
+    { "$ref": "#/$defs/batches.show" },
+    { "$ref": "#/$defs/error" }
+  ]
+}

@@ -13,6 +13,7 @@ use PressQueue\Admin\AdminScreens;
 use PressQueue\Admin\DeliveryDetailController;
 use PressQueue\Delivery\DeliveryQueryRepository;
 use PressQueue\Delivery\DeliveryWorker;
+use PressQueue\Delivery\OperatorActionAssessmentService;
 use PressQueue\Delivery\OperatorActionService;
 use PressQueue\Delivery\ReconciliationService;
 use PressQueue\Provider\Capability\DeliveryCapability;
@@ -39,6 +40,8 @@ use PressQueue\Storage\Schema;
 use PressQueue\Storage\SchemaMigrator;
 use PressQueue\Storage\SettingsRepository;
 use PressQueue\Storage\ValidationException;
+use PressQueue\WpCli\DeliveryCommand;
+use PressQueue\WpCli\ExitCodes;
 use WP_UnitTestCase;
 
 /**
@@ -197,6 +200,92 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 			$events = ( new DeliveryEventRepository() )->find_by_delivery_id( $delivery->id );
 			self::assertSame( 'legacy_encoder_retired', $events[ count( $events ) - 1 ]->detail['classification'] ?? null );
 		}
+	}
+
+	public function test_retry_assessment_is_zero_write_and_requires_decryptable_credential(): void {
+		$delivery = $this->liveDelivery();
+		$this->updateDelivery(
+			$delivery->public_id,
+			array(
+				'error_class'      => 'automatic_budget_exhausted',
+				'provider_result'  => 'retryable_failure',
+				'retry_safety'     => 'manual_allowed',
+				'state'            => 'failed',
+				'state_changed_at' => '2026-08-24 12:00:00',
+			)
+		);
+		$before_events = ( new DeliveryEventRepository() )->find_by_delivery_id( $delivery->id );
+
+		$blocked = ( new OperatorActionAssessmentService( Database::from_globals(), static fn (): bool => false ) )->assess_retry( $delivery->public_id );
+		$allowed = ( new OperatorActionAssessmentService( Database::from_globals(), static fn (): bool => true ) )->assess_retry( $delivery->public_id );
+		$stored  = ( new DeliveryRepository() )->find_by_public_id( $delivery->public_id );
+
+		self::assertFalse( $blocked->would_mutate );
+		self::assertContains( 'manual_retry_credential_unavailable', $blocked->blocked_reasons );
+		self::assertTrue( $allowed->would_mutate );
+		self::assertNotNull( $stored );
+		self::assertSame( 'failed', $stored->state );
+		self::assertCount( count( $before_events ), ( new DeliveryEventRepository() )->find_by_delivery_id( $delivery->id ) );
+	}
+
+	public function test_cli_delivery_cancel_defaults_to_zero_write_assessment(): void {
+		$user_id  = $this->commandUser( Capabilities::OPERATE_DELIVERIES );
+		$delivery = $this->liveDelivery();
+		$this->updateDelivery(
+			$delivery->public_id,
+			array(
+				'action_id'        => 700,
+				'queued_at'        => '2026-08-24 12:00:00',
+				'state'            => 'queued',
+				'state_changed_at' => '2026-08-24 12:00:00',
+			)
+		);
+		$before_events = ( new DeliveryEventRepository() )->find_by_delivery_id( $delivery->id );
+
+		list( $status, $line ) = $this->captureCommand(
+			static function () use ( $delivery ): int {
+				return ( new DeliveryCommand() )->cancel( array( $delivery->public_id ), array() );
+			}
+		);
+		$stored = ( new DeliveryRepository() )->find_by_public_id( $delivery->public_id );
+
+		self::assertSame( $user_id, get_current_user_id() );
+		self::assertSame( ExitCodes::SUCCESS, $status );
+		self::assertFalse( $line['data']['applied'] );
+		self::assertTrue( $line['data']['would_mutate'] );
+		self::assertNotNull( $stored );
+		self::assertSame( 'queued', $stored->state );
+		self::assertCount( count( $before_events ), ( new DeliveryEventRepository() )->find_by_delivery_id( $delivery->id ) );
+	}
+
+	public function test_cli_delivery_cancel_apply_uses_existing_service(): void {
+		$this->commandUser( Capabilities::OPERATE_DELIVERIES );
+		$delivery = $this->liveDelivery();
+		$this->updateDelivery(
+			$delivery->public_id,
+			array(
+				'action_id'        => 700,
+				'queued_at'        => '2026-08-24 12:00:00',
+				'state'            => 'queued',
+				'state_changed_at' => '2026-08-24 12:00:00',
+			)
+		);
+
+		list( $status, $line ) = $this->captureCommand(
+			static function () use ( $delivery ): int {
+				return ( new DeliveryCommand() )->cancel( array( $delivery->public_id ), array( 'apply' => true ) );
+			}
+		);
+		$stored = ( new DeliveryRepository() )->find_by_public_id( $delivery->public_id );
+
+		self::assertSame( ExitCodes::SUCCESS, $status );
+		self::assertTrue( $line['data']['applied'] );
+		self::assertSame( $delivery->public_id, $line['data']['record_public_id'] );
+		self::assertSame( 'queued', $line['data']['old_state'] );
+		self::assertSame( 'cancelled', $line['data']['new_state'] );
+		self::assertNotNull( $line['data']['event_public_id'] );
+		self::assertNotNull( $stored );
+		self::assertSame( 'cancelled', $stored->state );
 	}
 
 	public function test_worker_counts_operator_retry_as_manual_attempt(): void {
@@ -465,6 +554,40 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertStringContainsString( 'PressQueue Delivery Log', $html );
 		self::assertStringNotContainsString( 'PressQueue Connections', $html );
 		self::assertStringNotContainsString( 'PressQueue Decisions', $html );
+	}
+
+	/**
+	 * Create an authenticated command user with one capability.
+	 *
+	 * @param string $capability Capability.
+	 * @return int
+	 */
+	private function commandUser( string $capability ): int {
+		$user_id = (int) self::factory()->user->create();
+		wp_set_current_user( $user_id );
+		$user = get_userdata( $user_id );
+		self::assertInstanceOf( \WP_User::class, $user );
+		$user->add_cap( $capability );
+
+		return $user_id;
+	}
+
+	/**
+	 * Capture one JSON command response.
+	 *
+	 * @param callable():int $callback Callback.
+	 * @return array{0:int,1:array<string,mixed>}
+	 */
+	private function captureCommand( callable $callback ): array {
+		ob_start();
+		$status = $callback();
+		$output = ob_get_clean();
+
+		self::assertIsString( $output );
+		$decoded = json_decode( trim( $output ), true, 512, JSON_THROW_ON_ERROR );
+		self::assertIsArray( $decoded );
+
+		return array( $status, $decoded );
 	}
 
 	/**

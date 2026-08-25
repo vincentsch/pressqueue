@@ -9,8 +9,8 @@ declare(strict_types=1);
 
 namespace PressQueue\Admin;
 
-use PressQueue\Provider\Dto\ProviderAccount;
 use PressQueue\Provider\ProviderException;
+use PressQueue\Provider\ProviderConnectionService;
 use PressQueue\Provider\ProviderRegistry;
 use PressQueue\Security\Capabilities;
 use PressQueue\Security\CredentialEnvelope;
@@ -100,21 +100,13 @@ final class ConnectionController {
 		self::mutation_boundary( 'pressqueue_create_connection' );
 
 		try {
-			$repository = new ConnectionRepository();
-			$secret     = self::post_secret( 'api_key' );
-			$envelope   = new CredentialEnvelope();
+			$secret = self::post_secret( 'api_key' );
 			try {
-				$repository->create_with_credential_factory(
+				self::connection_service()->create_disabled_connection(
 					'buffer',
 					self::post_text( 'label', __( 'Buffer connection', 'pressqueue' ) ),
-					static function ( string $connection_public_id ) use ( $envelope, &$secret ): array {
-						$json = $envelope->encode_for_storage( $envelope->encrypt( 'buffer', $connection_public_id, $secret ) );
-
-						return array(
-							'hash' => $envelope->storage_hash( $json ),
-							'json' => $json,
-						);
-					}
+					$secret,
+					'personal_api_key'
 				);
 			} finally {
 				self::memzero( $secret );
@@ -138,13 +130,11 @@ final class ConnectionController {
 			$connection = self::requested_connection( $repository );
 			$credential = self::decrypt_connection_credential( $connection, $repository );
 			try {
-				$account = self::registry()->discovery_provider( $connection->provider )->account( $credential );
+				self::connection_service()->verify_account( $connection, $credential );
 			} finally {
 				self::memzero( $credential );
 				unset( $credential );
 			}
-
-			$repository->store_verified_account( $connection->public_id, $account->remote_account_id, $account->to_storage_document() );
 			self::redirect( 'credential_verified' );
 		} catch ( \Throwable $throwable ) {
 			self::redirect( 'connection_error', self::safe_error_detail( $throwable ) );
@@ -160,17 +150,13 @@ final class ConnectionController {
 		try {
 			$repository      = new ConnectionRepository();
 			$connection      = self::requested_connection( $repository );
+			$service         = self::connection_service();
 			$credential      = self::decrypt_connection_credential( $connection, $repository );
 			$organization_id = self::post_text( 'remote_organization_id' );
 
 			try {
-				$account = self::registry()->discovery_provider( $connection->provider )->account( $credential );
-
-				if ( ! $account->has_organization( $organization_id ) ) {
-					throw new ValidationException( 'Selected organization is not visible to this credential.' );
-				}
-
-				self::sync_channels( $connection, $credential, $account, $organization_id, self::can_preserve_enabled_on_sync( $connection, $organization_id ) );
+				$account = $service->fetch_account( $connection, $credential );
+				$service->sync_channels( $connection, $credential, $account, $organization_id, self::can_preserve_enabled_on_sync( $connection, $organization_id ) );
 			} finally {
 				self::memzero( $credential );
 				unset( $credential );
@@ -195,9 +181,10 @@ final class ConnectionController {
 				throw new ValidationException( 'Connection has no credential to rotate.' );
 			}
 
-			$secret = self::post_secret( 'api_key' );
+			$service = self::connection_service();
+			$secret  = self::post_secret( 'api_key' );
 			try {
-				$account  = self::registry()->discovery_provider( $connection->provider )->account( $secret );
+				$account  = $service->fetch_account( $connection, $secret );
 				$envelope = new CredentialEnvelope();
 				$json     = $envelope->encode_for_storage( $envelope->encrypt( $connection->provider, $connection->public_id, $secret ) );
 				$hash     = $envelope->storage_hash( $json );
@@ -215,7 +202,7 @@ final class ConnectionController {
 			if ( $organization_visible && null !== $rotated->remote_organization_id ) {
 				$credential = self::decrypt_connection_credential( $rotated, $repository );
 				try {
-					self::sync_channels( $rotated, $credential, $account, $rotated->remote_organization_id, $connection->enabled );
+					$service->sync_channels( $rotated, $credential, $account, $rotated->remote_organization_id, $connection->enabled );
 				} finally {
 					self::memzero( $credential );
 					unset( $credential );
@@ -440,78 +427,6 @@ final class ConnectionController {
 	}
 
 	/**
-	 * Run a complete channel sync.
-	 *
-	 * @param ConnectionRecord $connection Connection.
-	 * @param string           $credential Credential.
-	 * @param ProviderAccount  $account Account.
-	 * @param string           $organization_id Organization ID.
-	 * @param bool             $preserve_enabled Whether to keep enabled state.
-	 */
-	private static function sync_channels( ConnectionRecord $connection, string $credential, ProviderAccount $account, string $organization_id, bool $preserve_enabled ): void {
-		$database         = Database::from_globals();
-		$connections      = new ConnectionRepository( $database );
-		$channels         = new ChannelRepository( $database );
-		$previous_org_id  = $connection->remote_organization_id;
-		$changing_org     = null !== $previous_org_id && $previous_org_id !== $organization_id;
-		$preserve_enabled = $preserve_enabled && ! $changing_org;
-		$connections->store_verified_account( $connection->public_id, $account->remote_account_id, $account->to_storage_document() );
-
-		if ( null === $connection->remote_organization_id || $changing_org ) {
-			$connection       = $connections->select_organization_unverified( $connection->public_id, $organization_id );
-			$preserve_enabled = false;
-		} else {
-			$connection = $connections->find_by_public_id( $connection->public_id );
-			if ( null === $connection ) {
-				throw new ValidationException( 'Connection disappeared before synchronization.' );
-			}
-		}
-
-		$lease = $connections->acquire_sync_lease( $connection->public_id );
-
-		if ( null === $lease ) {
-			throw new ValidationException( 'Connection synchronization is already running.' );
-		}
-
-		try {
-			$provider_channels = self::registry()->discovery_provider( $connection->provider )->channels( $credential, $organization_id );
-			$database->transaction(
-				static function () use ( $channels, $connections, $connection, $lease, $provider_channels, $account, $organization_id, $previous_org_id, $changing_org, $preserve_enabled ): void {
-					$leased = $connections->find_by_public_id( $connection->public_id );
-					if ( null === $leased || $leased->sync_lease_owner !== $lease ) {
-						throw new StaleRecordException( 'Connection sync lease is no longer held.' );
-					}
-
-					if ( $changing_org && null !== $previous_org_id ) {
-						$channels->mark_organization_channels_missing( $leased, $lease, $previous_org_id );
-					}
-
-					$channels->synchronize_provider_channels( $leased, $lease, $provider_channels );
-					$connections->complete_sync_success( $connection->public_id, $lease, $account->remote_account_id, $organization_id, $account->to_storage_document(), $preserve_enabled );
-				}
-			);
-		} catch ( ProviderException $exception ) {
-			self::record_sync_failure( $connections, $connection->public_id, $lease, $exception->to_redacted_document() );
-			throw $exception;
-		} catch ( \Throwable $throwable ) {
-			if ( ! $throwable instanceof StaleRecordException ) {
-				self::record_sync_failure(
-					$connections,
-					$connection->public_id,
-					$lease,
-					array(
-						'classification' => 'unexpected_provider_failure',
-						'message'        => 'Channel synchronization failed with redacted diagnostics.',
-						'schema_version' => 1,
-					)
-				);
-			}
-
-			throw $throwable;
-		}
-	}
-
-	/**
 	 * Check whether synchronization may keep a connection enabled.
 	 *
 	 * @param ConnectionRecord $connection Connection.
@@ -524,22 +439,6 @@ final class ConnectionController {
 			&& null !== $connection->remote_organization_id
 			&& $connection->remote_organization_id === $organization_id
 			&& null !== $connection->verified_identity_hash;
-	}
-
-	/**
-	 * Record a sync failure without masking the original stale-lease result.
-	 *
-	 * @param ConnectionRepository $connections Connections.
-	 * @param string               $connection_public_id Connection public ID.
-	 * @param string               $lease Sync lease owner.
-	 * @param array<string,mixed>  $error Error document.
-	 */
-	private static function record_sync_failure( ConnectionRepository $connections, string $connection_public_id, string $lease, array $error ): void {
-		try {
-			$connections->complete_sync_failure( $connection_public_id, $lease, $error );
-		} catch ( StaleRecordException $exception ) {
-			unset( $exception );
-		}
 	}
 
 	/**
@@ -612,6 +511,15 @@ final class ConnectionController {
 	 */
 	private static function registry(): ProviderRegistry {
 		return self::$registry ?? ProviderRegistry::defaults();
+	}
+
+	/**
+	 * Return a provider connection service.
+	 *
+	 * @return ProviderConnectionService
+	 */
+	private static function connection_service(): ProviderConnectionService {
+		return new ProviderConnectionService( Database::from_globals(), self::registry() );
 	}
 
 	/**

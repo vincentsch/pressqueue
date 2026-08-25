@@ -28,7 +28,10 @@
   },
   "autoload-dev": {
     "psr-4": {
+      "PressQueue\\Tests\\Fixtures\\Provider\\": "tests/fixtures/provider/",
+      "PressQueue\\Tests\\Fixtures\\": "tests/fixtures/",
       "PressQueue\\Tests\\Integration\\": "tests/integration/",
+      "PressQueue\\Tests\\Support\\": "tests/Support/",
       "PressQueue\\Tests\\Unit\\": "tests/unit/"
     }
   },

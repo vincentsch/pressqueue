@@ -117,6 +117,65 @@ final class BatchPreviewService {
 	}
 
 	/**
+	 * Evaluate a batch preview without creating storage rows.
+	 *
+	 * @param string              $batch_type Batch type.
+	 * @param array<string,mixed> $filters Raw filters.
+	 * @param array<string,mixed> $batch_limits Raw limits.
+	 * @param int                 $created_by Creator user ID.
+	 * @return array{filters:array<string,mixed>,batch_limits:array<string,mixed>,items:array<int,array<string,mixed>>,queueable_items:array<int,array<string,mixed>>,summary:array<string,mixed>,snapshot_hash:null}
+	 */
+	public function assess( string $batch_type, array $filters, array $batch_limits, int $created_by ): array {
+		StorageEnums::assert_batch_type( $batch_type );
+		StorageValidator::assert_unsigned_id( 'Creator user ID', $created_by, true );
+		$this->assert_json_size( $filters );
+		$this->assert_json_size( $batch_limits );
+
+		$normalized_limits  = $this->limits->normalize( $batch_limits );
+		$normalized_filters = $this->normalize_filters( $batch_type, $filters );
+		$this->validate_filters_before_storage( $normalized_filters );
+
+		$now        = StorageValidator::parse_required_date_time( StorageValidator::now() );
+		$evaluation = $this->evaluate(
+			new BatchRecord(
+				0,
+				'01K3KGXB71P2MR4K9A7V6Q5C8D',
+				$batch_type,
+				'previewed',
+				$created_by,
+				null,
+				$normalized_filters,
+				array( 'schema_version' => 1 ),
+				str_repeat( '0', 64 ),
+				$normalized_limits,
+				StorageValidator::parse_required_date_time( $this->limits->preview_expires_at() ),
+				null,
+				null,
+				null,
+				1,
+				$now,
+				$now
+			),
+			$normalized_filters,
+			$normalized_limits
+		);
+
+		if ( 'staggered_explicit_time' === ( $normalized_limits['schedule']['mode'] ?? null ) ) {
+			$normalized_limits['schedule']['item_order_hash'] = $this->limits->item_order_hash( $evaluation['queueable_items'] );
+			$evaluation['summary']['item_order_hash']         = $normalized_limits['schedule']['item_order_hash'];
+		}
+
+		return array(
+			'batch_limits'    => $normalized_limits,
+			'filters'         => $normalized_filters,
+			'items'           => $evaluation['items'],
+			'queueable_items' => $evaluation['queueable_items'],
+			'snapshot_hash'   => null,
+			'summary'         => $evaluation['summary'],
+		);
+	}
+
+	/**
 	 * Evaluate a batch without creating decision or delivery rows.
 	 *
 	 * @param BatchRecord                     $batch Batch.

@@ -15,11 +15,11 @@ namespace PressQueue\Provider\Dto;
  * Represents the authenticated provider account.
  */
 final class ProviderAccount {
-	public string $provider;
-	public string $remote_account_id;
-	public string $display_label;
+	public readonly string $provider;
+	public readonly string $remote_account_id;
+	public readonly string $display_label;
 	/** @var array<int,ProviderOrganization> */
-	public array $organizations;
+	public readonly array $organizations;
 
 	/**
 	 * Constructor.

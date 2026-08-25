@@ -11,6 +11,7 @@ namespace PressQueue\Storage\Repository;
 
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\HashKeys;
+use PressQueue\Storage\ObservationPayloads;
 use PressQueue\Storage\PublicIdCollisionException;
 use PressQueue\Storage\PublicIds;
 use PressQueue\Storage\Record\DecisionRecord;
@@ -96,10 +97,26 @@ final class DecisionRepository extends AbstractRepository {
 					throw new StorageException( 'Created decision could not be loaded.' );
 				}
 
+				if ( function_exists( 'do_action' ) ) {
+					$payload = ObservationPayloads::decision( $record );
+					$this->database->after_commit(
+						static function () use ( $payload ): void {
+							do_action( 'pressqueue_decision_recorded', $payload );
+						}
+					);
+				}
+
 				return $record;
 			} catch ( StorageException $exception ) {
 				if ( $this->is_duplicate_public_id_error( $exception ) ) {
 					continue;
+				}
+
+				if ( $this->is_duplicate_decision_key_error( $exception ) ) {
+					$existing = $this->find_by_decision_key( $prepared['decision_key'] );
+					if ( null !== $existing ) {
+						return $existing;
+					}
 				}
 
 				throw $exception;
@@ -107,6 +124,17 @@ final class DecisionRepository extends AbstractRepository {
 		}
 
 		throw new PublicIdCollisionException( 'Could not persist a unique PressQueue decision public ID.' );
+	}
+
+	/**
+	 * Check whether a duplicate failure names the decision key.
+	 *
+	 * @param StorageException $exception Storage failure.
+	 * @return bool
+	 */
+	private function is_duplicate_decision_key_error( StorageException $exception ): bool {
+		return $this->is_duplicate_error( $exception )
+			&& false !== stripos( $exception->getMessage(), 'decision_key' );
 	}
 
 	/**

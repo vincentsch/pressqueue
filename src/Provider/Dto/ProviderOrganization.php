@@ -15,10 +15,10 @@ namespace PressQueue\Provider\Dto;
  * Represents one remote provider organization.
  */
 final class ProviderOrganization {
-	public string $provider;
-	public string $remote_organization_id;
-	public string $display_label;
-	public int $channel_count;
+	public readonly string $provider;
+	public readonly string $remote_organization_id;
+	public readonly string $display_label;
+	public readonly int $channel_count;
 
 	/**
 	 * Constructor.

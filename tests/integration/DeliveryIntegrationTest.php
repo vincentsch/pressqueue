@@ -32,6 +32,7 @@ use PressQueue\Storage\Repository\RuleRepository;
 use PressQueue\Storage\Schema;
 use PressQueue\Storage\SchemaMigrator;
 use PressQueue\Storage\SettingsRepository;
+use PressQueue\Tests\Fixtures\Provider\FixtureDeliveryProvider;
 use WP_UnitTestCase;
 
 /**
@@ -210,6 +211,47 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 		self::assertContains( 'scheduler_action_scheduled', array_column( $events, 'event_type' ) );
 	}
 
+	public function test_fixture_provider_worker_path_accepts_delivery_without_live_http(): void {
+		$delivery  = $this->fixtureDelivery();
+		$scheduler = $this->fakeScheduler();
+		$provider  = new FixtureDeliveryProvider();
+		$registry  = new ProviderRegistry( array(), array( 'fixture' => $provider ) );
+
+		self::assertSame( 1, ( new QueueSweep( Database::from_globals(), $scheduler, $registry ) )->run() );
+		( new DeliveryWorker(
+			Database::from_globals(),
+			$registry,
+			$scheduler,
+			static function (): string {
+				return 'fixture';
+			}
+		) )->run( $delivery->public_id );
+
+		$accepted = ( new DeliveryRepository() )->find_by_public_id( $delivery->public_id );
+		self::assertNotNull( $accepted );
+		self::assertSame( 'accepted', $accepted->state );
+		self::assertSame( 'remote_fixture_post', $accepted->remote_id );
+		self::assertCount( 1, $provider->requests );
+		self::assertSame( 'fixture', $provider->requests[0]->provider );
+	}
+
+	public function test_fixture_provider_worker_path_stops_before_provider_for_disabled_destination(): void {
+		$delivery = $this->fixtureDelivery();
+		( new ConnectionRepository() )->disable( $delivery->connection_public_id );
+		$scheduler = $this->fakeScheduler();
+		$provider  = new FixtureDeliveryProvider();
+		$registry  = new ProviderRegistry( array(), array( 'fixture' => $provider ) );
+
+		self::assertSame( 1, ( new QueueSweep( Database::from_globals(), $scheduler, $registry ) )->run() );
+
+		$failed = ( new DeliveryRepository() )->find_by_public_id( $delivery->public_id );
+		self::assertNotNull( $failed );
+		self::assertSame( 'failed', $failed->state );
+		self::assertSame( 'destination_binding_failed', $failed->error_class );
+		self::assertSame( array(), $scheduler->scheduled );
+		self::assertCount( 0, $provider->requests );
+	}
+
 	/**
 	 * Create a live proposed delivery fixture.
 	 *
@@ -251,6 +293,46 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Create a fixture-provider delivery.
+	 *
+	 * @return \PressQueue\Storage\Record\DeliveryRecord
+	 */
+	private function fixtureDelivery() {
+		$destination = $this->fixtureDestination();
+		$rule        = ( new RuleRepository() )->create( $this->ruleInput( $destination['channel']->public_id ) );
+		$decision    = ( new DecisionRepository() )->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $destination['channel']->public_id ) );
+		$final_text  = "Hello from fixture\n\nhttps://example.test/post";
+
+		return ( new DeliveryRepository() )->create(
+			array(
+				'channel_public_id'    => $destination['channel']->public_id,
+				'connection_public_id' => $destination['connection']->public_id,
+				'decision_public_id'   => $decision->public_id,
+				'delivery_mode'        => 'live',
+				'payload_preview'      => array(
+					'adapter_encoding_version'  => 2,
+					'bound_capability_hash'     => DeliveryCapability::hash( $destination['channel']->capabilities ),
+					'capability_schema_version' => 2,
+					'canonical_url'             => 'https://example.test/post',
+					'final_encoded_text'        => $final_text,
+					'final_encoded_text_length' => strlen( $final_text ),
+					'media_snapshot'            => array(
+						'items'          => array(),
+						'mode'           => 'none',
+						'schema_version' => 1,
+					),
+					'message'                   => 'Hello from fixture',
+					'payload_schema_version'    => 2,
+					'schedule_slot'             => 'immediate',
+				),
+				'provider'             => 'fixture',
+				'remote_channel_id'    => $destination['channel']->remote_channel_id,
+				'state'                => 'proposed',
+			)
+		);
+	}
+
+	/**
 	 * Create an enabled destination.
 	 *
 	 * @return array{connection:ConnectionRecord,channel:ChannelRecord}
@@ -270,6 +352,34 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 		$connection = $connections->complete_sync_success( $connection->public_id, $lease, 'acct_1', 'org_1', $account );
 		$connection = $connections->enable( $connection->public_id );
 		$channel    = $channels->create( $connection->public_id, 'buffer', 'remote-channel-1', 'mastodon', array( 'name' => 'Example Social' ), $this->channelCapabilities(), false, '2026-08-24 12:00:00', 'org_1', 'available' );
+		$channel    = $channels->set_enabled_if_current( $channel->public_id, true, $channel->updated_at->format( 'Y-m-d H:i:s' ) );
+
+		return array(
+			'channel'    => $channel,
+			'connection' => $connection,
+		);
+	}
+
+	/**
+	 * Create an enabled fixture-provider destination.
+	 *
+	 * @return array{connection:ConnectionRecord,channel:ChannelRecord}
+	 */
+	private function fixtureDestination(): array {
+		$connections = new ConnectionRepository();
+		$channels    = new ChannelRepository();
+		$envelope    = CanonicalJson::encode_object( array( 'fixture' => 'encrypted' ) );
+		$account     = $this->providerAccountDocument( 'fixture', 'acct_fixture', 'org_fixture' );
+		$connection  = $connections->create_with_credential( 'fixture', 'Fixture account', $envelope, hash( 'sha256', $envelope ) );
+		$connection  = $connections->store_verified_account( $connection->public_id, 'acct_fixture', $account );
+		$connection  = $connections->select_organization_unverified( $connection->public_id, 'org_fixture' );
+		$lease       = $connections->acquire_sync_lease( $connection->public_id );
+
+		self::assertNotNull( $lease );
+
+		$connection = $connections->complete_sync_success( $connection->public_id, $lease, 'acct_fixture', 'org_fixture', $account );
+		$connection = $connections->enable( $connection->public_id );
+		$channel    = $channels->create( $connection->public_id, 'fixture', 'chan_fixture', 'mastodon', array( 'name' => 'Fixture Social' ), $this->channelCapabilities(), false, '2026-08-24 12:00:00', 'org_fixture', 'available' );
 		$channel    = $channels->set_enabled_if_current( $channel->public_id, true, $channel->updated_at->format( 'Y-m-d H:i:s' ) );
 
 		return array(
@@ -487,18 +597,30 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	 * @return array<string,mixed>
 	 */
 	private function accountDocument(): array {
+		return $this->providerAccountDocument( 'buffer', 'acct_1', 'org_1' );
+	}
+
+	/**
+	 * Return a verified account document.
+	 *
+	 * @param string $provider Provider.
+	 * @param string $account_id Account ID.
+	 * @param string $organization_id Organization ID.
+	 * @return array<string,mixed>
+	 */
+	private function providerAccountDocument( string $provider, string $account_id, string $organization_id ): array {
 		return array(
 			'display_label'     => 'Owner',
 			'organizations'     => array(
 				array(
 					'channel_count'          => 1,
 					'display_label'          => 'Editorial',
-					'provider'               => 'buffer',
-					'remote_organization_id' => 'org_1',
+					'provider'               => $provider,
+					'remote_organization_id' => $organization_id,
 				),
 			),
-			'provider'          => 'buffer',
-			'remote_account_id' => 'acct_1',
+			'provider'          => $provider,
+			'remote_account_id' => $account_id,
 			'schema_version'    => 1,
 		);
 	}

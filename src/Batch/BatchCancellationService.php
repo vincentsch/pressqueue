@@ -16,6 +16,7 @@ use PressQueue\Security\Capabilities;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\Repository\BatchItemRepository;
 use PressQueue\Storage\Repository\BatchRepository;
+use PressQueue\Storage\StaleRecordException;
 use PressQueue\Storage\StorageValidator;
 use PressQueue\Storage\ValidationException;
 use Throwable;
@@ -58,13 +59,18 @@ final class BatchCancellationService {
 			return;
 		}
 
-		$this->batches->transition(
+		$cancelled = $this->batches->transition(
 			$batch->public_id,
 			$batch->lock_version,
 			array( 'previewed', 'confirming', 'queueing' ),
 			'cancelled',
 			array( 'completed_at' => StorageValidator::now() )
 		);
+
+		if ( null === $cancelled ) {
+			throw new StaleRecordException( 'Batch changed before cancellation completed.' );
+		}
+
 		$this->items->cancel_unqueued( $batch->public_id );
 
 		foreach ( $this->items->find_by_batch( $batch->public_id ) as $item ) {

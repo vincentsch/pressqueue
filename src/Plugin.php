@@ -18,6 +18,7 @@ use PressQueue\Storage\Database;
 use PressQueue\Storage\SchemaMigrator;
 use PressQueue\Storage\SchemaStatus;
 use PressQueue\Storage\SettingsRepository;
+use PressQueue\WpCli\CommandRegistrar;
 
 /**
  * Coordinates bootstrap and lifecycle extension points.
@@ -83,6 +84,7 @@ final class Plugin {
 		AdminScreens::register_hooks();
 		Capabilities::register_hooks();
 		ActionSchedulerQueue::register_hooks();
+		CommandRegistrar::register();
 
 		if ( Database::has_global_database() ) {
 			add_action( 'pressqueue_schema_upgrade', array( SchemaMigrator::class, 'migrate_current_site' ), 10, 1 );

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "source_date_utc": "2026-08-25",
+  "provider": "buffer",
+  "catalog_version": "2026-08-25.1",
+  "operation_names": [
+    "PressQueueAccount",
+    "PressQueueChannels",
+    "PressQueueCreatePost"
+  ],
+  "selected_graphql_fields": {
+    "PressQueueAccount": [
+      "account.id",
+      "account.email",
+      "account.name",
+      "account.organizations.id",
+      "account.organizations.name",
+      "account.organizations.channelCount"
+    ],
+    "PressQueueChannels": [
+      "channels.allowedActions",
+      "channels.displayName",
+      "channels.externalLink",
+      "channels.id",
+      "channels.isDisconnected",
+      "channels.isLocked",
+      "channels.isQueuePaused",
+      "channels.metadata.maxCharacters",
+      "channels.name",
+      "channels.organizationId",
+      "channels.service"
+    ],
+    "PressQueueCreatePost": [
+      "createPost.__typename",
+      "createPost.post.id"
+    ]
+  },
+  "source_urls": [
+    "https://developers.buffer.com/guides/posts-and-scheduling.html",
+    "https://developers.buffer.com/reference.html",
+    "https://developers.buffer.com/examples/create-image-post.html",
+    "https://developers.buffer.com/types/CreatePostInput.html",
+    "https://developers.buffer.com/types/AssetInput.html",
+    "https://developers.buffer.com/types/ImageAssetInput.html",
+    "https://developers.buffer.com/types/ImageMetadataInput.html",
+    "https://developers.buffer.com/types/MastodonMetadata.html"
+  ],
+  "local_fixture_hashes": {
+    "tests/unit/BufferDiscoveryProviderTest.php": "ba3c939fcc0dd147e22af0ba4a602f785b492af8b2044b5381f1ac345c387100",
+    "tests/unit/BufferDeliveryProviderTest.php": "8ad2c983cf90c3d67eb9850cf7d49a23e34fa13621ebb6fa9df0e53d2e3174ed",
+    "src/Provider/Buffer/BufferDiscoveryProvider.php": "99bb48d940742bb22ff33f0819c252a6e7d0604fdb6d8f67c46a238bcc827771",
+    "src/Provider/Buffer/BufferPostEncoder.php": "12d7a80766e7f353e7ed3702a6e540ce8c6f3bd70549df6d8e29b06bfeb6005a"
+  }
+}

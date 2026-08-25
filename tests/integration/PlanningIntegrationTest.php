@@ -9,14 +9,20 @@ declare(strict_types=1);
 
 namespace PressQueue\Tests\Integration;
 
+use PressQueue\Batch\BatchConfirmationService;
+use PressQueue\Batch\BatchPreviewService;
 use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Planning\EventCollector;
 use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\Planner;
+use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
+use PressQueue\Storage\Record\BatchRecord;
 use PressQueue\Storage\Record\RuleRecord;
+use PressQueue\Storage\Repository\BatchItemRepository;
+use PressQueue\Storage\Repository\BatchRepository;
 use PressQueue\Storage\Repository\ChannelRepository;
 use PressQueue\Storage\Repository\ConnectionRepository;
 use PressQueue\Storage\Repository\DecisionRepository;
@@ -25,6 +31,10 @@ use PressQueue\Storage\Schema;
 use PressQueue\Storage\SchemaMigrator;
 use PressQueue\Storage\SettingsRepository;
 use PressQueue\Storage\StaleRecordException;
+use PressQueue\Storage\ValidationException;
+use PressQueue\WpCli\BatchCommand;
+use PressQueue\WpCli\ExitCodes;
+use RuntimeException;
 use WP_UnitTestCase;
 
 /**
@@ -429,6 +439,137 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		$repository->mark_version_previewed( $loaded->public_id, $loaded->lock_version, $loaded->version );
 	}
 
+	public function test_batch_confirmation_scheduler_failure_leaves_recoverable_queueing_batch(): void {
+		$fixture   = $this->durableBulkPreview();
+		$batch     = $fixture['batch'];
+		$scheduler = new FailingBatchQueueScheduler();
+
+		$confirmed = ( new BatchConfirmationService( null, $scheduler ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+		$reloaded  = ( new BatchRepository() )->find_by_public_id( $batch->public_id );
+		$items     = ( new BatchItemRepository() )->find_by_batch( $batch->public_id );
+
+		self::assertSame( 1, $scheduler->calls );
+		self::assertSame( 'queueing', $confirmed->status );
+		self::assertNotNull( $reloaded );
+		self::assertSame( 'queueing', $reloaded->status );
+		self::assertSame( array( 'reserved' ), array_values( array_unique( array_column( $items, 'state' ) ) ) );
+	}
+
+	public function test_batch_confirmation_stale_batch_state_does_not_schedule_handoff(): void {
+		$fixture   = $this->durableBulkPreview();
+		$batch     = $fixture['batch'];
+		$scheduler = new CountingBatchQueueScheduler();
+		$stale     = ( new BatchRepository() )->transition( $batch->public_id, $batch->lock_version, array( 'previewed' ), 'cancelled' );
+
+		self::assertNotNull( $stale );
+
+		try {
+			( new BatchConfirmationService( null, $scheduler ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+			self::fail( 'Stale batch state must refuse confirmation.' );
+		} catch ( ValidationException $exception ) {
+			self::assertStringContainsString( 'confirmable', $exception->getMessage() );
+		}
+
+		self::assertSame( 0, $scheduler->calls );
+	}
+
+	public function test_batch_confirmation_stale_item_state_does_not_schedule_handoff(): void {
+		$fixture   = $this->durableBulkPreview();
+		$batch     = $fixture['batch'];
+		$scheduler = new CountingBatchQueueScheduler();
+		$items     = ( new BatchItemRepository() )->find_by_batch( $batch->public_id );
+
+		self::assertNotSame( array(), $items );
+		self::assertNotNull( ( new BatchItemRepository() )->reserve( $items[0] ) );
+
+		try {
+			( new BatchConfirmationService( null, $scheduler ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+			self::fail( 'Stale batch item state must refuse confirmation.' );
+		} catch ( ValidationException $exception ) {
+			self::assertStringContainsString( 'item', $exception->getMessage() );
+		}
+
+		self::assertSame( 0, $scheduler->calls );
+	}
+
+	public function test_cli_batch_preview_apply_reports_total_created_items_not_page_slice(): void {
+		$user_id = (int) self::factory()->user->create( array( 'role' => 'administrator' ) );
+		wp_set_current_user( $user_id );
+		Capabilities::grant_to_administrators( false );
+		$user = get_userdata( $user_id );
+		self::assertInstanceOf( \WP_User::class, $user );
+		$user->add_cap( Capabilities::OPERATE_BATCHES );
+
+		$destination            = $this->enabledDestination();
+		$rule_input             = $this->includeRuleInput( $destination['channel_public_id'] );
+		$rule_input['triggers'] = array( 'bulk' );
+		$this->createEnabledRule( $rule_input );
+		$first_post_id  = $this->publishedPost( 'First Batch Post' );
+		$second_post_id = $this->publishedPost( 'Second Batch Post' );
+
+		list( $status, $line ) = $this->captureCommand(
+			static function () use ( $first_post_id, $second_post_id ): int {
+				return ( new BatchCommand() )->preview(
+					array(),
+					array(
+						'apply'    => true,
+						'per-page' => 1,
+						'post-ids' => (string) $first_post_id . ',' . (string) $second_post_id,
+						'type'     => 'bulk',
+					)
+				);
+			}
+		);
+
+		self::assertSame( ExitCodes::SUCCESS, $status );
+		self::assertTrue( $line['data']['applied'] );
+		self::assertSame( 2, $line['data']['affected_counts']['batch_items'] );
+		self::assertCount( 1, $line['data']['items'] );
+		self::assertSame( 1, $this->rowCount( Schema::BATCHES ) );
+		self::assertSame( 2, $this->rowCount( Schema::BATCH_ITEMS ) );
+	}
+
+	/**
+	 * Create a durable queueable bulk preview.
+	 *
+	 * @return array{batch:BatchRecord,user_id:int}
+	 */
+	private function durableBulkPreview(): array {
+		$user_id = (int) self::factory()->user->create( array( 'role' => 'administrator' ) );
+		wp_set_current_user( $user_id );
+		Capabilities::grant_to_administrators( false );
+
+		$destination           = $this->enabledDestination();
+		$rule_input            = $this->includeRuleInput( $destination['channel_public_id'] );
+		$rule_input['triggers'] = array( 'bulk' );
+		$this->createEnabledRule( $rule_input );
+
+		$post_id = $this->publishedPost( 'Batch Post' );
+
+		return array(
+			'batch'   => ( new BatchPreviewService() )->preview(
+				'bulk',
+				array(
+					'post_ids'       => array( $post_id ),
+					'post_statuses'  => array( 'publish' ),
+					'post_types'     => array( 'post' ),
+					'schema_version' => 1,
+				),
+				array(
+					'candidate_limit'        => 20,
+					'destination_item_limit' => 100,
+					'schedule'               => array(
+						'mode'           => 'inherit',
+						'schema_version' => 1,
+					),
+					'schema_version'         => 1,
+				),
+				$user_id
+			),
+			'user_id' => $user_id,
+		);
+	}
+
 	/**
 	 * Run planning for a post and specific rules.
 	 *
@@ -443,6 +584,24 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		self::assertNotNull( $event );
 
 		return ( new Planner() )->plan_runtime( $event );
+	}
+
+	/**
+	 * Capture one JSON command response.
+	 *
+	 * @param callable():int $callback Callback.
+	 * @return array{0:int,1:array<string,mixed>}
+	 */
+	private function captureCommand( callable $callback ): array {
+		ob_start();
+		$status = $callback();
+		$output = ob_get_clean();
+
+		self::assertIsString( $output );
+		$decoded = json_decode( trim( $output ), true, 512, JSON_THROW_ON_ERROR );
+		self::assertIsArray( $decoded );
+
+		return array( $status, $decoded );
 	}
 
 	/**
@@ -808,5 +967,50 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 			get_role( 'administrator' )->remove_cap( $capability );
 			get_role( 'editor' )->remove_cap( $capability );
 		}
+	}
+}
+
+/**
+ * Scheduler double that records handoff attempts.
+ */
+class CountingBatchQueueScheduler extends ActionSchedulerQueue {
+	/**
+	 * Number of scheduling attempts.
+	 *
+	 * @var int
+	 */
+	public int $calls = 0;
+
+	/**
+	 * Schedule one batch handoff.
+	 *
+	 * @param string $batch_public_id Batch public ID.
+	 * @param string $preview_snapshot_hash Snapshot hash.
+	 * @return int
+	 */
+	public function schedule_batch_queue( string $batch_public_id, string $preview_snapshot_hash ): int {
+		unset( $batch_public_id, $preview_snapshot_hash );
+
+		++$this->calls;
+
+		return 123;
+	}
+}
+
+/**
+ * Scheduler double that fails after recording an attempt.
+ */
+final class FailingBatchQueueScheduler extends CountingBatchQueueScheduler {
+	/**
+	 * Schedule one batch handoff.
+	 *
+	 * @param string $batch_public_id Batch public ID.
+	 * @param string $preview_snapshot_hash Snapshot hash.
+	 * @return int
+	 */
+	public function schedule_batch_queue( string $batch_public_id, string $preview_snapshot_hash ): int {
+		parent::schedule_batch_queue( $batch_public_id, $preview_snapshot_hash );
+
+		throw new RuntimeException( 'Scheduler unavailable.' );
 	}
 }

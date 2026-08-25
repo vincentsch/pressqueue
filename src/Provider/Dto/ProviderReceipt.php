@@ -21,7 +21,7 @@ final class ProviderReceipt {
 	 *
 	 * @var array<string,mixed>
 	 */
-	private array $document;
+	private readonly array $document;
 
 	/**
 	 * Constructor.

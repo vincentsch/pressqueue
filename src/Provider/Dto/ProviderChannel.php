@@ -15,21 +15,21 @@ namespace PressQueue\Provider\Dto;
  * Represents one remote destination discovered from a provider.
  */
 final class ProviderChannel {
-	public string $provider;
-	public string $remote_organization_id;
-	public string $remote_channel_id;
-	public string $name;
-	public string $display_label;
-	public string $service;
-	public ?string $external_link;
+	public readonly string $provider;
+	public readonly string $remote_organization_id;
+	public readonly string $remote_channel_id;
+	public readonly string $name;
+	public readonly string $display_label;
+	public readonly string $service;
+	public readonly ?string $external_link;
 	/** @var array<string,mixed> */
-	public array $raw_status_flags;
+	public readonly array $raw_status_flags;
 	/** @var array<int,string> */
-	public array $allowed_actions;
-	public string $availability;
+	public readonly array $allowed_actions;
+	public readonly string $availability;
 	/** @var array<string,mixed> */
-	public array $capability_document;
-	public ?string $unavailable_reason;
+	public readonly array $capability_document;
+	public readonly ?string $unavailable_reason;
 
 	/**
 	 * Constructor.

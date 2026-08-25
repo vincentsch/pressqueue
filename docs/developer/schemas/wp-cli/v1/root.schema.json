@@ -1,0 +1,521 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pressqueue.local/schemas/wp-cli/v1/root.schema.json",
+  "title": "PressQueue WP-CLI shared response definitions",
+  "type": "object",
+  "$defs": {
+    "public_id": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339_utc": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "pagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "per_page", "total_items", "total_pages"],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "per_page": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "total_items": { "type": "integer", "minimum": 0 },
+        "total_pages": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "field_error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "code", "message"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "status", "field_errors"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_arguments",
+            "malformed_json",
+            "schema_validation_failed",
+            "not_authenticated",
+            "not_authorized",
+            "not_found",
+            "stale_state",
+            "conflict",
+            "policy_refused",
+            "runtime_disabled",
+            "internal_error",
+            "storage_failure"
+          ]
+        },
+        "message": { "type": "string", "minLength": 1 },
+        "status": { "type": "integer", "enum": [2, 3, 4, 5] },
+        "field_errors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/field_error" }
+        }
+      }
+    },
+    "success_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "command", "data", "pagination"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "data": { "type": "object" },
+        "pagination": {
+          "oneOf": [
+            { "$ref": "#/$defs/pagination" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "error_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "command", "error"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "error": { "$ref": "#/$defs/error" }
+      }
+    },
+    "provider_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authentication_modes",
+        "label",
+        "provider_key",
+        "supports_delivery",
+        "supports_discovery"
+      ],
+      "properties": {
+        "authentication_modes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "provider_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "supports_delivery": { "type": "boolean" },
+        "supports_discovery": { "type": "boolean" }
+      }
+    },
+    "status": {
+      "type": "object",
+      "required": [
+        "capabilities",
+        "plugin_version",
+        "providers",
+        "queue",
+        "retention",
+        "runtime_disabled",
+        "schema_version",
+        "settings",
+        "storage"
+      ],
+      "properties": {
+        "capabilities": { "type": "object" },
+        "plugin_version": { "type": ["string", "null"] },
+        "providers": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/provider_summary" }
+        },
+        "queue": { "$ref": "#/$defs/queue_status" },
+        "retention": {
+          "oneOf": [
+            { "type": "object" },
+            { "type": "null" }
+          ]
+        },
+        "runtime_disabled": {
+          "oneOf": [
+            { "type": "boolean" },
+            { "type": "null" }
+          ]
+        },
+        "schema_version": { "const": 1 },
+        "settings": { "type": "object" },
+        "storage": { "type": "object" }
+      }
+    },
+    "queue_status": {
+      "type": "object",
+      "required": [
+        "batches",
+        "deliveries",
+        "recurring_sweep",
+        "schema_version",
+        "scheduler_ready"
+      ],
+      "properties": {
+        "batches": { "type": "object" },
+        "deliveries": { "type": "object" },
+        "recurring_sweep": { "type": "boolean" },
+        "schema_version": { "const": 1 },
+        "scheduler_ready": { "type": "boolean" }
+      }
+    },
+    "connection": {
+      "type": "object",
+      "required": [
+        "account",
+        "connection_status",
+        "enabled",
+        "has_credential",
+        "label",
+        "provider",
+        "public_id"
+      ],
+      "properties": {
+        "account": { "type": "object" },
+        "connection_status": { "type": "string" },
+        "created_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "credential_rotated_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "credential_verified_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "enabled": { "type": "boolean" },
+        "has_credential": { "type": "boolean" },
+        "label": { "type": "string" },
+        "last_error": { "oneOf": [{ "type": "object" }, { "type": "null" }] },
+        "last_sync_completed_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "last_sync_started_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "provider": { "type": "string" },
+        "public_id": { "$ref": "#/$defs/public_id" },
+        "remote_account_id": { "type": ["string", "null"] },
+        "remote_organization_id": { "type": ["string", "null"] },
+        "sync_lease_expires_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "sync_lease_owner_present": { "type": "boolean" },
+        "updated_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "verified_identity_hash": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] }
+      }
+    },
+    "channel": {
+      "type": "object",
+      "required": [
+        "availability",
+        "capabilities",
+        "connection_public_id",
+        "display",
+        "enabled",
+        "provider",
+        "public_id",
+        "remote_channel_id",
+        "remote_organization_id",
+        "service"
+      ],
+      "properties": {
+        "availability": { "type": "string" },
+        "availability_checked_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "capabilities": { "type": "object" },
+        "connection_public_id": { "$ref": "#/$defs/public_id" },
+        "created_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "display": { "type": "object" },
+        "enabled": { "type": "boolean" },
+        "last_seen_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "last_synced_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "provider": { "type": "string" },
+        "public_id": { "$ref": "#/$defs/public_id" },
+        "remote_channel_id": { "type": "string" },
+        "remote_organization_id": { "type": "string" },
+        "service": { "type": "string" },
+        "updated_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "document_hashes",
+        "effect",
+        "enabled",
+        "lock_version",
+        "name",
+        "priority",
+        "public_id",
+        "schedule_policy",
+        "version"
+      ],
+      "properties": {
+        "created_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "document_hashes": { "type": "object" },
+        "documents": { "type": "object" },
+        "effect": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "last_previewed_version": { "type": ["integer", "null"] },
+        "lock_version": { "type": "integer" },
+        "name": { "type": "string" },
+        "priority": { "type": "integer" },
+        "public_id": { "$ref": "#/$defs/public_id" },
+        "schedule_policy": { "type": "string" },
+        "source_template_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "source_template_version": { "type": ["integer", "null"] },
+        "updated_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "version": { "type": "integer" }
+      }
+    },
+    "preview": {
+      "type": "object",
+      "required": ["decisions", "deliveries", "durable", "event", "schema_version"],
+      "properties": {
+        "decisions": { "type": "array", "items": { "type": "object" } },
+        "deliveries": { "type": "array", "items": { "type": "object" } },
+        "durable": { "type": "boolean" },
+        "event": { "type": "object" },
+        "schema_version": { "const": 1 }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": [
+        "created_at_utc",
+        "decision_key",
+        "event_key",
+        "event_mode",
+        "post_id",
+        "public_id",
+        "result",
+        "snapshot_hash",
+        "trigger"
+      ],
+      "properties": {
+        "created_at_utc": { "$ref": "#/$defs/rfc3339_utc" },
+        "decision_key": { "$ref": "#/$defs/hash" },
+        "event_key": { "$ref": "#/$defs/hash" },
+        "event_mode": { "type": "string" },
+        "intent_occurrence_key": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "post_id": { "type": "integer", "minimum": 1 },
+        "post_status": { "type": "string" },
+        "post_type": { "type": "string" },
+        "public_id": { "$ref": "#/$defs/public_id" },
+        "reasons": { "type": "array" },
+        "result": { "type": "string" },
+        "revision_fingerprint": { "$ref": "#/$defs/hash" },
+        "rule_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "rule_version": { "type": ["integer", "null"] },
+        "scope_public_id": { "type": ["string", "null"] },
+        "scope_type": { "type": "string" },
+        "snapshot_hash": { "$ref": "#/$defs/hash" },
+        "trigger": { "type": "string" }
+      }
+    },
+    "delivery_event": {
+      "type": "object",
+      "required": [
+        "actor_type",
+        "created_at_utc",
+        "delivery_public_id",
+        "event_public_id",
+        "event_type"
+      ],
+      "properties": {
+        "action_id": { "type": ["integer", "null"] },
+        "actor_type": { "type": "string" },
+        "attempt_number": { "type": ["integer", "null"] },
+        "classification": { "type": ["string", "null"] },
+        "created_at_utc": { "$ref": "#/$defs/rfc3339_utc" },
+        "delivery_public_id": { "$ref": "#/$defs/public_id" },
+        "event_public_id": { "$ref": "#/$defs/public_id" },
+        "event_type": { "type": "string" },
+        "from_state": { "type": ["string", "null"] },
+        "provider_result": { "type": ["string", "null"] },
+        "retry_safety": { "type": ["string", "null"] },
+        "to_state": { "type": ["string", "null"] }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "required": [
+        "channel_public_id",
+        "connection_public_id",
+        "decision_public_id",
+        "delivery_key",
+        "payload_summary",
+        "provider",
+        "public_id",
+        "state"
+      ],
+      "properties": {
+        "action_id": { "type": ["integer", "null"] },
+        "adapter_encoding_version": { "type": "integer" },
+        "automatic_attempt_count": { "type": "integer" },
+        "bound_capability_catalog_version": { "type": ["string", "null"] },
+        "bound_capability_hash": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "bound_capability_schema_version": { "type": ["integer", "null"] },
+        "bound_channel_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "bound_connection_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "bound_provider": { "type": ["string", "null"] },
+        "channel_public_id": { "$ref": "#/$defs/public_id" },
+        "connection_public_id": { "$ref": "#/$defs/public_id" },
+        "created_at_utc": { "$ref": "#/$defs/rfc3339_utc" },
+        "decision_public_id": { "$ref": "#/$defs/public_id" },
+        "delivery_key": { "$ref": "#/$defs/hash" },
+        "delivery_mode": { "type": "string" },
+        "error_class": { "type": ["string", "null"] },
+        "error_detail": { "type": ["object", "null"] },
+        "event_key": { "$ref": "#/$defs/hash" },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/delivery_event" } },
+        "intent_occurrence_key": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "last_attempt_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "media_identity_hash": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "next_attempt_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "payload_hash": { "$ref": "#/$defs/hash" },
+        "payload_schema_version": { "type": "integer" },
+        "payload_summary": { "type": "object" },
+        "provider": { "type": "string" },
+        "provider_result": { "type": ["string", "null"] },
+        "public_id": { "$ref": "#/$defs/public_id" },
+        "queued_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "receipt": { "type": ["object", "null"] },
+        "reconciliation_note": { "type": ["string", "null"] },
+        "reconciliation_status": { "type": "string" },
+        "reconciled_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "remote_channel_id": { "type": "string" },
+        "remote_id": { "type": ["string", "null"] },
+        "remote_receipt_key": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "retry_safety": { "type": "string" },
+        "rule_public_id": { "$ref": "#/$defs/public_id" },
+        "rule_version": { "type": "integer" },
+        "schedule_slot": { "type": "string" },
+        "schedule_timezone": { "type": ["string", "null"] },
+        "scheduled_for_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "state": { "type": "string" },
+        "state_changed_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "updated_at_utc": { "$ref": "#/$defs/rfc3339_utc" }
+      }
+    },
+    "batch_item": {
+      "type": "object",
+      "required": ["batch_public_id", "item_key", "position", "post_id", "public_id", "state"],
+      "properties": {
+        "batch_public_id": { "$ref": "#/$defs/public_id" },
+        "channel_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "created_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "decision_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "delivery_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "duplicate_of_delivery_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "inclusion_rule_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "inclusion_rule_version": { "type": ["integer", "null"] },
+        "intent_occurrence_key": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "item_key": { "$ref": "#/$defs/hash" },
+        "lock_version": { "type": "integer" },
+        "position": { "type": "integer", "minimum": 0 },
+        "post_id": { "type": "integer", "minimum": 1 },
+        "public_id": { "$ref": "#/$defs/public_id" },
+        "reason": { "type": ["object", "array", "null"] },
+        "scheduled_for_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "semantic_preview_hash": { "$ref": "#/$defs/hash" },
+        "state": { "type": "string" },
+        "updated_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] }
+      }
+    },
+    "batch": {
+      "type": "object",
+      "required": [
+        "batch_limits",
+        "batch_type",
+        "filters",
+        "items",
+        "preview_summary",
+        "public_id",
+        "status"
+      ],
+      "properties": {
+        "batch_limits": { "type": "object" },
+        "batch_type": { "type": "string" },
+        "completed_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "confirmed_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "confirmed_by": { "type": ["integer", "null"] },
+        "created_at_utc": { "$ref": "#/$defs/rfc3339_utc" },
+        "created_by": { "type": "integer" },
+        "filters": { "type": "object" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/batch_item" } },
+        "lock_version": { "type": "integer" },
+        "preview_expires_at_utc": { "$ref": "#/$defs/rfc3339_utc" },
+        "preview_snapshot_hash": { "$ref": "#/$defs/hash" },
+        "preview_summary": { "type": "object" },
+        "public_id": { "$ref": "#/$defs/public_id" },
+        "started_at_utc": { "oneOf": [{ "$ref": "#/$defs/rfc3339_utc" }, { "type": "null" }] },
+        "status": { "type": "string" },
+        "updated_at_utc": { "$ref": "#/$defs/rfc3339_utc" }
+      }
+    },
+    "mutation_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applied",
+        "would_mutate",
+        "blocked_reasons",
+        "record_public_id",
+        "old_state",
+        "new_state",
+        "event_public_id",
+        "scheduled_action_id"
+      ],
+      "properties": {
+        "applied": { "type": "boolean" },
+        "would_mutate": { "type": "boolean" },
+        "blocked_reasons": { "type": "array", "items": { "type": "string" } },
+        "record_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "old_state": { "type": ["string", "null"] },
+        "new_state": { "type": ["string", "null"] },
+        "event_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "scheduled_action_id": { "type": ["integer", "null"] }
+      }
+    },
+    "batch_mutation_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "affected_counts",
+        "applied",
+        "batch_public_id",
+        "blocked_reasons",
+        "items",
+        "preview_summary",
+        "preview_snapshot_hash",
+        "scheduled_action_ids",
+        "would_mutate"
+      ],
+      "properties": {
+        "affected_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["batch_items", "batches", "deliveries", "delivery_events", "scheduled_actions"],
+          "properties": {
+            "batch_items": { "type": "integer", "minimum": 0 },
+            "batches": { "type": "integer", "minimum": 0 },
+            "deliveries": { "type": "integer", "minimum": 0 },
+            "delivery_events": { "type": "integer", "minimum": 0 },
+            "scheduled_actions": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "applied": { "type": "boolean" },
+        "batch_public_id": { "oneOf": [{ "$ref": "#/$defs/public_id" }, { "type": "null" }] },
+        "blocked_reasons": { "type": "array", "items": { "type": "string" } },
+        "items": { "type": "array", "maxItems": 100, "items": { "type": "object" } },
+        "preview_summary": { "oneOf": [{ "type": "object" }, { "type": "null" }] },
+        "preview_snapshot_hash": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "scheduled_action_ids": { "type": "array", "items": { "type": "integer" } },
+        "would_mutate": { "type": "boolean" }
+      }
+    }
+  }
+}

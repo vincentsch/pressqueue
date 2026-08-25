@@ -17,6 +17,41 @@ if ( ! defined( 'DAY_IN_SECONDS' ) ) {
 	define( 'DAY_IN_SECONDS', 86400 );
 }
 
+if ( ! class_exists( 'wpdb' ) ) {
+	/**
+	 * Minimal database base class for unit-test doubles.
+	 */
+	class wpdb {
+		/**
+		 * Table prefix.
+		 *
+		 * @var string
+		 */
+		public string $prefix = 'wp_';
+
+		/**
+		 * Options table.
+		 *
+		 * @var string
+		 */
+		public string $options = 'wp_options';
+
+		/**
+		 * Last error.
+		 *
+		 * @var string
+		 */
+		public string $last_error = '';
+
+		/**
+		 * Insert ID.
+		 *
+		 * @var int
+		 */
+		public int $insert_id = 0;
+	}
+}
+
 $GLOBALS['wp_version']                          = $GLOBALS['wp_version'] ?? '6.8.8';
 $GLOBALS['pressqueue_test_actions']             = array();
 $GLOBALS['pressqueue_test_hooks']               = array();
@@ -29,6 +64,7 @@ $GLOBALS['pressqueue_test_options']             = array();
 $GLOBALS['pressqueue_test_option_autoloads']    = array();
 $GLOBALS['pressqueue_test_roles']               = array();
 $GLOBALS['pressqueue_test_current_user_caps']   = array();
+$GLOBALS['pressqueue_test_current_user_id']     = 1;
 $GLOBALS['pressqueue_test_valid_nonces']        = array();
 $GLOBALS['pressqueue_test_as_next_action_id']   = 1000;
 $GLOBALS['pressqueue_test_as_supports']         = array();
@@ -43,6 +79,9 @@ $GLOBALS['pressqueue_test_registered_meta']     = array();
 $GLOBALS['pressqueue_test_rest_routes']         = array();
 $GLOBALS['pressqueue_test_meta_boxes']          = array();
 $GLOBALS['pressqueue_test_logged_in']           = true;
+$GLOBALS['pressqueue_test_wp_cli_commands']     = array();
+$GLOBALS['pressqueue_test_wp_cli_halt_status']  = null;
+$GLOBALS['pressqueue_test_wp_cli_lines']        = array();
 
 /**
  * Reset test hook state.
@@ -62,6 +101,7 @@ function pressqueue_test_reset_wordpress_stubs(): void {
 		'editor'        => new PressQueue_Test_Role(),
 	);
 	$GLOBALS['pressqueue_test_current_user_caps']   = array();
+	$GLOBALS['pressqueue_test_current_user_id']     = 1;
 	$GLOBALS['pressqueue_test_valid_nonces']        = array();
 	$GLOBALS['pressqueue_test_as_next_action_id']   = 1000;
 	$GLOBALS['pressqueue_test_as_supports']         = array();
@@ -77,6 +117,9 @@ function pressqueue_test_reset_wordpress_stubs(): void {
 	$GLOBALS['pressqueue_test_meta_boxes']          = array();
 	$GLOBALS['pressqueue_test_logged_in']           = true;
 	$GLOBALS['pressqueue_runtime_notice']           = null;
+	$GLOBALS['pressqueue_test_wp_cli_commands']     = array();
+	$GLOBALS['pressqueue_test_wp_cli_halt_status']  = null;
+	$GLOBALS['pressqueue_test_wp_cli_lines']        = array();
 	$GLOBALS['wp_version']                          = '6.8.8';
 }
 
@@ -105,6 +148,34 @@ function add_action( $hook_name, $callback, $priority = 10, $accepted_args = 1 )
  */
 function add_filter( $hook_name, $callback, $priority = 10, $accepted_args = 1 ): void {
 	add_action( $hook_name, $callback, $priority, $accepted_args );
+}
+
+/**
+ * Run filter callbacks.
+ *
+ * @param string $hook_name Hook name.
+ * @param mixed  $value Initial value.
+ * @param mixed  ...$args Additional arguments.
+ * @return mixed
+ */
+function apply_filters( $hook_name, $value, ...$args ) {
+	if ( empty( $GLOBALS['pressqueue_test_hooks'][ $hook_name ] ) ) {
+		return $value;
+	}
+
+	ksort( $GLOBALS['pressqueue_test_hooks'][ $hook_name ] );
+
+	foreach ( $GLOBALS['pressqueue_test_hooks'][ $hook_name ] as $callbacks ) {
+		foreach ( $callbacks as $registered ) {
+			$callback_args = array_merge( array( $value ), $args );
+			$value         = call_user_func_array(
+				$registered['callback'],
+				array_slice( $callback_args, 0, $registered['accepted_args'] )
+			);
+		}
+	}
+
+	return $value;
 }
 
 /**
@@ -313,6 +384,15 @@ function is_user_logged_in(): bool {
 }
 
 /**
+ * Return the current test user ID.
+ *
+ * @return int
+ */
+function get_current_user_id(): int {
+	return (int) $GLOBALS['pressqueue_test_current_user_id'];
+}
+
+/**
  * Check a test nonce for administrator mutations.
  *
  * @param int|string $action Nonce action.
@@ -433,6 +513,18 @@ function load_plugin_textdomain( $domain, $deprecated = false, $path = '' ): boo
 	);
 
 	return true;
+}
+
+/**
+ * Encode JSON like WordPress.
+ *
+ * @param mixed $value Value.
+ * @param int   $flags JSON flags.
+ * @param int   $depth JSON depth.
+ * @return string|false
+ */
+function wp_json_encode( $value, $flags = 0, $depth = 512 ) {
+	return json_encode( $value, $flags, $depth );
 }
 
 /**
@@ -1126,6 +1218,17 @@ function is_wp_error( $thing ): bool {
 }
 
 /**
+ * Check current action state.
+ *
+ * @param string|null $hook_name Hook name.
+ * @return bool
+ */
+function doing_action( $hook_name = null ): bool {
+	unset( $hook_name );
+	return false;
+}
+
+/**
  * Action Scheduler feature support stub.
  *
  * @param string $feature Feature name.
@@ -1258,4 +1361,39 @@ function as_unschedule_all_actions( $hook = '', $args = array(), $group = '' ): 
 			}
 		)
 	);
+}
+
+if ( ! class_exists( 'WP_CLI' ) ) {
+	/**
+	 * Minimal WP-CLI class stub.
+	 */
+	class WP_CLI {
+		/**
+		 * Record a command registration.
+		 *
+		 * @param string $name Command name.
+		 * @param mixed  $callable Command callback.
+		 */
+		public static function add_command( $name, $callable ): void {
+			$GLOBALS['pressqueue_test_wp_cli_commands'][ (string) $name ] = $callable;
+		}
+
+		/**
+		 * Record a stdout line.
+		 *
+		 * @param string $line Line.
+		 */
+		public static function line( $line ): void {
+			$GLOBALS['pressqueue_test_wp_cli_lines'][] = (string) $line;
+		}
+
+		/**
+		 * Record a halt status.
+		 *
+		 * @param int $status Status.
+		 */
+		public static function halt( $status ): void {
+			$GLOBALS['pressqueue_test_wp_cli_halt_status'] = (int) $status;
+		}
+	}
 }

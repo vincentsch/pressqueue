@@ -19,7 +19,7 @@ use PressQueue\Provider\Dto\ProviderReceipt;
 use PressQueue\Provider\ProviderException;
 
 /**
- * Submits text-only immediate Buffer posts.
+ * Submits scheduled or immediate Buffer deliveries with supported media.
  */
 final class BufferDeliveryProvider implements DeliveryProvider {
 	private const ENDPOINT           = 'https://api.buffer.com';

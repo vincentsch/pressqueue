@@ -23,6 +23,20 @@ final class Database {
 	private $wpdb;
 
 	/**
+	 * Active transaction depth.
+	 *
+	 * @var int
+	 */
+	private int $transaction_depth = 0;
+
+	/**
+	 * After-commit callbacks keyed by transaction depth.
+	 *
+	 * @var array<int,array<int,callable>>
+	 */
+	private array $after_commit_callbacks = array();
+
+	/**
 	 * Constructor.
 	 *
 	 * @param \wpdb $wpdb WordPress database object.
@@ -271,16 +285,46 @@ final class Database {
 	 */
 	public function transaction( callable $callback, array $table_suffixes = array() ) {
 		$this->assert_transaction_capable_tables( $table_suffixes );
-		$this->query( 'START TRANSACTION' );
+		$depth = $this->transaction_depth + 1;
+
+		if ( 1 === $depth ) {
+			$this->query( 'START TRANSACTION' );
+		} else {
+			$this->query( 'SAVEPOINT pressqueue_sp_' . $depth );
+		}
+
+		$this->transaction_depth = $depth;
 
 		try {
 			$result = $callback();
-			$this->query( 'COMMIT' );
+
+			if ( 1 === $depth ) {
+				$this->query( 'COMMIT' );
+				$callbacks                    = $this->after_commit_callbacks[1] ?? array();
+				$this->after_commit_callbacks = array();
+				$this->transaction_depth      = 0;
+				$this->dispatch_after_commit_callbacks( $callbacks );
+			} else {
+				$this->query( 'RELEASE SAVEPOINT pressqueue_sp_' . $depth );
+				$callbacks = $this->after_commit_callbacks[ $depth ] ?? array();
+				unset( $this->after_commit_callbacks[ $depth ] );
+				$this->after_commit_callbacks[ $depth - 1 ] = array_merge( $this->after_commit_callbacks[ $depth - 1 ] ?? array(), $callbacks );
+				$this->transaction_depth                    = $depth - 1;
+			}
 
 			return $result;
 		} catch ( Throwable $throwable ) {
 			try {
-				$this->query( 'ROLLBACK' );
+				if ( 1 === $depth ) {
+					$this->query( 'ROLLBACK' );
+					$this->after_commit_callbacks = array();
+					$this->transaction_depth      = 0;
+				} else {
+					$this->query( 'ROLLBACK TO SAVEPOINT pressqueue_sp_' . $depth );
+					$this->query( 'RELEASE SAVEPOINT pressqueue_sp_' . $depth );
+					unset( $this->after_commit_callbacks[ $depth ] );
+					$this->transaction_depth = $depth - 1;
+				}
 			} catch ( Throwable $rollback_failure ) {
 				unset( $rollback_failure );
 
@@ -290,6 +334,20 @@ final class Database {
 
 			throw $throwable;
 		}
+	}
+
+	/**
+	 * Queue work to run only after the outermost successful commit.
+	 *
+	 * @param callable $callback Callback.
+	 */
+	public function after_commit( callable $callback ): void {
+		if ( 0 === $this->transaction_depth ) {
+			$this->dispatch_after_commit_callbacks( array( $callback ) );
+			return;
+		}
+
+		$this->after_commit_callbacks[ $this->transaction_depth ][] = $callback;
 	}
 
 	/**
@@ -417,6 +475,21 @@ final class Database {
 	private function assert_identifier( string $identifier ): void {
 		if ( 1 !== preg_match( '/^[A-Za-z0-9_]+$/', $identifier ) ) {
 			throw new ValidationException( 'Database identifier contains invalid characters.' );
+		}
+	}
+
+	/**
+	 * Dispatch best-effort after-commit callbacks.
+	 *
+	 * @param array<int,callable> $callbacks Callbacks.
+	 */
+	private function dispatch_after_commit_callbacks( array $callbacks ): void {
+		foreach ( $callbacks as $callback ) {
+			try {
+				call_user_func( $callback );
+			} catch ( Throwable $throwable ) {
+				unset( $throwable );
+			}
 		}
 	}
 }

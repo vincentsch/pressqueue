@@ -18,22 +18,22 @@ use PressQueue\Storage\StorageEnums;
  * Normalized provider delivery result.
  */
 final class ProviderDeliveryResult {
-	public string $provider;
-	public string $connection_public_id;
-	public string $provider_result;
-	public string $retry_safety;
-	public ?string $remote_id;
-	public ?ProviderReceipt $receipt;
-	public ?DateTimeImmutable $retry_after_utc;
-	public ?string $error_class;
+	public readonly string $provider;
+	public readonly string $connection_public_id;
+	public readonly string $provider_result;
+	public readonly string $retry_safety;
+	public readonly ?string $remote_id;
+	public readonly ?ProviderReceipt $receipt;
+	public readonly ?DateTimeImmutable $retry_after_utc;
+	public readonly ?string $error_class;
 	/** @var array<string,mixed>|null */
-	public ?array $error_detail;
-	public bool $request_started;
-	public bool $request_may_have_reached_provider;
+	public readonly ?array $error_detail;
+	public readonly bool $request_started;
+	public readonly bool $request_may_have_reached_provider;
 	/** @var array<int,string> */
-	public array $provider_warnings;
+	public readonly array $provider_warnings;
 	/** @var array<string,mixed> */
-	public array $redacted_detail;
+	public readonly array $redacted_detail;
 
 	/**
 	 * Constructor.

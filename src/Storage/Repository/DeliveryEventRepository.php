@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue\Storage\Repository;
 
 use PressQueue\Storage\CanonicalJson;
+use PressQueue\Storage\ObservationPayloads;
 use PressQueue\Storage\PublicIdCollisionException;
 use PressQueue\Storage\PublicIds;
 use PressQueue\Storage\Record\DeliveryEventRecord;
@@ -79,6 +80,19 @@ final class DeliveryEventRepository extends AbstractRepository {
 				$record = $this->find_by_public_id( $public_id );
 				if ( null === $record ) {
 					throw new StorageException( 'Created delivery event could not be loaded.' );
+				}
+
+				if ( function_exists( 'do_action' ) ) {
+					$delivery_key = $this->database->get_var(
+						'SELECT delivery_key FROM `' . $this->deliveries_table() . '` WHERE public_id = %s',
+						array( $record->delivery_public_id )
+					);
+					$payload      = ObservationPayloads::delivery_event( $record, $delivery_key );
+					$this->database->after_commit(
+						static function () use ( $payload ): void {
+							do_action( 'pressqueue_delivery_event_recorded', $payload );
+						}
+					);
 				}
 
 				return $record;
