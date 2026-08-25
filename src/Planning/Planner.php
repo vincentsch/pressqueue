@@ -15,6 +15,7 @@ use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\HashKeys;
 use PressQueue\Storage\PolicySettings;
+use PressQueue\Storage\PublicIds;
 use PressQueue\Storage\Record\ChannelRecord;
 use PressQueue\Storage\Record\ConnectionRecord;
 use PressQueue\Storage\Record\DecisionRecord;
@@ -152,14 +153,45 @@ final class Planner {
 	}
 
 	/**
+	 * Run non-durable runtime planning for one destination channel.
+	 *
+	 * @param NormalizedEvent $event Event.
+	 * @param string          $channel_public_id Destination channel public ID.
+	 * @return PlanningResult
+	 */
+	public function preview_runtime_destination( NormalizedEvent $event, string $channel_public_id ): PlanningResult {
+		PublicIds::assert( $channel_public_id );
+
+		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), false, $channel_public_id );
+	}
+
+	/**
+	 * Run durable runtime planning for one destination channel.
+	 *
+	 * @param NormalizedEvent $event Event.
+	 * @param string          $channel_public_id Destination channel public ID.
+	 * @return PlanningResult
+	 */
+	public function plan_runtime_destination( NormalizedEvent $event, string $channel_public_id ): PlanningResult {
+		PublicIds::assert( $channel_public_id );
+
+		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), true, $channel_public_id );
+	}
+
+	/**
 	 * Run planning.
 	 *
 	 * @param NormalizedEvent       $event Event.
 	 * @param array<int,RuleRecord> $rules Rules to evaluate.
 	 * @param bool                  $durable Whether to write rows.
+	 * @param string|null           $only_channel_public_id Optional destination filter.
 	 * @return PlanningResult
 	 */
-	private function plan( NormalizedEvent $event, array $rules, bool $durable ): PlanningResult {
+	private function plan( NormalizedEvent $event, array $rules, bool $durable, ?string $only_channel_public_id = null ): PlanningResult {
+		if ( null !== $only_channel_public_id ) {
+			PublicIds::assert( $only_channel_public_id );
+		}
+
 		$settings   = $this->settings->read();
 		$decisions  = array();
 		$deliveries = array();
@@ -304,6 +336,10 @@ final class Planner {
 			}
 
 			foreach ( $destination_public_ids as $channel_public_id ) {
+				if ( null !== $only_channel_public_id && $channel_public_id !== $only_channel_public_id ) {
+					continue;
+				}
+
 				$blocked_destinations[ $channel_public_id ] = true;
 
 				$decisions[] = $this->decision_summary( $event, $settings, 'policy_error', 'channel', $channel_public_id, $entry['rule'], $entry['reasons'], null, $durable );
@@ -335,6 +371,10 @@ final class Planner {
 			}
 
 			foreach ( $destination_public_ids as $channel_public_id ) {
+				if ( null !== $only_channel_public_id && $channel_public_id !== $only_channel_public_id ) {
+					continue;
+				}
+
 				$matching_destination_ids[ $channel_public_id ] = true;
 
 				if ( null !== $override_public_ids && ! in_array( $channel_public_id, $override_public_ids, true ) ) {
@@ -429,6 +469,10 @@ final class Planner {
 
 		if ( null !== $override_public_ids ) {
 			foreach ( $override_public_ids as $requested_public_id ) {
+				if ( null !== $only_channel_public_id && $requested_public_id !== $only_channel_public_id ) {
+					continue;
+				}
+
 				if ( isset( $matching_destination_ids[ $requested_public_id ] ) ) {
 					continue;
 				}
@@ -939,22 +983,23 @@ final class Planner {
 		);
 
 		$input = array(
-			'author_id'            => $event->author_id,
-			'event_key'            => $event->event_key,
-			'event_mode'           => $event->mode,
-			'post_id'              => $event->post_id,
-			'post_status'          => $event->post_status,
-			'post_type'            => $event->post_type,
-			'reasons'              => $reasons,
-			'result'               => $result,
-			'revision_fingerprint' => $event->revision_fingerprint,
-			'rule_id'              => null === $rule ? null : $rule->id,
-			'rule_public_id'       => null === $rule ? null : $rule->public_id,
-			'rule_version'         => null === $rule ? null : $rule->version,
-			'scope_public_id'      => $scope_public_id,
-			'scope_type'           => $scope_type,
-			'snapshot'             => $snapshot,
-			'trigger'              => $event->trigger,
+			'author_id'             => $event->author_id,
+			'event_key'             => $event->event_key,
+			'event_mode'            => $event->mode,
+			'intent_occurrence_key' => $event->intent_occurrence_key,
+			'post_id'               => $event->post_id,
+			'post_status'           => $event->post_status,
+			'post_type'             => $event->post_type,
+			'reasons'               => $reasons,
+			'result'                => $result,
+			'revision_fingerprint'  => $event->revision_fingerprint,
+			'rule_id'               => null === $rule ? null : $rule->id,
+			'rule_public_id'        => null === $rule ? null : $rule->public_id,
+			'rule_version'          => null === $rule ? null : $rule->version,
+			'scope_public_id'       => $scope_public_id,
+			'scope_type'            => $scope_type,
+			'snapshot'              => $snapshot,
+			'trigger'               => $event->trigger,
 		);
 
 		$decision_key  = HashKeys::decision_key( $event->event_fields(), $event->event_key, $scope_type, $scope_public_id, null === $rule ? null : $rule->public_id, null === $rule ? null : $rule->version, $result );
@@ -1000,6 +1045,7 @@ final class Planner {
 		$schedule_slot     = isset( $payload_preview['schedule_slot'] ) && is_string( $payload_preview['schedule_slot'] ) ? $payload_preview['schedule_slot'] : 'immediate';
 		$scheduled_for_utc = isset( $payload_preview['scheduled_for_utc'] ) && is_string( $payload_preview['scheduled_for_utc'] ) ? $payload_preview['scheduled_for_utc'] : null;
 		$media_hash        = isset( $payload_preview['media_identity_hash'] ) && is_string( $payload_preview['media_identity_hash'] ) ? $payload_preview['media_identity_hash'] : null;
+		$key_occurrence    = $event->intent_occurrence_key;
 		$delivery_key      = HashKeys::delivery_key(
 			$settings->delivery_mode,
 			(string) $destination['provider'],
@@ -1013,10 +1059,11 @@ final class Planner {
 			(int) $decision['rule_version'],
 			$schedule_slot,
 			$scheduled_for_utc,
-			$media_hash
+			$media_hash,
+			$key_occurrence
 		);
 
-		$payload_hash_input    = array(
+		$payload_hash_input = array(
 			'canonical_url'          => $payload_preview['canonical_url'],
 			'channel_public_id'      => $destination['channel_public_id'],
 			'connection_public_id'   => $destination['connection_public_id'],
@@ -1033,6 +1080,9 @@ final class Planner {
 			'schedule_slot'          => $schedule_slot,
 			'trigger'                => $event->trigger,
 		);
+		if ( null !== $key_occurrence ) {
+			$payload_hash_input['intent_occurrence_key'] = $key_occurrence;
+		}
 		$intent_occurrence_key = CanonicalJson::hash(
 			'intent_occurrence',
 			array(
@@ -1054,7 +1104,7 @@ final class Planner {
 
 		$payload_preview['delivery_key']          = $delivery_key;
 		$payload_preview['event_key']             = $event->event_key;
-		$payload_preview['intent_occurrence_key'] = $intent_occurrence_key;
+		$payload_preview['intent_occurrence_key'] = $key_occurrence ?? $intent_occurrence_key;
 		$payload_preview['payload_hash']          = $payload_hash;
 		$payload_preview['payload_hash_input']    = $payload_hash_input;
 		$payload_preview['revision_fingerprint']  = $event->revision_fingerprint;
@@ -1063,15 +1113,16 @@ final class Planner {
 
 		if ( $durable && $decision['stored_record'] instanceof DecisionRecord ) {
 			$input = array(
-				'channel_public_id'    => $destination['channel_public_id'],
-				'connection_public_id' => $destination['connection_public_id'],
-				'decision_public_id'   => $decision['stored_record']->public_id,
-				'delivery_mode'        => $settings->delivery_mode,
-				'payload_preview'      => $payload_preview,
-				'provider'             => $destination['provider'],
-				'remote_channel_id'    => $destination['remote_channel_id'],
-				'schedule_slot'        => $schedule_slot,
-				'state'                => $settings->delivery_state,
+				'channel_public_id'     => $destination['channel_public_id'],
+				'connection_public_id'  => $destination['connection_public_id'],
+				'decision_public_id'    => $decision['stored_record']->public_id,
+				'delivery_mode'         => $settings->delivery_mode,
+				'intent_occurrence_key' => $key_occurrence,
+				'payload_preview'       => $payload_preview,
+				'provider'              => $destination['provider'],
+				'remote_channel_id'     => $destination['remote_channel_id'],
+				'schedule_slot'         => $schedule_slot,
+				'state'                 => $settings->delivery_state,
 			);
 
 			$record = $this->ensure_delivery( $input, $delivery_key, $payload_hash );

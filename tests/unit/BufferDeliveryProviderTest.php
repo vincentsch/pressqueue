@@ -235,6 +235,7 @@ final class BufferDeliveryProviderTest extends TestCase {
 			'01K8Z8D0PKH2N8J7S3K5A9C6DG',
 			str_repeat( 'b', 64 ),
 			str_repeat( 'a', 64 ),
+			null,
 			'live',
 			'buffer',
 			1,

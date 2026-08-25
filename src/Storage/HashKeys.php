@@ -74,6 +74,7 @@ final class HashKeys {
 	 * @param string      $schedule_slot Schedule slot.
 	 * @param string|null $scheduled_for_utc Explicit due time.
 	 * @param string|null $media_identity_hash Media identity hash.
+	 * @param string|null $intent_occurrence_key Optional batch occurrence key.
 	 * @return string
 	 */
 	public static function delivery_key(
@@ -89,7 +90,8 @@ final class HashKeys {
 		int $rule_version,
 		string $schedule_slot = 'immediate',
 		?string $scheduled_for_utc = null,
-		?string $media_identity_hash = null
+		?string $media_identity_hash = null,
+		?string $intent_occurrence_key = null
 	): string {
 		$data = array(
 			'channel_public_id'    => $channel_public_id,
@@ -105,6 +107,11 @@ final class HashKeys {
 			'trigger'              => $trigger,
 		);
 
+		if ( null !== $intent_occurrence_key ) {
+			StorageValidator::assert_hash( $intent_occurrence_key );
+			$data['intent_occurrence_key'] = $intent_occurrence_key;
+		}
+
 		if ( null !== $scheduled_for_utc ) {
 			$data['scheduled_for_utc'] = $scheduled_for_utc;
 		}
@@ -114,6 +121,103 @@ final class HashKeys {
 		}
 
 		return CanonicalJson::hash( 'delivery_key', $data );
+	}
+
+	/**
+	 * Calculate a batch item key.
+	 *
+	 * @param string      $batch_public_id Batch public ID.
+	 * @param int         $post_id WordPress post ID.
+	 * @param string|null $channel_public_id Destination channel public ID.
+	 * @param string      $semantic_preview_hash Stable item preview hash.
+	 * @return string
+	 */
+	public static function batch_item_key( string $batch_public_id, int $post_id, ?string $channel_public_id, string $semantic_preview_hash ): string {
+		PublicIds::assert( $batch_public_id );
+		if ( null !== $channel_public_id ) {
+			PublicIds::assert( $channel_public_id );
+		}
+		StorageValidator::assert_unsigned_id( 'Post ID', $post_id );
+		StorageValidator::assert_hash( $semantic_preview_hash );
+
+		return CanonicalJson::hash(
+			'batch_item_key',
+			array(
+				'batch_public_id'       => $batch_public_id,
+				'channel_public_id'     => $channel_public_id ?? 'global',
+				'post_id'               => $post_id,
+				'semantic_preview_hash' => $semantic_preview_hash,
+			)
+		);
+	}
+
+	/**
+	 * Calculate the stable occurrence key for one manual batch item.
+	 *
+	 * @param string      $mode Batch mode.
+	 * @param string      $batch_public_id Batch public ID.
+	 * @param string      $batch_item_public_id Batch item public ID.
+	 * @param int         $post_id WordPress post ID.
+	 * @param string|null $channel_public_id Destination channel public ID.
+	 * @param string      $semantic_hash Semantic preview hash or repost criteria hash.
+	 * @return string
+	 */
+	public static function intent_occurrence_key( string $mode, string $batch_public_id, string $batch_item_public_id, int $post_id, ?string $channel_public_id, string $semantic_hash ): string {
+		StorageEnums::assert_batch_type( $mode );
+		PublicIds::assert( $batch_public_id );
+		PublicIds::assert( $batch_item_public_id );
+		if ( null !== $channel_public_id ) {
+			PublicIds::assert( $channel_public_id );
+		}
+		StorageValidator::assert_unsigned_id( 'Post ID', $post_id );
+		StorageValidator::assert_hash( $semantic_hash );
+
+		$data = array(
+			'batch_item_public_id' => $batch_item_public_id,
+			'batch_public_id'      => $batch_public_id,
+			'channel_public_id'    => $channel_public_id ?? 'global',
+			'mode'                 => $mode,
+			'post_id'              => $post_id,
+		);
+
+		if ( 'bulk' === $mode ) {
+			$data['semantic_preview_hash'] = $semantic_hash;
+		} else {
+			$data['repost_criteria_hash'] = $semantic_hash;
+		}
+
+		return CanonicalJson::hash( 'intent_occurrence', $data );
+	}
+
+	/**
+	 * Calculate the stable occurrence key for ordinary captured publishing.
+	 *
+	 * @param string $site_identifier Stable site identifier.
+	 * @param int    $post_id WordPress post ID.
+	 * @param string $trigger Runtime trigger.
+	 * @param string $semantic_occurrence_hash Captured semantic occurrence hash.
+	 * @return string
+	 */
+	public static function ordinary_intent_occurrence_key( string $site_identifier, int $post_id, string $trigger, string $semantic_occurrence_hash ): string {
+		if ( '' === trim( $site_identifier ) || strlen( $site_identifier ) > 191 ) {
+			throw new ValidationException( 'Site identifier is invalid.' );
+		}
+		if ( ! in_array( $trigger, array( 'first_publish', 'update', 'scheduled_publication' ), true ) ) {
+			throw new ValidationException( 'Ordinary occurrence trigger is unsupported.' );
+		}
+		StorageValidator::assert_unsigned_id( 'Post ID', $post_id );
+		StorageValidator::assert_hash( $semantic_occurrence_hash );
+
+		return CanonicalJson::hash(
+			'intent_occurrence',
+			array(
+				'mode'                     => 'ordinary',
+				'post_id'                  => $post_id,
+				'semantic_occurrence_hash' => $semantic_occurrence_hash,
+				'site_identifier'          => $site_identifier,
+				'trigger'                  => $trigger,
+			)
+		);
 	}
 
 	/**

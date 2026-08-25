@@ -9,9 +9,11 @@ declare(strict_types=1);
 
 namespace PressQueue\Scheduler;
 
+use PressQueue\Batch\BatchQueueService;
 use PressQueue\Delivery\DeliveryWorker;
 use PressQueue\Delivery\QueueSweep;
 use PressQueue\Storage\PublicIds;
+use PressQueue\Storage\StorageValidator;
 use PressQueue\Storage\StorageUnavailableException;
 
 /**
@@ -21,6 +23,7 @@ class ActionSchedulerQueue {
 	public const GROUP                  = 'pressqueue';
 	public const SWEEP_HOOK             = 'pressqueue_queue_sweep';
 	public const WORKER_HOOK            = 'pressqueue_deliver_delivery';
+	public const BATCH_QUEUE_HOOK       = 'pressqueue_process_batch_queue';
 	public const SWEEP_INTERVAL_SECONDS = 300;
 
 	/**
@@ -70,6 +73,14 @@ class ActionSchedulerQueue {
 			10,
 			1
 		);
+		add_action(
+			self::BATCH_QUEUE_HOOK,
+			static function ( string $batch_public_id, string $preview_snapshot_hash ): void {
+				( new BatchQueueService() )->process( $batch_public_id, $preview_snapshot_hash );
+			},
+			10,
+			2
+		);
 		add_action( 'action_scheduler_init', array( self::class, 'after_scheduler_init' ), 10, 0 );
 
 		self::register_recurring_repair_hook();
@@ -81,6 +92,7 @@ class ActionSchedulerQueue {
 	public static function after_scheduler_init(): void {
 		self::register_recurring_repair_hook();
 		self::ensure_recurring_sweep();
+		BatchQueueService::recover_queueing_batches();
 	}
 
 	/**
@@ -158,6 +170,63 @@ class ActionSchedulerQueue {
 		$this->assert_ready();
 
 		return false !== as_next_scheduled_action( self::WORKER_HOOK, array( $delivery_public_id ), self::GROUP );
+	}
+
+	/**
+	 * Schedule one batch queue handoff action.
+	 *
+	 * @param string $batch_public_id Batch public ID.
+	 * @param string $preview_snapshot_hash Preview snapshot hash.
+	 * @return int Action ID.
+	 */
+	public function schedule_batch_queue( string $batch_public_id, string $preview_snapshot_hash ): int {
+		PublicIds::assert( $batch_public_id );
+		StorageValidator::assert_hash( $preview_snapshot_hash );
+		$this->assert_ready();
+
+		$args      = array( $batch_public_id, $preview_snapshot_hash );
+		$action_id = as_schedule_single_action( time(), self::BATCH_QUEUE_HOOK, $args, self::GROUP, true );
+		if ( ! is_numeric( $action_id ) || (int) $action_id <= 0 ) {
+			throw new StorageUnavailableException( 'Action Scheduler did not create a batch queue action.' );
+		}
+
+		return (int) $action_id;
+	}
+
+	/**
+	 * Schedule the next batch queue handoff chunk.
+	 *
+	 * @param string $batch_public_id Batch public ID.
+	 * @param string $preview_snapshot_hash Preview snapshot hash.
+	 * @return int Action ID.
+	 */
+	public function schedule_batch_queue_continuation( string $batch_public_id, string $preview_snapshot_hash ): int {
+		PublicIds::assert( $batch_public_id );
+		StorageValidator::assert_hash( $preview_snapshot_hash );
+		$this->assert_ready();
+
+		$args      = array( $batch_public_id, $preview_snapshot_hash );
+		$action_id = as_schedule_single_action( time(), self::BATCH_QUEUE_HOOK, $args, self::GROUP, false );
+		if ( ! is_numeric( $action_id ) || (int) $action_id <= 0 ) {
+			throw new StorageUnavailableException( 'Action Scheduler did not create a batch queue action.' );
+		}
+
+		return (int) $action_id;
+	}
+
+	/**
+	 * Check whether a pending batch queue action exists.
+	 *
+	 * @param string $batch_public_id Batch public ID.
+	 * @param string $preview_snapshot_hash Preview snapshot hash.
+	 * @return bool
+	 */
+	public function has_batch_queue_action( string $batch_public_id, string $preview_snapshot_hash ): bool {
+		PublicIds::assert( $batch_public_id );
+		StorageValidator::assert_hash( $preview_snapshot_hash );
+		$this->assert_ready();
+
+		return false !== as_next_scheduled_action( self::BATCH_QUEUE_HOOK, array( $batch_public_id, $preview_snapshot_hash ), self::GROUP );
 	}
 
 	/**

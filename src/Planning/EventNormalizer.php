@@ -11,6 +11,7 @@ namespace PressQueue\Planning;
 
 use PressQueue\Editorial\PostControlAuthorization;
 use PressQueue\Editorial\PostControlMetadata;
+use PressQueue\Storage\HashKeys;
 use PressQueue\Storage\Record\RuleRecord;
 use PressQueue\Storage\StorageValidator;
 use PressQueue\Storage\ValidationException;
@@ -32,9 +33,10 @@ final class EventNormalizer {
 	 * @param string            $source Diagnostic source.
 	 * @param string            $trigger Trigger.
 	 * @param array<int,string> $metadata_allowlist Custom metadata allowlist.
+	 * @param string|null       $intent_occurrence_key Optional precomputed occurrence key.
 	 * @return NormalizedEvent|null
 	 */
-	public function from_post_id( int $post_id, string $mode, string $source, string $trigger, array $metadata_allowlist = array() ): ?NormalizedEvent {
+	public function from_post_id( int $post_id, string $mode, string $source, string $trigger, array $metadata_allowlist = array(), ?string $intent_occurrence_key = null ): ?NormalizedEvent {
 		if ( function_exists( 'wp_is_post_autosave' ) && wp_is_post_autosave( $post_id ) ) {
 			return null;
 		}
@@ -76,7 +78,7 @@ final class EventNormalizer {
 		$previous_trigger   = $this->previous_trigger_fingerprint( (int) $post->ID );
 		$previous_runtime   = $this->previous_runtime_fingerprint( (int) $post->ID );
 
-		return new NormalizedEvent(
+		$event = new NormalizedEvent(
 			$mode,
 			$source,
 			$trigger,
@@ -97,7 +99,37 @@ final class EventNormalizer {
 			$previous_runtime,
 			null,
 			$legacy_metadata,
-			$legacy_templates
+			$legacy_templates,
+			$intent_occurrence_key
+		);
+
+		if ( null !== $intent_occurrence_key || ! in_array( $trigger, array( 'first_publish', 'update', 'scheduled_publication' ), true ) ) {
+			return $event;
+		}
+
+		return new NormalizedEvent(
+			$mode,
+			$source,
+			$trigger,
+			(int) $post->ID,
+			(string) $post->post_type,
+			(string) $post->post_status,
+			(int) $post->post_author,
+			$canonical_url,
+			$this->normalize_datetime( (string) $post->post_date_gmt, (string) $post->post_date ),
+			$this->normalize_datetime( (string) $post->post_modified_gmt, (string) $post->post_modified ),
+			$terms,
+			$metadata,
+			$template_values,
+			$previous_trigger,
+			$event->revision_fingerprint,
+			$control_bundle,
+			$event->trigger_fingerprint,
+			$previous_runtime,
+			$event->legacy_runtime_fingerprint,
+			$legacy_metadata,
+			$legacy_templates,
+			HashKeys::ordinary_intent_occurrence_key( $this->site_identifier(), (int) $post->ID, $trigger, $event->trigger_fingerprint )
 		);
 	}
 
@@ -205,6 +237,26 @@ final class EventNormalizer {
 		sort( $allowlist, SORT_STRING );
 
 		return $allowlist;
+	}
+
+	/**
+	 * Return a stable local site identifier for ordinary occurrence identity.
+	 *
+	 * @return string
+	 */
+	private function site_identifier(): string {
+		if ( function_exists( 'get_current_blog_id' ) ) {
+			return 'blog:' . (string) get_current_blog_id();
+		}
+
+		if ( function_exists( 'home_url' ) ) {
+			$url = home_url( '/' );
+			if ( is_string( $url ) && '' !== $url ) {
+				return 'home:' . $url;
+			}
+		}
+
+		return 'single-site';
 	}
 
 	/**

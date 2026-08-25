@@ -13,7 +13,7 @@ namespace PressQueue\Storage;
  * Defines the current storage schema.
  */
 final class Schema {
-	public const TARGET_VERSION            = 4;
+	public const TARGET_VERSION            = 5;
 	public const VERSION_OPTION            = 'pressqueue_schema_version';
 	public const MIGRATION_LOCK_OPTION     = 'pressqueue_migration_lock';
 	public const MIGRATION_FAILED_OPTION   = 'pressqueue_migration_failed';
@@ -28,6 +28,7 @@ final class Schema {
 	public const MEDIA_POLICY_MAX_BYTES    = 32768;
 	public const MEDIA_SNAPSHOT_MAX_BYTES  = 65536;
 	public const PAYLOAD_PREVIEW_MAX_BYTES = 131072;
+	public const BATCH_JSON_MAX_BYTES      = 65536;
 
 	public const CONNECTIONS     = 'connections';
 	public const CHANNELS        = 'channels';
@@ -36,6 +37,8 @@ final class Schema {
 	public const DECISIONS       = 'decisions';
 	public const DELIVERIES      = 'deliveries';
 	public const DELIVERY_EVENTS = 'delivery_events';
+	public const BATCHES         = 'batches';
+	public const BATCH_ITEMS     = 'batch_items';
 
 	/**
 	 * Return all PressQueue table suffixes.
@@ -51,6 +54,8 @@ final class Schema {
 			self::DECISIONS,
 			self::DELIVERIES,
 			self::DELIVERY_EVENTS,
+			self::BATCHES,
+			self::BATCH_ITEMS,
 		);
 	}
 
@@ -69,6 +74,8 @@ final class Schema {
 		$decisions   = $database->table( self::DECISIONS );
 		$deliveries  = $database->table( self::DELIVERIES );
 		$events      = $database->table( self::DELIVERY_EVENTS );
+		$batches     = $database->table( self::BATCHES );
+		$batch_items = $database->table( self::BATCH_ITEMS );
 
 		return array(
 			"CREATE TABLE $connections (
@@ -182,6 +189,7 @@ final class Schema {
 				public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
 				event_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
 				decision_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				intent_occurrence_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
 				scope_type VARCHAR(16) NOT NULL,
 				scope_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL,
 				post_id BIGINT UNSIGNED NOT NULL,
@@ -203,6 +211,7 @@ final class Schema {
 				UNIQUE KEY public_id (public_id),
 				UNIQUE KEY decision_key (decision_key),
 				KEY event_key (event_key),
+				KEY intent_occurrence_key (intent_occurrence_key),
 				KEY post_id (post_id),
 				KEY scope (scope_type, scope_public_id),
 				KEY result (result),
@@ -217,6 +226,7 @@ final class Schema {
 				decision_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
 				event_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
 				delivery_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				intent_occurrence_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
 				delivery_mode VARCHAR(16) NOT NULL,
 				provider VARCHAR(64) NOT NULL,
 				connection_id BIGINT UNSIGNED NOT NULL,
@@ -273,6 +283,7 @@ final class Schema {
 				KEY decision_id (decision_id),
 				KEY decision_public_id (decision_public_id),
 				KEY event_key (event_key),
+				KEY intent_occurrence_key (intent_occurrence_key),
 				KEY connection_id (connection_id),
 				KEY connection_public_id (connection_public_id),
 				KEY channel_id (channel_id),
@@ -311,6 +322,64 @@ final class Schema {
 				KEY event_type (event_type),
 				KEY action_id (action_id),
 				KEY created_at (created_at)
+			) $collate;",
+			"CREATE TABLE $batches (
+				id BIGINT UNSIGNED AUTO_INCREMENT NOT NULL,
+				public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				batch_type VARCHAR(32) NOT NULL,
+				status VARCHAR(32) NOT NULL,
+				created_by BIGINT UNSIGNED NOT NULL,
+				confirmed_by BIGINT UNSIGNED NULL,
+				filters_json LONGTEXT NOT NULL,
+				preview_summary_json LONGTEXT NOT NULL,
+				preview_snapshot_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				batch_limits_json LONGTEXT NOT NULL,
+				preview_expires_at DATETIME NOT NULL,
+				started_at DATETIME NULL,
+				confirmed_at DATETIME NULL,
+				completed_at DATETIME NULL,
+				lock_version INT UNSIGNED NOT NULL DEFAULT 1,
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				PRIMARY KEY  (id),
+				UNIQUE KEY public_id (public_id),
+				KEY type_status (batch_type, status),
+				KEY created_by (created_by),
+				KEY confirmed_at (confirmed_at),
+				KEY preview_expires_at (preview_expires_at)
+			) $collate;",
+			"CREATE TABLE $batch_items (
+				id BIGINT UNSIGNED AUTO_INCREMENT NOT NULL,
+				public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				batch_id BIGINT UNSIGNED NOT NULL,
+				batch_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				item_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				intent_occurrence_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				position INT UNSIGNED NOT NULL,
+				post_id BIGINT UNSIGNED NOT NULL,
+				channel_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL,
+				state VARCHAR(32) NOT NULL,
+				semantic_preview_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				decision_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL,
+				delivery_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL,
+				duplicate_of_delivery_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL,
+				inclusion_rule_public_id CHAR(26) CHARACTER SET ascii COLLATE ascii_bin NULL,
+				inclusion_rule_version INT UNSIGNED NULL,
+				scheduled_for_utc DATETIME NULL,
+				preview_item_json LONGTEXT NOT NULL,
+				reason_json LONGTEXT NOT NULL,
+				lock_version INT UNSIGNED NOT NULL DEFAULT 1,
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				PRIMARY KEY  (id),
+				UNIQUE KEY public_id (public_id),
+				UNIQUE KEY item_key (item_key),
+				UNIQUE KEY intent_occurrence_key (intent_occurrence_key),
+				KEY batch_state (batch_public_id, state),
+				KEY batch_position (batch_public_id, position),
+				KEY post_channel (post_id, channel_public_id),
+				KEY delivery_public_id (delivery_public_id),
+				KEY scheduled_for_utc (scheduled_for_utc)
 			) $collate;",
 		);
 	}
@@ -446,39 +515,41 @@ final class Schema {
 			),
 			self::DECISIONS       => array(
 				'columns' => array(
-					'id'                   => self::column( 'bigint unsigned', false, null, 'auto_increment' ),
-					'public_id'            => self::ascii_column( 'char(26)' ),
-					'event_key'            => self::ascii_column( 'char(64)' ),
-					'decision_key'         => self::ascii_column( 'char(64)' ),
-					'scope_type'           => self::column( 'varchar(16)' ),
-					'scope_public_id'      => self::ascii_column( 'char(26)', true ),
-					'post_id'              => self::column( 'bigint unsigned' ),
-					'post_type'            => self::column( 'varchar(20)' ),
-					'post_status'          => self::column( 'varchar(20)' ),
-					'author_id'            => self::column( 'bigint unsigned' ),
-					'revision_fingerprint' => self::ascii_column( 'char(64)' ),
-					'trigger'              => self::column( 'varchar(32)' ),
-					'event_mode'           => self::column( 'varchar(16)' ),
-					'rule_id'              => self::column( 'bigint unsigned', true ),
-					'rule_public_id'       => self::ascii_column( 'char(26)', true ),
-					'rule_version'         => self::column( 'int unsigned', true ),
-					'result'               => self::column( 'varchar(32)' ),
-					'reasons_json'         => self::column( 'longtext' ),
-					'snapshot_json'        => self::column( 'longtext' ),
-					'snapshot_hash'        => self::ascii_column( 'char(64)' ),
-					'created_at'           => self::column( 'datetime' ),
+					'id'                    => self::column( 'bigint unsigned', false, null, 'auto_increment' ),
+					'public_id'             => self::ascii_column( 'char(26)' ),
+					'event_key'             => self::ascii_column( 'char(64)' ),
+					'decision_key'          => self::ascii_column( 'char(64)' ),
+					'intent_occurrence_key' => self::ascii_column( 'char(64)', true ),
+					'scope_type'            => self::column( 'varchar(16)' ),
+					'scope_public_id'       => self::ascii_column( 'char(26)', true ),
+					'post_id'               => self::column( 'bigint unsigned' ),
+					'post_type'             => self::column( 'varchar(20)' ),
+					'post_status'           => self::column( 'varchar(20)' ),
+					'author_id'             => self::column( 'bigint unsigned' ),
+					'revision_fingerprint'  => self::ascii_column( 'char(64)' ),
+					'trigger'               => self::column( 'varchar(32)' ),
+					'event_mode'            => self::column( 'varchar(16)' ),
+					'rule_id'               => self::column( 'bigint unsigned', true ),
+					'rule_public_id'        => self::ascii_column( 'char(26)', true ),
+					'rule_version'          => self::column( 'int unsigned', true ),
+					'result'                => self::column( 'varchar(32)' ),
+					'reasons_json'          => self::column( 'longtext' ),
+					'snapshot_json'         => self::column( 'longtext' ),
+					'snapshot_hash'         => self::ascii_column( 'char(64)' ),
+					'created_at'            => self::column( 'datetime' ),
 				),
 				'indexes' => array(
-					'PRIMARY'        => self::index( array( 'id' ), true ),
-					'public_id'      => self::index( array( 'public_id' ), true ),
-					'decision_key'   => self::index( array( 'decision_key' ), true ),
-					'event_key'      => self::index( array( 'event_key' ) ),
-					'post_id'        => self::index( array( 'post_id' ) ),
-					'scope'          => self::index( array( 'scope_type', 'scope_public_id' ) ),
-					'result'         => self::index( array( 'result' ) ),
-					'rule_id'        => self::index( array( 'rule_id' ) ),
-					'rule_public_id' => self::index( array( 'rule_public_id' ) ),
-					'created_at'     => self::index( array( 'created_at' ) ),
+					'PRIMARY'               => self::index( array( 'id' ), true ),
+					'public_id'             => self::index( array( 'public_id' ), true ),
+					'decision_key'          => self::index( array( 'decision_key' ), true ),
+					'event_key'             => self::index( array( 'event_key' ) ),
+					'intent_occurrence_key' => self::index( array( 'intent_occurrence_key' ) ),
+					'post_id'               => self::index( array( 'post_id' ) ),
+					'scope'                 => self::index( array( 'scope_type', 'scope_public_id' ) ),
+					'result'                => self::index( array( 'result' ) ),
+					'rule_id'               => self::index( array( 'rule_id' ) ),
+					'rule_public_id'        => self::index( array( 'rule_public_id' ) ),
+					'created_at'            => self::index( array( 'created_at' ) ),
 				),
 			),
 			self::DELIVERIES      => array(
@@ -489,6 +560,7 @@ final class Schema {
 					'decision_public_id'               => self::ascii_column( 'char(26)' ),
 					'event_key'                        => self::ascii_column( 'char(64)' ),
 					'delivery_key'                     => self::ascii_column( 'char(64)' ),
+					'intent_occurrence_key'            => self::ascii_column( 'char(64)', true ),
 					'delivery_mode'                    => self::column( 'varchar(16)' ),
 					'provider'                         => self::column( 'varchar(64)' ),
 					'connection_id'                    => self::column( 'bigint unsigned' ),
@@ -547,6 +619,7 @@ final class Schema {
 					'decision_id'           => self::index( array( 'decision_id' ) ),
 					'decision_public_id'    => self::index( array( 'decision_public_id' ) ),
 					'event_key'             => self::index( array( 'event_key' ) ),
+					'intent_occurrence_key' => self::index( array( 'intent_occurrence_key' ) ),
 					'connection_id'         => self::index( array( 'connection_id' ) ),
 					'connection_public_id'  => self::index( array( 'connection_public_id' ) ),
 					'channel_id'            => self::index( array( 'channel_id' ) ),
@@ -560,6 +633,72 @@ final class Schema {
 					'remote_receipt_key'    => self::index( array( 'remote_receipt_key' ), true ),
 					'reconciliation_status' => self::index( array( 'reconciliation_status' ) ),
 					'state_changed_id'      => self::index( array( 'state_changed_at', 'id' ) ),
+				),
+			),
+			self::BATCHES         => array(
+				'columns' => array(
+					'id'                    => self::column( 'bigint unsigned', false, null, 'auto_increment' ),
+					'public_id'             => self::ascii_column( 'char(26)' ),
+					'batch_type'            => self::column( 'varchar(32)' ),
+					'status'                => self::column( 'varchar(32)' ),
+					'created_by'            => self::column( 'bigint unsigned' ),
+					'confirmed_by'          => self::column( 'bigint unsigned', true ),
+					'filters_json'          => self::column( 'longtext' ),
+					'preview_summary_json'  => self::column( 'longtext' ),
+					'preview_snapshot_hash' => self::ascii_column( 'char(64)' ),
+					'batch_limits_json'     => self::column( 'longtext' ),
+					'preview_expires_at'    => self::column( 'datetime' ),
+					'started_at'            => self::column( 'datetime', true ),
+					'confirmed_at'          => self::column( 'datetime', true ),
+					'completed_at'          => self::column( 'datetime', true ),
+					'lock_version'          => self::column( 'int unsigned', false, '1' ),
+					'created_at'            => self::column( 'datetime' ),
+					'updated_at'            => self::column( 'datetime' ),
+				),
+				'indexes' => array(
+					'PRIMARY'            => self::index( array( 'id' ), true ),
+					'public_id'          => self::index( array( 'public_id' ), true ),
+					'type_status'        => self::index( array( 'batch_type', 'status' ) ),
+					'created_by'         => self::index( array( 'created_by' ) ),
+					'confirmed_at'       => self::index( array( 'confirmed_at' ) ),
+					'preview_expires_at' => self::index( array( 'preview_expires_at' ) ),
+				),
+			),
+			self::BATCH_ITEMS     => array(
+				'columns' => array(
+					'id'                              => self::column( 'bigint unsigned', false, null, 'auto_increment' ),
+					'public_id'                       => self::ascii_column( 'char(26)' ),
+					'batch_id'                        => self::column( 'bigint unsigned' ),
+					'batch_public_id'                 => self::ascii_column( 'char(26)' ),
+					'item_key'                        => self::ascii_column( 'char(64)' ),
+					'intent_occurrence_key'           => self::ascii_column( 'char(64)' ),
+					'position'                        => self::column( 'int unsigned' ),
+					'post_id'                         => self::column( 'bigint unsigned' ),
+					'channel_public_id'               => self::ascii_column( 'char(26)', true ),
+					'state'                           => self::column( 'varchar(32)' ),
+					'semantic_preview_hash'           => self::ascii_column( 'char(64)' ),
+					'decision_public_id'              => self::ascii_column( 'char(26)', true ),
+					'delivery_public_id'              => self::ascii_column( 'char(26)', true ),
+					'duplicate_of_delivery_public_id' => self::ascii_column( 'char(26)', true ),
+					'inclusion_rule_public_id'        => self::ascii_column( 'char(26)', true ),
+					'inclusion_rule_version'          => self::column( 'int unsigned', true ),
+					'scheduled_for_utc'               => self::column( 'datetime', true ),
+					'preview_item_json'               => self::column( 'longtext' ),
+					'reason_json'                     => self::column( 'longtext' ),
+					'lock_version'                    => self::column( 'int unsigned', false, '1' ),
+					'created_at'                      => self::column( 'datetime' ),
+					'updated_at'                      => self::column( 'datetime' ),
+				),
+				'indexes' => array(
+					'PRIMARY'               => self::index( array( 'id' ), true ),
+					'public_id'             => self::index( array( 'public_id' ), true ),
+					'item_key'              => self::index( array( 'item_key' ), true ),
+					'intent_occurrence_key' => self::index( array( 'intent_occurrence_key' ), true ),
+					'batch_state'           => self::index( array( 'batch_public_id', 'state' ) ),
+					'batch_position'        => self::index( array( 'batch_public_id', 'position' ) ),
+					'post_channel'          => self::index( array( 'post_id', 'channel_public_id' ) ),
+					'delivery_public_id'    => self::index( array( 'delivery_public_id' ) ),
+					'scheduled_for_utc'     => self::index( array( 'scheduled_for_utc' ) ),
 				),
 			),
 			self::DELIVERY_EVENTS => array(

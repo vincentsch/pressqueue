@@ -27,7 +27,7 @@ final class DeliveryQueryRepository {
 	public const DEFAULT_PAGE_SIZE = 50;
 	public const MAX_PAGE_SIZE     = 100;
 
-	private const DELIVERY_INDEX_HINT = 'USE INDEX (state_changed_id, connection_public_id, channel_public_id, remote_id, delivery_key, public_id)';
+	private const DELIVERY_INDEX_HINT = 'USE INDEX (state_changed_id, connection_public_id, channel_public_id, remote_id, delivery_key, intent_occurrence_key, public_id)';
 
 	/**
 	 * Database wrapper.
@@ -134,6 +134,14 @@ final class DeliveryQueryRepository {
 			$normalized['channel_public_id'] = $channel_public_id;
 		}
 
+		$intent_occurrence_key = $this->optional_string( $filters, 'intent_occurrence_key' );
+		if ( null !== $intent_occurrence_key ) {
+			StorageValidator::assert_hash( $intent_occurrence_key );
+			$clauses[]                           = 'intent_occurrence_key = %s';
+			$args[]                              = $intent_occurrence_key;
+			$normalized['intent_occurrence_key'] = $intent_occurrence_key;
+		}
+
 		$post_id = $this->optional_int( $filters, 'post_id' );
 		if ( null !== $post_id ) {
 			StorageValidator::assert_unsigned_id( 'Post ID', $post_id );
@@ -177,7 +185,8 @@ final class DeliveryQueryRepository {
 
 		$identifier = $this->optional_identifier( $filters );
 		if ( null !== $identifier ) {
-			$clauses[]                = '(public_id = %s OR delivery_key = %s OR (remote_id = %s AND BINARY remote_id = BINARY %s))';
+			$clauses[]                = '(public_id = %s OR delivery_key = %s OR intent_occurrence_key = %s OR (remote_id = %s AND BINARY remote_id = BINARY %s))';
+			$args[]                   = $identifier;
 			$args[]                   = $identifier;
 			$args[]                   = $identifier;
 			$args[]                   = $identifier;

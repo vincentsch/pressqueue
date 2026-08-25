@@ -34,12 +34,14 @@ final class PostControlAuthorizationTest extends TestCase {
 		$GLOBALS['pressqueue_test_posts'][42] = new WP_Post( array( 'ID' => 42 ) );
 	}
 
-	public function test_capability_schema_version_three_grants_administrators_only(): void {
+	public function test_capability_schema_version_grants_administrators_only(): void {
 		Capabilities::grant_to_administrators( false );
 
 		self::assertTrue( $GLOBALS['pressqueue_test_roles']['administrator']->has_cap( Capabilities::EDIT_POST_CONTROLS ) );
+		self::assertTrue( $GLOBALS['pressqueue_test_roles']['administrator']->has_cap( Capabilities::OPERATE_BATCHES ) );
 		self::assertFalse( $GLOBALS['pressqueue_test_roles']['editor']->has_cap( Capabilities::EDIT_POST_CONTROLS ) );
-		self::assertSame( 3, $GLOBALS['pressqueue_test_options'][ Capabilities::VERSION_OPTION ] );
+		self::assertFalse( $GLOBALS['pressqueue_test_roles']['editor']->has_cap( Capabilities::OPERATE_BATCHES ) );
+		self::assertSame( 4, $GLOBALS['pressqueue_test_options'][ Capabilities::VERSION_OPTION ] );
 	}
 
 	public function test_raw_control_meta_is_registered_outside_core_rest(): void {
@@ -63,7 +65,7 @@ final class PostControlAuthorizationTest extends TestCase {
 	}
 
 	public function test_malformed_put_body_returns_structured_bad_request(): void {
-		$GLOBALS['pressqueue_test_current_user_caps']['edit_post'] = true;
+		$GLOBALS['pressqueue_test_current_user_caps']['edit_post']                        = true;
 		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::EDIT_POST_CONTROLS ] = true;
 
 		$response = PostControlsController::handle_put_controls( new WP_REST_Request( array( 'post_id' => 42 ), array( 'not-an-object' ) ) );
@@ -76,7 +78,7 @@ final class PostControlAuthorizationTest extends TestCase {
 	}
 
 	public function test_malformed_preview_body_returns_structured_bad_request(): void {
-		$GLOBALS['pressqueue_test_current_user_caps']['edit_post'] = true;
+		$GLOBALS['pressqueue_test_current_user_caps']['edit_post']                        = true;
 		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::EDIT_POST_CONTROLS ] = true;
 
 		$response = PostPreviewController::handle_preview( new WP_REST_Request( array( 'post_id' => 42 ), array( 'not-an-object' ) ) );
@@ -102,7 +104,7 @@ final class PostControlAuthorizationTest extends TestCase {
 	}
 
 	public function test_public_or_internal_post_type_does_not_bypass_control_authorization(): void {
-		$GLOBALS['pressqueue_test_posts'][99] = new WP_Post(
+		$GLOBALS['pressqueue_test_posts'][99]                      = new WP_Post(
 			array(
 				'ID'        => 99,
 				'post_type' => 'internal',
@@ -114,14 +116,14 @@ final class PostControlAuthorizationTest extends TestCase {
 		self::assertFalse( PostControlAuthorization::is_supported_post( 99 ) );
 
 		$request = new WP_REST_Request( array( 'post_id' => 99 ) );
-		$error = PostControlsController::rest_permission_callback( $request );
+		$error   = PostControlsController::rest_permission_callback( $request );
 
 		self::assertInstanceOf( \WP_Error::class, $error );
 		self::assertSame( 'invalid_post_type', $error->get_error_code() );
 	}
 
 	public function test_missing_post_returns_not_found_before_control_facts_are_loaded(): void {
-		$GLOBALS['pressqueue_test_current_user_caps']['edit_post'] = true;
+		$GLOBALS['pressqueue_test_current_user_caps']['edit_post']                        = true;
 		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::EDIT_POST_CONTROLS ] = true;
 
 		$error = PostControlsController::rest_permission_callback( new WP_REST_Request( array( 'post_id' => 404 ) ) );

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue;
 
 use PressQueue\Admin\AdminScreens;
+use PressQueue\Batch\BatchQueueService;
 use PressQueue\Planning\EventCollector;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
@@ -87,6 +88,8 @@ final class Plugin {
 			add_action( 'pressqueue_schema_upgrade', array( SchemaMigrator::class, 'migrate_current_site' ), 10, 1 );
 			add_action( 'pressqueue_capability_registration', array( Capabilities::class, 'grant_to_administrators' ), 10, 1 );
 			add_action( 'admin_init', array( self::class, 'maybe_upgrade' ) );
+			add_action( 'admin_init', array( BatchQueueService::class, 'recover_queueing_batches' ) );
+			add_action( 'pressqueue_after_activation', array( BatchQueueService::class, 'recover_queueing_batches' ), 10, 0 );
 			add_action( 'admin_post_pressqueue_recover_migration_lock', array( SchemaMigrator::class, 'handle_lock_recovery' ) );
 		}
 	}

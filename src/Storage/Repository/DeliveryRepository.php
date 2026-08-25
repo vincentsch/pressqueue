@@ -34,6 +34,7 @@ final class DeliveryRepository extends AbstractRepository {
 		'decision_public_id'               => '%s',
 		'event_key'                        => '%s',
 		'delivery_key'                     => '%s',
+		'intent_occurrence_key'            => '%s',
 		'delivery_mode'                    => '%s',
 		'provider'                         => '%s',
 		'connection_id'                    => '%d',
@@ -109,6 +110,7 @@ final class DeliveryRepository extends AbstractRepository {
 						'decision_public_id'               => $prepared['decision_public_id'],
 						'event_key'                        => $prepared['event_key'],
 						'delivery_key'                     => $prepared['delivery_key'],
+						'intent_occurrence_key'            => $prepared['intent_occurrence_key'],
 						'delivery_mode'                    => $prepared['delivery_mode'],
 						'provider'                         => $prepared['provider'],
 						'connection_id'                    => $prepared['connection_id'],
@@ -211,6 +213,23 @@ final class DeliveryRepository extends AbstractRepository {
 		$row = $this->database->get_row(
 			'SELECT * FROM `' . $this->deliveries_table() . '` WHERE delivery_key = %s',
 			array( $delivery_key )
+		);
+
+		return $row ? $this->hydrate( $row ) : null;
+	}
+
+	/**
+	 * Find a delivery by occurrence key.
+	 *
+	 * @param string $intent_occurrence_key Occurrence key.
+	 * @return DeliveryRecord|null
+	 */
+	public function find_by_intent_occurrence_key( string $intent_occurrence_key ): ?DeliveryRecord {
+		StorageValidator::assert_hash( $intent_occurrence_key );
+
+		$row = $this->database->get_row(
+			'SELECT * FROM `' . $this->deliveries_table() . '` WHERE intent_occurrence_key = %s ORDER BY id ASC LIMIT 1',
+			array( $intent_occurrence_key )
 		);
 
 		return $row ? $this->hydrate( $row ) : null;
@@ -330,6 +349,19 @@ final class DeliveryRepository extends AbstractRepository {
 			throw new ValidationException( 'Deliveries require an included rule-scoped decision.' );
 		}
 
+		$intent_occurrence_key = null;
+		if ( null !== $decision->intent_occurrence_key ) {
+			$intent_occurrence_key = $decision->intent_occurrence_key;
+		}
+		if ( array_key_exists( 'intent_occurrence_key', $input ) && null !== $input['intent_occurrence_key'] && '' !== $input['intent_occurrence_key'] ) {
+			$candidate_intent_occurrence_key = (string) $input['intent_occurrence_key'];
+			StorageValidator::assert_hash( $candidate_intent_occurrence_key );
+			if ( null !== $intent_occurrence_key && $intent_occurrence_key !== $candidate_intent_occurrence_key ) {
+				throw new ValidationException( 'Delivery occurrence key must match the decision occurrence key.' );
+			}
+			$intent_occurrence_key = $candidate_intent_occurrence_key;
+		}
+
 		$delivery_mode = (string) ( $input['delivery_mode'] ?? '' );
 		StorageEnums::assert_delivery_mode( $delivery_mode );
 
@@ -439,31 +471,34 @@ final class DeliveryRepository extends AbstractRepository {
 			CanonicalJson::assert_maximum_size( $media_snapshot_json, Schema::MEDIA_SNAPSHOT_MAX_BYTES );
 		}
 
-		$payload_hash = HashKeys::payload_hash(
-			array(
-				'canonical_url'          => $payload_preview['canonical_url'],
-				'channel_public_id'      => $channel->public_id,
-				'connection_public_id'   => $connection->public_id,
-				'final_encoded_text'     => 2 === $payload_schema_version ? $final_text : null,
-				'media_identity_hash'    => $media_identity_hash,
-				'message'                => $payload_preview['message'],
-				'payload_schema_version' => $payload_schema_version,
-				'provider'               => $provider,
-				'remote_channel_id'      => $remote_channel_id,
-				'revision_fingerprint'   => $decision->revision_fingerprint,
-				'rule_public_id'         => $decision->rule_public_id,
-				'rule_version'           => $decision->rule_version,
-				'scheduled_for_utc'      => $scheduled_for_utc,
-				'schedule_slot'          => $schedule_slot,
-				'trigger'                => $decision->trigger,
-			)
+		$payload_hash_input = array(
+			'canonical_url'          => $payload_preview['canonical_url'],
+			'channel_public_id'      => $channel->public_id,
+			'connection_public_id'   => $connection->public_id,
+			'final_encoded_text'     => 2 === $payload_schema_version ? $final_text : null,
+			'media_identity_hash'    => $media_identity_hash,
+			'message'                => $payload_preview['message'],
+			'payload_schema_version' => $payload_schema_version,
+			'provider'               => $provider,
+			'remote_channel_id'      => $remote_channel_id,
+			'revision_fingerprint'   => $decision->revision_fingerprint,
+			'rule_public_id'         => $decision->rule_public_id,
+			'rule_version'           => $decision->rule_version,
+			'scheduled_for_utc'      => $scheduled_for_utc,
+			'schedule_slot'          => $schedule_slot,
+			'trigger'                => $decision->trigger,
 		);
+		if ( null !== $intent_occurrence_key ) {
+			$payload_hash_input['intent_occurrence_key'] = $intent_occurrence_key;
+		}
+		$payload_hash = HashKeys::payload_hash( $payload_hash_input );
 
 		return array(
 			'decision_id'                      => $decision->id,
 			'decision_public_id'               => $decision->public_id,
 			'event_key'                        => $decision->event_key,
-			'delivery_key'                     => HashKeys::delivery_key( $delivery_mode, $provider, $connection->public_id, $channel->public_id, $remote_channel_id, $decision->post_id, $decision->revision_fingerprint, $decision->trigger, $decision->rule_public_id, $decision->rule_version, $schedule_slot, $scheduled_for_utc, $media_identity_hash ),
+			'delivery_key'                     => HashKeys::delivery_key( $delivery_mode, $provider, $connection->public_id, $channel->public_id, $remote_channel_id, $decision->post_id, $decision->revision_fingerprint, $decision->trigger, $decision->rule_public_id, $decision->rule_version, $schedule_slot, $scheduled_for_utc, $media_identity_hash, $intent_occurrence_key ),
+			'intent_occurrence_key'            => $intent_occurrence_key,
 			'delivery_mode'                    => $delivery_mode,
 			'provider'                         => $provider,
 			'connection_id'                    => $connection->id,
@@ -578,6 +613,7 @@ final class DeliveryRepository extends AbstractRepository {
 			(string) $row->decision_public_id,
 			(string) $row->event_key,
 			(string) $row->delivery_key,
+			property_exists( $row, 'intent_occurrence_key' ) && null !== $row->intent_occurrence_key ? (string) $row->intent_occurrence_key : null,
 			(string) $row->delivery_mode,
 			(string) $row->provider,
 			(int) $row->connection_id,

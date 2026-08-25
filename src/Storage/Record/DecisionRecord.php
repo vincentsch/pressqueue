@@ -21,6 +21,7 @@ final class DecisionRecord {
 	public string $public_id;
 	public string $event_key;
 	public string $decision_key;
+	public ?string $intent_occurrence_key;
 	public string $scope_type;
 	public ?string $scope_public_id;
 	public int $post_id;
@@ -48,6 +49,7 @@ final class DecisionRecord {
 	 * @param string              $public_id Public ID.
 	 * @param string              $event_key Event key.
 	 * @param string              $decision_key Decision key.
+	 * @param string|null         $intent_occurrence_key Manual batch occurrence key.
 	 * @param string              $scope_type Scope type.
 	 * @param string|null         $scope_public_id Scope public ID.
 	 * @param int                 $post_id WordPress post ID.
@@ -71,6 +73,7 @@ final class DecisionRecord {
 		string $public_id,
 		string $event_key,
 		string $decision_key,
+		?string $intent_occurrence_key,
 		string $scope_type,
 		?string $scope_public_id,
 		int $post_id,
@@ -89,26 +92,27 @@ final class DecisionRecord {
 		string $snapshot_hash,
 		DateTimeImmutable $created_at
 	) {
-		$this->id                   = $id;
-		$this->public_id            = $public_id;
-		$this->event_key            = $event_key;
-		$this->decision_key         = $decision_key;
-		$this->scope_type           = $scope_type;
-		$this->scope_public_id      = $scope_public_id;
-		$this->post_id              = $post_id;
-		$this->post_type            = $post_type;
-		$this->post_status          = $post_status;
-		$this->author_id            = $author_id;
-		$this->revision_fingerprint = $revision_fingerprint;
-		$this->trigger              = $trigger;
-		$this->event_mode           = $event_mode;
-		$this->rule_id              = $rule_id;
-		$this->rule_public_id       = $rule_public_id;
-		$this->rule_version         = $rule_version;
-		$this->result               = $result;
-		$this->reasons              = $reasons;
-		$this->snapshot             = $snapshot;
-		$this->snapshot_hash        = $snapshot_hash;
-		$this->created_at           = $created_at;
+		$this->id                    = $id;
+		$this->public_id             = $public_id;
+		$this->event_key             = $event_key;
+		$this->decision_key          = $decision_key;
+		$this->intent_occurrence_key = $intent_occurrence_key;
+		$this->scope_type            = $scope_type;
+		$this->scope_public_id       = $scope_public_id;
+		$this->post_id               = $post_id;
+		$this->post_type             = $post_type;
+		$this->post_status           = $post_status;
+		$this->author_id             = $author_id;
+		$this->revision_fingerprint  = $revision_fingerprint;
+		$this->trigger               = $trigger;
+		$this->event_mode            = $event_mode;
+		$this->rule_id               = $rule_id;
+		$this->rule_public_id        = $rule_public_id;
+		$this->rule_version          = $rule_version;
+		$this->result                = $result;
+		$this->reasons               = $reasons;
+		$this->snapshot              = $snapshot;
+		$this->snapshot_hash         = $snapshot_hash;
+		$this->created_at            = $created_at;
 	}
 }

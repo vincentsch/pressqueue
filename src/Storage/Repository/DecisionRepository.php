@@ -24,27 +24,28 @@ use PressQueue\Storage\ValidationException;
  */
 final class DecisionRepository extends AbstractRepository {
 	private const FORMATS = array(
-		'id'                   => '%d',
-		'public_id'            => '%s',
-		'event_key'            => '%s',
-		'decision_key'         => '%s',
-		'scope_type'           => '%s',
-		'scope_public_id'      => '%s',
-		'post_id'              => '%d',
-		'post_type'            => '%s',
-		'post_status'          => '%s',
-		'author_id'            => '%d',
-		'revision_fingerprint' => '%s',
-		'trigger'              => '%s',
-		'event_mode'           => '%s',
-		'rule_id'              => '%d',
-		'rule_public_id'       => '%s',
-		'rule_version'         => '%d',
-		'result'               => '%s',
-		'reasons_json'         => '%s',
-		'snapshot_json'        => '%s',
-		'snapshot_hash'        => '%s',
-		'created_at'           => '%s',
+		'id'                    => '%d',
+		'public_id'             => '%s',
+		'event_key'             => '%s',
+		'decision_key'          => '%s',
+		'intent_occurrence_key' => '%s',
+		'scope_type'            => '%s',
+		'scope_public_id'       => '%s',
+		'post_id'               => '%d',
+		'post_type'             => '%s',
+		'post_status'           => '%s',
+		'author_id'             => '%d',
+		'revision_fingerprint'  => '%s',
+		'trigger'               => '%s',
+		'event_mode'            => '%s',
+		'rule_id'               => '%d',
+		'rule_public_id'        => '%s',
+		'rule_version'          => '%d',
+		'result'                => '%s',
+		'reasons_json'          => '%s',
+		'snapshot_json'         => '%s',
+		'snapshot_hash'         => '%s',
+		'created_at'            => '%s',
 	);
 
 	/**
@@ -64,26 +65,27 @@ final class DecisionRepository extends AbstractRepository {
 				$this->database->insert_row(
 					$table,
 					array(
-						'public_id'            => $public_id,
-						'event_key'            => $prepared['event_key'],
-						'decision_key'         => $prepared['decision_key'],
-						'scope_type'           => $prepared['scope_type'],
-						'scope_public_id'      => $prepared['scope_public_id'],
-						'post_id'              => $prepared['post_id'],
-						'post_type'            => $prepared['post_type'],
-						'post_status'          => $prepared['post_status'],
-						'author_id'            => $prepared['author_id'],
-						'revision_fingerprint' => $prepared['revision_fingerprint'],
-						'trigger'              => $prepared['trigger'],
-						'event_mode'           => $prepared['event_mode'],
-						'rule_id'              => $prepared['rule_id'],
-						'rule_public_id'       => $prepared['rule_public_id'],
-						'rule_version'         => $prepared['rule_version'],
-						'result'               => $prepared['result'],
-						'reasons_json'         => $prepared['reasons_json'],
-						'snapshot_json'        => $prepared['snapshot_json'],
-						'snapshot_hash'        => $prepared['snapshot_hash'],
-						'created_at'           => StorageValidator::now(),
+						'public_id'             => $public_id,
+						'event_key'             => $prepared['event_key'],
+						'decision_key'          => $prepared['decision_key'],
+						'intent_occurrence_key' => $prepared['intent_occurrence_key'],
+						'scope_type'            => $prepared['scope_type'],
+						'scope_public_id'       => $prepared['scope_public_id'],
+						'post_id'               => $prepared['post_id'],
+						'post_type'             => $prepared['post_type'],
+						'post_status'           => $prepared['post_status'],
+						'author_id'             => $prepared['author_id'],
+						'revision_fingerprint'  => $prepared['revision_fingerprint'],
+						'trigger'               => $prepared['trigger'],
+						'event_mode'            => $prepared['event_mode'],
+						'rule_id'               => $prepared['rule_id'],
+						'rule_public_id'        => $prepared['rule_public_id'],
+						'rule_version'          => $prepared['rule_version'],
+						'result'                => $prepared['result'],
+						'reasons_json'          => $prepared['reasons_json'],
+						'snapshot_json'         => $prepared['snapshot_json'],
+						'snapshot_hash'         => $prepared['snapshot_hash'],
+						'created_at'            => StorageValidator::now(),
 					),
 					self::FORMATS
 				);
@@ -225,6 +227,13 @@ final class DecisionRepository extends AbstractRepository {
 			'trigger'              => $trigger,
 		);
 
+		$intent_occurrence_key = null;
+		if ( array_key_exists( 'intent_occurrence_key', $input ) && null !== $input['intent_occurrence_key'] && '' !== $input['intent_occurrence_key'] ) {
+			$intent_occurrence_key = (string) $input['intent_occurrence_key'];
+			StorageValidator::assert_hash( $intent_occurrence_key );
+			$event_fields['intent_occurrence_key'] = $intent_occurrence_key;
+		}
+
 		$event_key = isset( $input['event_key'] ) ? (string) $input['event_key'] : HashKeys::event_key( $event_fields );
 		StorageValidator::assert_hash( $event_key );
 
@@ -249,26 +258,27 @@ final class DecisionRepository extends AbstractRepository {
 		$snapshot_hash = HashKeys::snapshot_hash( $snapshot );
 
 		return array(
-			'event_key'            => $event_key,
-			'decision_key'         => HashKeys::decision_key( $event_fields, $event_key, $scope_type, $scope_public_id, $rule_public_id, $rule_version, $result ),
-			'scope_type'           => $scope_type,
-			'scope_public_id'      => $scope_public_id,
-			'post_id'              => $post_id,
-			'post_type'            => $post_type,
-			'post_status'          => $post_status,
-			'author_id'            => $author_id,
-			'revision_fingerprint' => $revision_fingerprint,
-			'trigger'              => $trigger,
-			'event_mode'           => $event_mode,
-			'rule_id'              => $rule_id,
-			'rule_public_id'       => $rule_public_id,
-			'rule_version'         => $rule_version,
-			'result'               => $result,
-			'reasons'              => $reasons,
-			'reasons_json'         => $reasons_json,
-			'snapshot'             => $snapshot,
-			'snapshot_json'        => $snapshot_json,
-			'snapshot_hash'        => $snapshot_hash,
+			'event_key'             => $event_key,
+			'decision_key'          => HashKeys::decision_key( $event_fields, $event_key, $scope_type, $scope_public_id, $rule_public_id, $rule_version, $result ),
+			'intent_occurrence_key' => $intent_occurrence_key,
+			'scope_type'            => $scope_type,
+			'scope_public_id'       => $scope_public_id,
+			'post_id'               => $post_id,
+			'post_type'             => $post_type,
+			'post_status'           => $post_status,
+			'author_id'             => $author_id,
+			'revision_fingerprint'  => $revision_fingerprint,
+			'trigger'               => $trigger,
+			'event_mode'            => $event_mode,
+			'rule_id'               => $rule_id,
+			'rule_public_id'        => $rule_public_id,
+			'rule_version'          => $rule_version,
+			'result'                => $result,
+			'reasons'               => $reasons,
+			'reasons_json'          => $reasons_json,
+			'snapshot'              => $snapshot,
+			'snapshot_json'         => $snapshot_json,
+			'snapshot_hash'         => $snapshot_hash,
 		);
 	}
 
@@ -360,6 +370,7 @@ final class DecisionRepository extends AbstractRepository {
 			(string) $row->public_id,
 			(string) $row->event_key,
 			(string) $row->decision_key,
+			property_exists( $row, 'intent_occurrence_key' ) && null !== $row->intent_occurrence_key ? (string) $row->intent_occurrence_key : null,
 			(string) $row->scope_type,
 			null === $row->scope_public_id ? null : (string) $row->scope_public_id,
 			(int) $row->post_id,

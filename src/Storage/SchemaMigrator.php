@@ -87,6 +87,8 @@ final class SchemaMigrator {
 					$this->migrate_to_version_3();
 				} elseif ( 4 === $next_version ) {
 					$this->migrate_to_version_4();
+				} elseif ( 5 === $next_version ) {
+					$this->migrate_to_version_5();
 				}
 
 				$this->assert_expected_schema();
@@ -286,6 +288,23 @@ final class SchemaMigrator {
 		$this->maybe_add_column( $deliveries, 'media_snapshot_json', 'media_snapshot_json LONGTEXT NULL AFTER bound_capability_catalog_version' );
 		$this->maybe_add_column( $deliveries, 'media_identity_hash', 'media_identity_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER media_snapshot_json' );
 		$this->maybe_add_index( $deliveries, 'scheduled_for_utc', 'KEY scheduled_for_utc (scheduled_for_utc)' );
+	}
+
+	/**
+	 * Add batch storage and occurrence projections.
+	 */
+	private function migrate_to_version_5(): void {
+		$decisions  = $this->database->table( Schema::DECISIONS );
+		$deliveries = $this->database->table( Schema::DELIVERIES );
+
+		$this->validate_existing_delivery_payloads_if_present();
+		$this->create_base_tables();
+
+		$this->maybe_add_column( $decisions, 'intent_occurrence_key', 'intent_occurrence_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER decision_key' );
+		$this->maybe_add_index( $decisions, 'intent_occurrence_key', 'KEY intent_occurrence_key (intent_occurrence_key)' );
+
+		$this->maybe_add_column( $deliveries, 'intent_occurrence_key', 'intent_occurrence_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL AFTER delivery_key' );
+		$this->maybe_add_index( $deliveries, 'intent_occurrence_key', 'KEY intent_occurrence_key (intent_occurrence_key)' );
 	}
 
 	/**

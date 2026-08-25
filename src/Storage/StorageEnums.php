@@ -26,12 +26,15 @@ final class StorageEnums {
 	public const DELIVERY_ACTOR_TYPES    = array( 'system', 'queue_sweep', 'worker', 'recovery', 'operator', 'scheduler' );
 	public const CONNECTION_STATUSES     = array( 'disconnected', 'unverified', 'verified', 'credential_invalid' );
 	public const CHANNEL_AVAILABILITIES  = array( 'unverified', 'available', 'missing', 'unsupported' );
-	public const RULE_TRIGGERS           = array( 'first_publish', 'update', 'scheduled_publication' );
+	public const RULE_TRIGGERS           = array( 'first_publish', 'update', 'scheduled_publication', 'bulk', 'repost' );
 	public const SCHEDULE_SLOTS          = array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' );
 	public const RULE_SCHEDULE_SLOTS     = array( 'immediate', 'queue_next', 'queue_end' );
 	public const SCHEDULE_POLICIES       = self::SCHEDULE_SLOTS;
 	public const MEDIA_MODES             = array( 'none', 'featured_image', 'post_media' );
 	public const SCOPE_TYPES             = array( 'global', 'channel' );
+	public const BATCH_TYPES             = array( 'bulk', 'repost' );
+	public const BATCH_STATUSES          = array( 'previewed', 'confirming', 'queueing', 'cancelled', 'handed_off', 'failed', 'expired' );
+	public const BATCH_ITEM_STATES       = array( 'previewed', 'reserved', 'queued', 'duplicate', 'excluded', 'policy_error', 'cancelled', 'failed' );
 
 	/**
 	 * Assert that a value belongs to an enum set.
@@ -208,5 +211,32 @@ final class StorageEnums {
 	 */
 	public static function assert_scope_type( string $value ): void {
 		self::assert( 'Scope type', $value, self::SCOPE_TYPES );
+	}
+
+	/**
+	 * Assert a batch type.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_batch_type( string $value ): void {
+		self::assert( 'Batch type', $value, self::BATCH_TYPES );
+	}
+
+	/**
+	 * Assert a batch status.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_batch_status( string $value ): void {
+		self::assert( 'Batch status', $value, self::BATCH_STATUSES );
+	}
+
+	/**
+	 * Assert a batch item state.
+	 *
+	 * @param string $value Candidate value.
+	 */
+	public static function assert_batch_item_state( string $value ): void {
+		self::assert( 'Batch item state', $value, self::BATCH_ITEM_STATES );
 	}
 }

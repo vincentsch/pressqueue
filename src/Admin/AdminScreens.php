@@ -58,6 +58,7 @@ final class AdminScreens {
 		PostPreviewController::register_hooks();
 		ConditionBuilderController::register_hooks();
 		TemplateController::register_hooks();
+		BatchController::register_hooks();
 	}
 
 	/**
@@ -76,6 +77,7 @@ final class AdminScreens {
 		ConnectionController::register_menu( self::SLUG_ROOT );
 		DeliveryListController::register_menu( self::SLUG_ROOT );
 		DeliveryDetailController::register_menu( self::SLUG_ROOT );
+		BatchController::register_menu( self::SLUG_ROOT );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Rules', 'pressqueue' ), __( 'Rules', 'pressqueue' ), Capabilities::MANAGE_RULES, self::SLUG_RULES, array( self::class, 'render_rules_page' ) );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Preview', 'pressqueue' ), __( 'Preview', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_PREVIEW, array( self::class, 'render_preview_page' ) );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Decisions', 'pressqueue' ), __( 'Decisions', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_DECISIONS, array( self::class, 'render_decisions_page' ) );
@@ -517,7 +519,7 @@ final class AdminScreens {
 		echo '<tr><th scope="row"><label for="' . esc_attr( self::field_id( 'priority', $rule ) ) . '">' . esc_html__( 'Priority', 'pressqueue' ) . '</label></th><td><input id="' . esc_attr( self::field_id( 'priority', $rule ) ) . '" name="priority" type="number" value="' . esc_attr( null === $rule ? '100' : (string) $rule->priority ) . '" /></td></tr>';
 		echo '<tr><th scope="row">' . esc_html__( 'Triggers', 'pressqueue' ) . '</th><td>';
 		$selected_triggers = null === $rule ? array( 'first_publish' ) : ( $rule->triggers['triggers'] ?? array() );
-		foreach ( array( 'first_publish', 'update', 'scheduled_publication' ) as $trigger ) {
+		foreach ( array( 'first_publish', 'update', 'scheduled_publication', 'bulk', 'repost' ) as $trigger ) {
 			echo '<label><input type="checkbox" name="triggers[]" value="' . esc_attr( $trigger ) . '" ' . checked( in_array( $trigger, $selected_triggers, true ), true, false ) . ' /> ' . esc_html( $trigger ) . '</label><br />';
 		}
 		echo '</td></tr>';
@@ -902,7 +904,7 @@ final class AdminScreens {
 	private static function trigger_select( string $name, string $selected ): string {
 		$html = '<select name="' . esc_attr( $name ) . '">';
 
-		foreach ( array( 'first_publish', 'update', 'scheduled_publication' ) as $trigger ) {
+		foreach ( array( 'first_publish', 'update', 'scheduled_publication', 'bulk', 'repost' ) as $trigger ) {
 			$html .= '<option value="' . esc_attr( $trigger ) . '" ' . selected( $selected, $trigger, false ) . '>' . esc_html( $trigger ) . '</option>';
 		}
 

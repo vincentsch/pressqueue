@@ -146,6 +146,24 @@ abstract class AbstractRepository {
 	}
 
 	/**
+	 * Return the batches table.
+	 *
+	 * @return string
+	 */
+	protected function batches_table(): string {
+		return $this->table( Schema::BATCHES );
+	}
+
+	/**
+	 * Return the batch items table.
+	 *
+	 * @return string
+	 */
+	protected function batch_items_table(): string {
+		return $this->table( Schema::BATCH_ITEMS );
+	}
+
+	/**
 	 * Check whether a database failure was a duplicate key error.
 	 *
 	 * @param StorageException $exception Storage failure.

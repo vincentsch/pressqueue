@@ -183,7 +183,7 @@ final class StorageContractsTest extends TestCase {
 			'include',
 			array(
 				'schema_version' => 1,
-				'destinations'    => array(
+				'destinations'   => array(
 					array( 'channel_public_id' => '01K8Z8D0PKH2N8J7S3K5A9C6DG' ),
 					array( 'channel_public_id' => '01K8Z8D0PKH2N8J7S3K5A9C6DE' ),
 				),
@@ -291,10 +291,15 @@ final class StorageContractsTest extends TestCase {
 		$shape = Schema::expected_shape();
 
 		self::assertSame( array( 'rule_id' ), $shape[ Schema::DECISIONS ]['indexes']['rule_id']['columns'] );
+		self::assertSame( array( 'intent_occurrence_key' ), $shape[ Schema::DECISIONS ]['indexes']['intent_occurrence_key']['columns'] );
 		self::assertSame( array( 'connection_id' ), $shape[ Schema::DELIVERIES ]['indexes']['connection_id']['columns'] );
 		self::assertSame( array( 'channel_id' ), $shape[ Schema::DELIVERIES ]['indexes']['channel_id']['columns'] );
+		self::assertSame( array( 'intent_occurrence_key' ), $shape[ Schema::DELIVERIES ]['indexes']['intent_occurrence_key']['columns'] );
+		self::assertSame( array( 'batch_public_id', 'state' ), $shape[ Schema::BATCH_ITEMS ]['indexes']['batch_state']['columns'] );
+		self::assertSame( array( 'intent_occurrence_key' ), $shape[ Schema::BATCH_ITEMS ]['indexes']['intent_occurrence_key']['columns'] );
 		self::assertFalse( $shape[ Schema::DECISIONS ]['indexes']['rule_id']['unique'] );
 		self::assertFalse( $shape[ Schema::DELIVERIES ]['indexes']['connection_id']['unique'] );
 		self::assertFalse( $shape[ Schema::DELIVERIES ]['indexes']['channel_id']['unique'] );
+		self::assertTrue( $shape[ Schema::BATCH_ITEMS ]['indexes']['intent_occurrence_key']['unique'] );
 	}
 }

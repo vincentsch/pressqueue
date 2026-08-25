@@ -23,6 +23,7 @@ final class DeliveryRecord {
 	public string $decision_public_id;
 	public string $event_key;
 	public string $delivery_key;
+	public ?string $intent_occurrence_key;
 	public string $delivery_mode;
 	public string $provider;
 	public int $connection_id;
@@ -87,6 +88,7 @@ final class DeliveryRecord {
 	 * @param string                   $decision_public_id Decision public ID.
 	 * @param string                   $event_key Event key.
 	 * @param string                   $delivery_key Delivery key.
+	 * @param string|null              $intent_occurrence_key Manual batch occurrence key.
 	 * @param string                   $delivery_mode Delivery mode.
 	 * @param string                   $provider Provider key.
 	 * @param int                      $connection_id Connection internal ID.
@@ -145,6 +147,7 @@ final class DeliveryRecord {
 		string $decision_public_id,
 		string $event_key,
 		string $delivery_key,
+		?string $intent_occurrence_key,
 		string $delivery_mode,
 		string $provider,
 		int $connection_id,
@@ -202,6 +205,7 @@ final class DeliveryRecord {
 		$this->decision_public_id               = $decision_public_id;
 		$this->event_key                        = $event_key;
 		$this->delivery_key                     = $delivery_key;
+		$this->intent_occurrence_key            = $intent_occurrence_key;
 		$this->delivery_mode                    = $delivery_mode;
 		$this->provider                         = $provider;
 		$this->connection_id                    = $connection_id;

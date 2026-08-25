@@ -62,6 +62,7 @@ final class NormalizedEvent {
 	public ?string $previous_runtime_fingerprint;
 	public string $legacy_runtime_fingerprint;
 	public string $revision_fingerprint;
+	public ?string $intent_occurrence_key;
 
 	/**
 	 * Constructor.
@@ -87,6 +88,7 @@ final class NormalizedEvent {
 	 * @param string|null                    $legacy_runtime_fingerprint Optional precomputed legacy runtime fingerprint.
 	 * @param array<string,mixed>|null       $legacy_runtime_metadata Optional legacy metadata facts.
 	 * @param array<string,mixed>|null       $legacy_runtime_template_values Optional legacy template facts.
+	 * @param string|null                    $intent_occurrence_key Optional manual batch occurrence key.
 	 */
 	public function __construct(
 		string $mode,
@@ -109,7 +111,8 @@ final class NormalizedEvent {
 		?string $previous_runtime_fingerprint = null,
 		?string $legacy_runtime_fingerprint = null,
 		?array $legacy_runtime_metadata = null,
-		?array $legacy_runtime_template_values = null
+		?array $legacy_runtime_template_values = null,
+		?string $intent_occurrence_key = null
 	) {
 		StorageEnums::assert_event_mode( $mode );
 		StorageEnums::assert_rule_trigger( $trigger );
@@ -134,6 +137,10 @@ final class NormalizedEvent {
 			StorageValidator::assert_hash( $legacy_runtime_fingerprint );
 		}
 
+		if ( null !== $intent_occurrence_key ) {
+			StorageValidator::assert_hash( $intent_occurrence_key );
+		}
+
 		$control_bundle = PostControlMetadata::normalize_bundle( $control_bundle ?? PostControlMetadata::default_bundle() );
 
 		$this->mode                         = $mode;
@@ -156,6 +163,7 @@ final class NormalizedEvent {
 		$this->trigger_fingerprint          = $trigger_fingerprint ?? $this->calculate_trigger_fingerprint();
 		$this->revision_fingerprint         = $revision_fingerprint ?? $this->calculate_revision_fingerprint();
 		$this->legacy_runtime_fingerprint   = $legacy_runtime_fingerprint ?? $this->calculate_legacy_runtime_fingerprint( $legacy_runtime_metadata ?? $this->metadata, $legacy_runtime_template_values ?? $this->template_values );
+		$this->intent_occurrence_key        = $intent_occurrence_key;
 		$this->event_key                    = HashKeys::event_key( $this->event_fields() );
 	}
 
@@ -165,7 +173,7 @@ final class NormalizedEvent {
 	 * @return array<string,mixed>
 	 */
 	public function event_fields(): array {
-		return array(
+		$fields = array(
 			'author_id'            => $this->author_id,
 			'event_mode'           => $this->mode,
 			'post_id'              => $this->post_id,
@@ -174,6 +182,12 @@ final class NormalizedEvent {
 			'revision_fingerprint' => $this->revision_fingerprint,
 			'trigger'              => $this->trigger,
 		);
+
+		if ( null !== $this->intent_occurrence_key ) {
+			$fields['intent_occurrence_key'] = $this->intent_occurrence_key;
+		}
+
+		return $fields;
 	}
 
 	/**
@@ -204,6 +218,7 @@ final class NormalizedEvent {
 			'previous_trigger_fingerprint' => $this->previous_trigger_fingerprint,
 			'previous_runtime_fingerprint' => $this->previous_runtime_fingerprint,
 			'legacy_runtime_fingerprint'   => $this->legacy_runtime_fingerprint,
+			'intent_occurrence_key'        => $this->intent_occurrence_key,
 		);
 	}
 
