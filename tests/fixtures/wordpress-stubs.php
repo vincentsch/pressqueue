@@ -17,6 +17,10 @@ if ( ! defined( 'DAY_IN_SECONDS' ) ) {
 	define( 'DAY_IN_SECONDS', 86400 );
 }
 
+if ( ! defined( 'ARRAY_A' ) ) {
+	define( 'ARRAY_A', 'ARRAY_A' );
+}
+
 if ( ! class_exists( 'wpdb' ) ) {
 	/**
 	 * Minimal database base class for unit-test doubles.
@@ -37,6 +41,13 @@ if ( ! class_exists( 'wpdb' ) ) {
 		public string $options = 'wp_options';
 
 		/**
+		 * Postmeta table.
+		 *
+		 * @var string
+		 */
+		public string $postmeta = 'wp_postmeta';
+
+		/**
 		 * Last error.
 		 *
 		 * @var string
@@ -49,6 +60,62 @@ if ( ! class_exists( 'wpdb' ) ) {
 		 * @var int
 		 */
 		public int $insert_id = 0;
+
+		/**
+		 * Queries executed against the stub.
+		 *
+		 * @var array<int,string>
+		 */
+		public array $queries = array();
+
+		/**
+		 * Prepare SQL for test doubles.
+		 *
+		 * @param string $query Query.
+		 * @param mixed  ...$args Args.
+		 * @return string
+		 */
+		public function prepare( $query, $args = array() ): string {
+			if ( ! is_array( $args ) ) {
+				$args = array_slice( func_get_args(), 1 );
+			}
+
+			foreach ( $args as $arg ) {
+				preg_match( '/%([sdi])/', (string) $query, $matches );
+				$placeholder = $matches[1] ?? 's';
+				if ( 'i' === $placeholder ) {
+					$replacement = '`' . str_replace( '`', '', (string) $arg ) . '`';
+				} else {
+					$replacement = is_numeric( $arg ) ? (string) $arg : "'" . addslashes( (string) $arg ) . "'";
+				}
+
+				$query = preg_replace( '/%[sdi]/', $replacement, (string) $query, 1 ) ?? (string) $query;
+			}
+
+			return (string) $query;
+		}
+
+		/**
+		 * Record a query.
+		 *
+		 * @param string $query Query.
+		 * @return int
+		 */
+		public function query( $query ): int {
+			$this->queries[] = (string) $query;
+
+			return 1;
+		}
+
+		/**
+		 * Escape a LIKE fragment.
+		 *
+		 * @param string $text Text.
+		 * @return string
+		 */
+		public function esc_like( $text ): string {
+			return addcslashes( (string) $text, '_%\\' );
+		}
 	}
 }
 
@@ -82,6 +149,13 @@ $GLOBALS['pressqueue_test_logged_in']           = true;
 $GLOBALS['pressqueue_test_wp_cli_commands']     = array();
 $GLOBALS['pressqueue_test_wp_cli_halt_status']  = null;
 $GLOBALS['pressqueue_test_wp_cli_lines']        = array();
+$GLOBALS['pressqueue_test_redirects']           = array();
+$GLOBALS['pressqueue_test_scripts']             = array();
+$GLOBALS['pressqueue_test_script_translations'] = array();
+$GLOBALS['pressqueue_test_users']               = array();
+$GLOBALS['pressqueue_test_sites']               = array( 1 );
+$GLOBALS['pressqueue_test_current_blog_id']     = 1;
+$GLOBALS['pressqueue_test_timezone']            = 'UTC';
 
 /**
  * Reset test hook state.
@@ -120,7 +194,17 @@ function pressqueue_test_reset_wordpress_stubs(): void {
 	$GLOBALS['pressqueue_test_wp_cli_commands']     = array();
 	$GLOBALS['pressqueue_test_wp_cli_halt_status']  = null;
 	$GLOBALS['pressqueue_test_wp_cli_lines']        = array();
+	$GLOBALS['pressqueue_test_redirects']           = array();
+	$GLOBALS['pressqueue_test_scripts']             = array();
+	$GLOBALS['pressqueue_test_script_translations'] = array();
+	$GLOBALS['pressqueue_test_users']               = array(
+		1 => new WP_User( 1, 'user@example.test', 'Test User' ),
+	);
+	$GLOBALS['pressqueue_test_sites']               = array( 1 );
+	$GLOBALS['pressqueue_test_current_blog_id']     = 1;
+	$GLOBALS['pressqueue_test_timezone']            = 'UTC';
 	$GLOBALS['wp_version']                          = '6.8.8';
+	unset( $GLOBALS['wpdb'] );
 }
 
 /**
@@ -328,6 +412,100 @@ function esc_url( $url ): string {
 }
 
 /**
+ * Return an admin URL.
+ *
+ * @param string $path Path.
+ * @return string
+ */
+function admin_url( $path = '' ): string {
+	return 'https://example.test/wp-admin/' . ltrim( (string) $path, '/' );
+}
+
+/**
+ * Return a site URL.
+ *
+ * @param string $path Path.
+ * @return string
+ */
+function site_url( $path = '' ): string {
+	return 'https://example.test/' . ltrim( (string) $path, '/' );
+}
+
+/**
+ * Return a home URL.
+ *
+ * @param string $path Path.
+ * @return string
+ */
+function home_url( $path = '' ): string {
+	return site_url( $path );
+}
+
+/**
+ * Return the configured site timezone.
+ *
+ * @return DateTimeZone
+ */
+function wp_timezone(): DateTimeZone {
+	return new DateTimeZone( (string) $GLOBALS['pressqueue_test_timezone'] );
+}
+
+/**
+ * Format a timestamp in the configured site timezone.
+ *
+ * @param string            $format Format.
+ * @param int|null          $timestamp Timestamp.
+ * @param DateTimeZone|null $timezone Timezone.
+ * @return string
+ */
+function wp_date( $format, $timestamp = null, $timezone = null ): string {
+	$timestamp = null === $timestamp ? time() : (int) $timestamp;
+	$timezone  = $timezone instanceof DateTimeZone ? $timezone : wp_timezone();
+
+	return ( new DateTimeImmutable( '@' . (string) $timestamp ) )->setTimezone( $timezone )->format( (string) $format );
+}
+
+/**
+ * Add query args to a URL.
+ *
+ * @param string|array<string,mixed> $key Key or args.
+ * @param mixed                      $value Value or URL.
+ * @param string|null                $url URL.
+ * @return string
+ */
+function add_query_arg( $key, $value = null, $url = null ): string {
+	if ( is_array( $key ) ) {
+		$args = $key;
+		$url  = is_string( $value ) ? $value : '';
+	} else {
+		$args = array( (string) $key => $value );
+		$url  = (string) $url;
+	}
+
+	$separator = str_contains( $url, '?' ) ? '&' : '?';
+
+	return $url . $separator . http_build_query( $args );
+}
+
+/**
+ * Record a safe redirect.
+ *
+ * @param string $url URL.
+ */
+function wp_safe_redirect( $url ): void {
+	$GLOBALS['pressqueue_test_redirects'][] = (string) $url;
+}
+
+/**
+ * Return a test referer URL.
+ *
+ * @return string|false
+ */
+function wp_get_referer() {
+	return false;
+}
+
+/**
  * Sanitize a text field for tests.
  *
  * @param mixed $value Input value.
@@ -497,6 +675,74 @@ function wp_nonce_field( $action = -1, $name = '_wpnonce' ): void {
 }
 
 /**
+ * Render a test submit button.
+ *
+ * @param string $text Text.
+ * @param string $type Type.
+ * @param string $name Name.
+ * @param bool   $wrap Whether to wrap.
+ * @param array<string,string> $attributes Attributes.
+ */
+function submit_button( $text = null, $type = 'primary', $name = 'submit', $wrap = true, $attributes = array() ): void {
+	unset( $type, $wrap );
+
+	$attribute_markup = '';
+	foreach ( $attributes as $key => $value ) {
+		$attribute_markup .= ' ' . esc_attr( (string) $key ) . '="' . esc_attr( (string) $value ) . '"';
+	}
+
+	echo '<button type="submit" name="' . esc_attr( (string) $name ) . '"' . $attribute_markup . '>' . esc_html( (string) $text ) . '</button>';
+}
+
+/**
+ * Build a plugin asset URL.
+ *
+ * @param string $path Path.
+ * @param string $plugin Plugin file.
+ * @return string
+ */
+function plugins_url( $path = '', $plugin = '' ): string {
+	unset( $plugin );
+
+	return 'https://example.test/wp-content/plugins/pressqueue/' . ltrim( (string) $path, '/' );
+}
+
+/**
+ * Record script enqueue calls.
+ *
+ * @param string            $handle Handle.
+ * @param string            $src Source URL.
+ * @param array<int,string> $deps Dependencies.
+ * @param string|bool|null  $ver Version.
+ * @param bool              $in_footer In footer.
+ */
+function wp_enqueue_script( $handle, $src = '', $deps = array(), $ver = false, $in_footer = false ): void {
+	$GLOBALS['pressqueue_test_scripts'][ (string) $handle ] = array(
+		'deps'      => $deps,
+		'in_footer' => $in_footer,
+		'src'       => $src,
+		'ver'       => $ver,
+	);
+}
+
+/**
+ * Record script translations.
+ *
+ * @param string $handle Handle.
+ * @param string $domain Domain.
+ * @param string $path Language path.
+ * @return bool
+ */
+function wp_set_script_translations( $handle, $domain = 'default', $path = '' ): bool {
+	$GLOBALS['pressqueue_test_script_translations'][ (string) $handle ] = array(
+		'domain' => $domain,
+		'path'   => $path,
+	);
+
+	return true;
+}
+
+/**
  * Text domain recorder.
  *
  * @param string $domain Domain.
@@ -595,6 +841,33 @@ function delete_option( $option ): bool {
 }
 
 /**
+ * Delete an option cache entry.
+ *
+ * @param string $key Cache key.
+ * @param string $group Cache group.
+ * @return bool
+ */
+function wp_cache_delete( $key, $group = '' ): bool {
+	unset( $key, $group );
+
+	return true;
+}
+
+/**
+ * Serialize values like WordPress options.
+ *
+ * @param mixed $value Value.
+ * @return mixed
+ */
+function maybe_serialize( $value ) {
+	if ( is_array( $value ) || is_object( $value ) ) {
+		return serialize( $value );
+	}
+
+	return $value;
+}
+
+/**
  * Store a test transient.
  *
  * @param string $transient Transient name.
@@ -674,14 +947,20 @@ class WP_Post {
  * Minimal WordPress user object.
  */
 class WP_User {
+	public int $ID = 0;
+	public string $user_email = '';
 	public string $display_name = '';
 
 	/**
 	 * Constructor.
 	 *
+	 * @param int    $id User ID.
+	 * @param string $email Email address.
 	 * @param string $display_name Display name.
 	 */
-	public function __construct( string $display_name = 'Test User' ) {
+	public function __construct( int $id = 1, string $email = 'user@example.test', string $display_name = 'Test User' ) {
+		$this->ID           = $id;
+		$this->user_email   = $email;
 		$this->display_name = $display_name;
 	}
 }
@@ -840,7 +1119,80 @@ function get_ancestors( $object_id, $object_type = '', $resource_type = '' ): ar
  * @return WP_User|false
  */
 function get_userdata( $user_id ) {
-	return $user_id > 0 ? new WP_User( 'Test User' ) : false;
+	if ( isset( $GLOBALS['pressqueue_test_users'][ (int) $user_id ] ) ) {
+		return $GLOBALS['pressqueue_test_users'][ (int) $user_id ];
+	}
+
+	return $user_id > 0 ? new WP_User( (int) $user_id, 'user' . (int) $user_id . '@example.test', 'Test User' ) : false;
+}
+
+/**
+ * Return a user by field.
+ *
+ * @param string $field Field.
+ * @param mixed  $value Value.
+ * @return WP_User|false
+ */
+function get_user_by( $field, $value ) {
+	foreach ( $GLOBALS['pressqueue_test_users'] as $user ) {
+		if ( 'id' === $field && (int) $value === (int) $user->ID ) {
+			return $user;
+		}
+
+		if ( 'email' === $field && (string) $value === (string) $user->user_email ) {
+			return $user;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Check a user's capability.
+ *
+ * @param int|string $user_id User ID.
+ * @param string     $capability Capability.
+ * @return bool
+ */
+function user_can( $user_id, $capability ): bool {
+	unset( $user_id );
+
+	return current_user_can( $capability );
+}
+
+/**
+ * Return test site IDs.
+ *
+ * @param array<string,mixed> $args Args.
+ * @return array<int,int>
+ */
+function get_sites( $args = array() ): array {
+	unset( $args );
+
+	return $GLOBALS['pressqueue_test_sites'];
+}
+
+/**
+ * Switch to a test blog.
+ *
+ * @param int $site_id Site ID.
+ * @return bool
+ */
+function switch_to_blog( $site_id ): bool {
+	$GLOBALS['pressqueue_test_current_blog_id'] = (int) $site_id;
+
+	return true;
+}
+
+/**
+ * Restore the current test blog.
+ *
+ * @return bool
+ */
+function restore_current_blog(): bool {
+	$GLOBALS['pressqueue_test_current_blog_id'] = 1;
+
+	return true;
 }
 
 /**
@@ -1099,6 +1451,15 @@ class PressQueue_Test_Role {
 	}
 
 	/**
+	 * Remove a capability.
+	 *
+	 * @param string $capability Capability.
+	 */
+	public function remove_cap( $capability ): void {
+		unset( $this->capabilities[ $capability ] );
+	}
+
+	/**
 	 * Check a capability.
 	 *
 	 * @param string $capability Capability.
@@ -1178,14 +1539,23 @@ class WP_Error {
 	private string $message;
 
 	/**
+	 * Error data.
+	 *
+	 * @var mixed
+	 */
+	private $data;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param string $code Error code.
 	 * @param string $message Error message.
+	 * @param mixed  $data Error data.
 	 */
-	public function __construct( string $code, string $message = '' ) {
+	public function __construct( string $code, string $message = '', $data = null ) {
 		$this->code    = $code;
 		$this->message = $message;
+		$this->data    = $data;
 	}
 
 	/**
@@ -1204,6 +1574,15 @@ class WP_Error {
 	 */
 	public function get_error_message(): string {
 		return $this->message;
+	}
+
+	/**
+	 * Return error data.
+	 *
+	 * @return mixed
+	 */
+	public function get_error_data() {
+		return $this->data;
 	}
 }
 

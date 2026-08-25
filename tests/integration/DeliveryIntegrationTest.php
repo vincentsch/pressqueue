@@ -17,6 +17,7 @@ use PressQueue\Provider\Dto\ProviderDeliveryRequest;
 use PressQueue\Provider\Dto\ProviderDeliveryResult;
 use PressQueue\Provider\Dto\ProviderReceipt;
 use PressQueue\Provider\ProviderRegistry;
+use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\CanonicalJson;
@@ -54,6 +55,7 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 
 		$this->resetStorage();
 		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+		RuntimeDisabledLatch::open();
 	}
 
 	protected function tearDown(): void {

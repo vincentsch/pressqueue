@@ -15,6 +15,7 @@ use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Planning\EventCollector;
 use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\Planner;
+use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\CanonicalJson;
@@ -53,6 +54,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 		$this->resetStorage();
 		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+		RuntimeDisabledLatch::open();
 	}
 
 	protected function tearDown(): void {

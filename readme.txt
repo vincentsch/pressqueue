@@ -23,9 +23,17 @@ reconciliation controls.
 New connections, channels, and rules start disabled, and the kill switch can
 hold live-mode delivery rows locally. Default validation uses HTTP fakes and no
 live Buffer canary has been run. Bounded manual bulk and selected repost
-batches are local handoff workflows only. OAuth, standing evergreen automation,
-retention, export, compaction, uninstall deletion, and public release packaging
-are not part of this development package.
+batches are local handoff workflows only.
+
+The package includes a fail-closed runtime latch, privacy settings,
+administrator full-site export, WordPress personal data exporter and eraser
+callbacks, disabled-by-default retention, and preserve-by-default uninstall
+cleanup. Provider credentials are never exported. Rendered social text and
+media URLs are excluded from exports unless an administrator gives exact
+confirmation.
+
+OAuth, standing evergreen automation, public release packaging, and live social
+publishing proof are not part of this development package.
 
 == Changelog ==
 
@@ -35,4 +43,5 @@ are not part of this development package.
   evaluation, message previews, encrypted Buffer connection handling, channel
   discovery, editor controls, reusable templates, scheduling, image media,
   immutable local delivery records, background delivery, bounded retries,
-  manual batch handoff, and safe operator delivery controls.
+  manual batch handoff, safe operator delivery controls, privacy export,
+  retention controls, and preserve-by-default uninstall policy.

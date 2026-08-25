@@ -39,9 +39,11 @@ final class PostControlAuthorizationTest extends TestCase {
 
 		self::assertTrue( $GLOBALS['pressqueue_test_roles']['administrator']->has_cap( Capabilities::EDIT_POST_CONTROLS ) );
 		self::assertTrue( $GLOBALS['pressqueue_test_roles']['administrator']->has_cap( Capabilities::OPERATE_BATCHES ) );
+		self::assertTrue( $GLOBALS['pressqueue_test_roles']['administrator']->has_cap( Capabilities::EXPORT_DATA ) );
 		self::assertFalse( $GLOBALS['pressqueue_test_roles']['editor']->has_cap( Capabilities::EDIT_POST_CONTROLS ) );
 		self::assertFalse( $GLOBALS['pressqueue_test_roles']['editor']->has_cap( Capabilities::OPERATE_BATCHES ) );
-		self::assertSame( 4, $GLOBALS['pressqueue_test_options'][ Capabilities::VERSION_OPTION ] );
+		self::assertFalse( $GLOBALS['pressqueue_test_roles']['editor']->has_cap( Capabilities::EXPORT_DATA ) );
+		self::assertSame( 5, $GLOBALS['pressqueue_test_options'][ Capabilities::VERSION_OPTION ] );
 	}
 
 	public function test_raw_control_meta_is_registered_outside_core_rest(): void {

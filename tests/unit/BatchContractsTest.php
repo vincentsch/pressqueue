@@ -110,7 +110,7 @@ final class BatchContractsTest extends TestCase {
 		self::assertInstanceOf( NormalizedEvent::class, $event );
 		self::assertArrayHasKey( 'intent_occurrence_key', $event->event_fields() );
 		self::assertSame(
-			HashKeys::ordinary_intent_occurrence_key( 'single-site', 42, 'first_publish', $event->trigger_fingerprint ),
+			HashKeys::ordinary_intent_occurrence_key( 'home:https://example.test/', 42, 'first_publish', $event->trigger_fingerprint ),
 			$event->intent_occurrence_key
 		);
 	}

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue\Admin;
 
 use PressQueue\Security\Capabilities;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Record\RuleRecord;
 use PressQueue\Storage\Record\TemplateRecord;
@@ -47,7 +48,7 @@ final class TemplateController {
 		$templates = ( new TemplateRepository() )->find_all();
 
 		echo '<h2>' . esc_html__( 'Reusable Templates', 'pressqueue' ) . '</h2>';
-		echo '<table class="widefat striped"><thead><tr>';
+		echo '<table class="widefat striped"><caption class="screen-reader-text">' . esc_html__( 'Reusable PressQueue templates', 'pressqueue' ) . '</caption><thead><tr>';
 		foreach ( array( __( 'Name', 'pressqueue' ), __( 'Version', 'pressqueue' ), __( 'Enabled', 'pressqueue' ), __( 'Actions', 'pressqueue' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}
@@ -106,8 +107,7 @@ final class TemplateController {
 	 * Handle template create or update.
 	 */
 	public static function handle_save_template(): void {
-		self::require_capability();
-		check_admin_referer( 'pressqueue_save_template' );
+		AdminPostBoundary::check( 'pressqueue_save_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
 
 		try {
 			$repository   = new TemplateRepository();
@@ -130,7 +130,7 @@ final class TemplateController {
 
 			self::redirect( 'template_saved' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( 'template_error', $throwable->getMessage() );
+			self::redirect( 'template_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -152,14 +152,13 @@ final class TemplateController {
 	 * Soft-delete a template from selection.
 	 */
 	public static function handle_delete_template(): void {
-		self::require_capability();
-		check_admin_referer( 'pressqueue_delete_template' );
+		AdminPostBoundary::check( 'pressqueue_delete_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
 
 		try {
 			( new TemplateRepository() )->delete_from_selection( self::post_text( 'template_public_id' ), self::post_int( 'lock_version', 1 ) );
 			self::redirect( 'template_deleted' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( 'template_error', $throwable->getMessage() );
+			self::redirect( 'template_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -167,8 +166,7 @@ final class TemplateController {
 	 * Adopt the latest selected template snapshot into a rule.
 	 */
 	public static function handle_adopt_template(): void {
-		self::require_capability();
-		check_admin_referer( 'pressqueue_adopt_template' );
+		AdminPostBoundary::check( 'pressqueue_adopt_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
 
 		try {
 			( new RuleRepository() )->adopt_template_snapshot(
@@ -178,7 +176,7 @@ final class TemplateController {
 			);
 			self::redirect( 'template_adopted' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( 'template_error', $throwable->getMessage() );
+			self::redirect( 'template_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -189,14 +187,13 @@ final class TemplateController {
 	 * @param string $message Success message key.
 	 */
 	private static function set_template_enabled( bool $enabled, string $message ): void {
-		self::require_capability();
-		check_admin_referer( $enabled ? 'pressqueue_enable_template' : 'pressqueue_disable_template' );
+		AdminPostBoundary::check( $enabled ? 'pressqueue_enable_template' : 'pressqueue_disable_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
 
 		try {
 			( new TemplateRepository() )->set_enabled( self::post_text( 'template_public_id' ), self::post_int( 'lock_version', 1 ), $enabled );
 			self::redirect( $message );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( 'template_error', $throwable->getMessage() );
+			self::redirect( 'template_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 

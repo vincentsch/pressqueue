@@ -10,7 +10,10 @@ declare(strict_types=1);
 namespace PressQueue\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use PressQueue\Privacy\PrivacySettings;
+use PressQueue\Privacy\RetentionStateStore;
 use PressQueue\Plugin;
+use PressQueue\Runtime\RuntimeDisabledLatch;
 
 use function did_action;
 use function do_action;
@@ -47,6 +50,9 @@ final class PluginLifecycleTest extends TestCase {
 			$hooks
 		);
 		self::assertFalse( function_exists( 'add_cap' ) );
+		self::assertTrue( RuntimeDisabledLatch::is_open() );
+		self::assertSame( PrivacySettings::defaults(), get_option( PrivacySettings::OPTION ) );
+		self::assertSame( RetentionStateStore::defaults(), get_option( RetentionStateStore::OPTION ) );
 	}
 
 	public function test_deactivation_exposes_lifecycle_hooks(): void {
@@ -61,5 +67,6 @@ final class PluginLifecycleTest extends TestCase {
 			),
 			$hooks
 		);
+		self::assertTrue( RuntimeDisabledLatch::is_closed() );
 	}
 }

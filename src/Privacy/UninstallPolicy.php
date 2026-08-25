@@ -1,0 +1,168 @@
+<?php
+/**
+ * Uninstall cleanup policy.
+ *
+ * @package PressQueue
+ */
+
+declare(strict_types=1);
+
+namespace PressQueue\Privacy;
+
+use PressQueue\Scheduler\ActionSchedulerQueue;
+use PressQueue\Security\Capabilities;
+use PressQueue\Storage\Schema;
+use Throwable;
+
+/**
+ * Removes local plugin data only when the stored uninstall setting permits it.
+ */
+final class UninstallPolicy {
+	/**
+	 * Run uninstall cleanup for one site or every site in a multisite network.
+	 */
+	public static function uninstall(): void {
+		if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_sites' ) && function_exists( 'switch_to_blog' ) && function_exists( 'restore_current_blog' ) ) {
+			$sites = get_sites( array( 'fields' => 'ids' ) );
+			foreach ( $sites as $site_id ) {
+				switch_to_blog( (int) $site_id );
+				try {
+					self::unschedule_actions();
+					self::remove_role_capabilities();
+					self::delete_current_site_if_enabled();
+				} finally {
+					restore_current_blog();
+				}
+			}
+
+			return;
+		}
+
+		self::unschedule_actions();
+		self::remove_role_capabilities();
+		self::delete_current_site_if_enabled();
+	}
+
+	/**
+	 * Delete current-site data only when the setting is enabled.
+	 */
+	private static function delete_current_site_if_enabled(): void {
+		try {
+			if ( ! ( new PrivacySettings() )->delete_data_on_uninstall() ) {
+				return;
+			}
+		} catch ( Throwable $throwable ) {
+			unset( $throwable );
+			return;
+		}
+
+		self::delete_post_meta();
+		self::delete_options_and_transients();
+		self::drop_plugin_tables();
+	}
+
+	/**
+	 * Unschedule PressQueue Action Scheduler actions.
+	 */
+	private static function unschedule_actions(): void {
+		if ( class_exists( ActionSchedulerQueue::class ) ) {
+			ActionSchedulerQueue::unschedule_all();
+		}
+	}
+
+	/**
+	 * Remove plugin capabilities from administrator roles.
+	 */
+	private static function remove_role_capabilities(): void {
+		if ( ! function_exists( 'get_role' ) ) {
+			return;
+		}
+
+		$role = get_role( 'administrator' );
+		if ( ! $role || ! method_exists( $role, 'remove_cap' ) ) {
+			return;
+		}
+
+		foreach ( Capabilities::names() as $capability ) {
+			$role->remove_cap( $capability );
+		}
+	}
+
+	/**
+	 * Delete known plugin post metadata.
+	 */
+	private static function delete_post_meta(): void {
+		global $wpdb;
+
+		if ( ! isset( $wpdb ) || ! isset( $wpdb->postmeta ) ) {
+			return;
+		}
+
+		$keys = self::post_meta_keys();
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Uninstall cleanup must remove plugin-owned metadata.
+		$wpdb->query(
+			$wpdb->prepare(
+				'DELETE FROM %i WHERE meta_key IN (%s, %s)',
+				$wpdb->postmeta,
+				$keys[0],
+				$keys[1]
+			)
+		);
+	}
+
+	/**
+	 * Delete plugin options and transients.
+	 */
+	private static function delete_options_and_transients(): void {
+		global $wpdb;
+
+		if ( ! isset( $wpdb ) || ! isset( $wpdb->options ) ) {
+			return;
+		}
+
+		$like = $wpdb->esc_like( 'pressqueue_' ) . '%';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Uninstall cleanup must remove plugin-owned options.
+		$wpdb->query(
+			$wpdb->prepare(
+				'DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s OR option_name LIKE %s',
+				array( $wpdb->options, $like, '_transient_pressqueue_%', '_transient_timeout_pressqueue_%' )
+			)
+		);
+	}
+
+	/**
+	 * Drop PressQueue-owned tables.
+	 */
+	private static function drop_plugin_tables(): void {
+		global $wpdb;
+
+		if ( ! isset( $wpdb ) || ! isset( $wpdb->prefix ) ) {
+			return;
+		}
+
+		foreach ( array_reverse( Schema::table_suffixes() ) as $suffix ) {
+			if ( 1 !== preg_match( '/^[a-z_]+$/', $suffix ) ) {
+				continue;
+			}
+
+			$table = $wpdb->prefix . 'pressqueue_' . $suffix;
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Uninstall cleanup must remove plugin-owned tables when enabled.
+			$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $table ) );
+		}
+	}
+
+	/**
+	 * Return known plugin post meta keys.
+	 *
+	 * @return array<int,string>
+	 */
+	private static function post_meta_keys(): array {
+		return array(
+			'_pressqueue_controls',
+			'_pressqueue_policy',
+		);
+	}
+}

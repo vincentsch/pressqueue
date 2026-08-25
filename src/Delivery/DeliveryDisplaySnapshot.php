@@ -241,7 +241,7 @@ final class DeliveryDisplaySnapshot {
 	}
 
 	/**
-	 * Format a storage timestamp in UTC.
+	 * Format a storage timestamp for the WordPress site timezone.
 	 *
 	 * @param DateTimeImmutable|null $timestamp Timestamp.
 	 * @return string
@@ -251,7 +251,16 @@ final class DeliveryDisplaySnapshot {
 			return '';
 		}
 
-		return $timestamp->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' ) . ' UTC';
+		if ( function_exists( 'wp_date' ) ) {
+			return (string) wp_date( 'Y-m-d H:i:s T', $timestamp->getTimestamp() );
+		}
+
+		$timezone = function_exists( 'wp_timezone' ) ? wp_timezone() : new DateTimeZone( 'UTC' );
+		if ( ! $timezone instanceof DateTimeZone ) {
+			$timezone = new DateTimeZone( 'UTC' );
+		}
+
+		return $timestamp->setTimezone( $timezone )->format( 'Y-m-d H:i:s T' );
 	}
 
 	/**

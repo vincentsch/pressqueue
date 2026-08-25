@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Planning;
 
+use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\Repository\RuleRepository;
 use PressQueue\Storage\SchemaStatus;
@@ -133,6 +134,11 @@ final class EventCollector {
 	 * Finalize captured events after WordPress state has settled.
 	 */
 	public static function finalize(): void {
+		if ( RuntimeDisabledLatch::is_closed() ) {
+			self::$captured = array();
+			return;
+		}
+
 		if ( array() === self::$captured ) {
 			return;
 		}
@@ -192,6 +198,10 @@ final class EventCollector {
 	 * @param string $source Source.
 	 */
 	private static function capture( int $post_id, string $trigger, string $source ): void {
+		if ( RuntimeDisabledLatch::is_closed() ) {
+			return;
+		}
+
 		if ( $post_id <= 0 ) {
 			return;
 		}

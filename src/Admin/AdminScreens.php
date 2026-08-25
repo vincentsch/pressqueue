@@ -13,6 +13,7 @@ use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\Planner;
 use PressQueue\Planning\PlanningResult;
 use PressQueue\Security\Capabilities;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\Record\DecisionRecord;
@@ -59,6 +60,7 @@ final class AdminScreens {
 		ConditionBuilderController::register_hooks();
 		TemplateController::register_hooks();
 		BatchController::register_hooks();
+		PrivacyController::register_hooks();
 	}
 
 	/**
@@ -78,6 +80,7 @@ final class AdminScreens {
 		DeliveryListController::register_menu( self::SLUG_ROOT );
 		DeliveryDetailController::register_menu( self::SLUG_ROOT );
 		BatchController::register_menu( self::SLUG_ROOT );
+		PrivacyController::register_menu( self::SLUG_ROOT );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Rules', 'pressqueue' ), __( 'Rules', 'pressqueue' ), Capabilities::MANAGE_RULES, self::SLUG_RULES, array( self::class, 'render_rules_page' ) );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Preview', 'pressqueue' ), __( 'Preview', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_PREVIEW, array( self::class, 'render_preview_page' ) );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Decisions', 'pressqueue' ), __( 'Decisions', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_DECISIONS, array( self::class, 'render_decisions_page' ) );
@@ -155,7 +158,7 @@ final class AdminScreens {
 		}
 
 		echo '<h2>' . esc_html__( 'Saved Rules', 'pressqueue' ) . '</h2>';
-		echo '<table class="widefat striped"><thead><tr>';
+		echo '<table class="widefat striped"><caption class="screen-reader-text">' . esc_html__( 'Saved PressQueue rules', 'pressqueue' ) . '</caption><thead><tr>';
 		foreach ( array( __( 'Name', 'pressqueue' ), __( 'Effect', 'pressqueue' ), __( 'Priority', 'pressqueue' ), __( 'Version', 'pressqueue' ), __( 'Enabled', 'pressqueue' ), __( 'Actions', 'pressqueue' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}
@@ -231,7 +234,7 @@ final class AdminScreens {
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'PressQueue Decisions', 'pressqueue' ) . '</h1>';
 		self::render_notice();
-		echo '<table class="widefat striped"><thead><tr>';
+		echo '<table class="widefat striped"><caption class="screen-reader-text">' . esc_html__( 'Recent PressQueue decisions', 'pressqueue' ) . '</caption><thead><tr>';
 		foreach ( array( __( 'Created', 'pressqueue' ), __( 'Result', 'pressqueue' ), __( 'Post', 'pressqueue' ), __( 'Rule', 'pressqueue' ), __( 'Scope', 'pressqueue' ), __( 'Reasons', 'pressqueue' ), __( 'Delivery', 'pressqueue' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}
@@ -254,8 +257,7 @@ final class AdminScreens {
 	 * Handle settings save.
 	 */
 	public static function handle_save_settings(): void {
-		self::require_capability( Capabilities::MANAGE_SETTINGS );
-		check_admin_referer( 'pressqueue_save_settings' );
+		AdminPostBoundary::check( 'pressqueue_save_settings', Capabilities::MANAGE_SETTINGS, __( 'You are not allowed to manage PressQueue settings.', 'pressqueue' ) );
 
 		$repository = new SettingsRepository();
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked above.
@@ -270,8 +272,7 @@ final class AdminScreens {
 	 * Handle rule save.
 	 */
 	public static function handle_save_rule(): void {
-		self::require_capability( Capabilities::MANAGE_RULES );
-		check_admin_referer( 'pressqueue_save_rule' );
+		AdminPostBoundary::check( 'pressqueue_save_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
 		try {
 			$repository = new RuleRepository();
@@ -287,7 +288,7 @@ final class AdminScreens {
 
 			self::redirect( self::SLUG_RULES, 'rule_saved' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'rule_error', $throwable->getMessage() );
+			self::redirect( self::SLUG_RULES, 'rule_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -295,14 +296,13 @@ final class AdminScreens {
 	 * Handle rule enable confirmation.
 	 */
 	public static function handle_enable_rule(): void {
-		self::require_capability( Capabilities::MANAGE_RULES );
-		check_admin_referer( 'pressqueue_enable_rule' );
+		AdminPostBoundary::check( 'pressqueue_enable_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
 		try {
 			( new RuleRepository() )->enable_after_preview( self::post_text( 'rule_public_id' ), self::post_int( 'lock_version', 1 ) );
 			self::redirect( self::SLUG_RULES, 'rule_enabled' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'rule_error', $throwable->getMessage() );
+			self::redirect( self::SLUG_RULES, 'rule_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -310,15 +310,14 @@ final class AdminScreens {
 	 * Handle rule disable.
 	 */
 	public static function handle_disable_rule(): void {
-		self::require_capability( Capabilities::MANAGE_RULES );
-		check_admin_referer( 'pressqueue_disable_rule' );
+		AdminPostBoundary::check( 'pressqueue_disable_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
 		try {
 			$repository = new RuleRepository();
 			$repository->update( self::post_text( 'rule_public_id' ), self::post_int( 'lock_version', 1 ), array( 'enabled' => false ) );
 			self::redirect( self::SLUG_RULES, 'rule_disabled' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'rule_error', $throwable->getMessage() );
+			self::redirect( self::SLUG_RULES, 'rule_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -326,8 +325,7 @@ final class AdminScreens {
 	 * Handle one-rule post preview.
 	 */
 	public static function handle_rule_post_preview(): void {
-		self::require_capability( Capabilities::MANAGE_RULES );
-		check_admin_referer( 'pressqueue_preview_rule_post' );
+		AdminPostBoundary::check( 'pressqueue_preview_rule_post', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
 		try {
 			$rule   = self::requested_rule_from_request( true );
@@ -336,7 +334,7 @@ final class AdminScreens {
 			self::store_preview_result( $result );
 			self::redirect( self::SLUG_RULES, 'preview_ready' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'preview_error', $throwable->getMessage() );
+			self::redirect( self::SLUG_RULES, 'preview_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -344,8 +342,7 @@ final class AdminScreens {
 	 * Handle one-rule recent post preview.
 	 */
 	public static function handle_rule_recent_preview(): void {
-		self::require_capability( Capabilities::MANAGE_RULES );
-		check_admin_referer( 'pressqueue_preview_rule_recent' );
+		AdminPostBoundary::check( 'pressqueue_preview_rule_recent', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
 		try {
 			$rule       = self::requested_rule_from_request( true );
@@ -388,7 +385,7 @@ final class AdminScreens {
 			);
 			self::redirect( self::SLUG_RULES, 'preview_ready' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'preview_error', $throwable->getMessage() );
+			self::redirect( self::SLUG_RULES, 'preview_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -396,8 +393,7 @@ final class AdminScreens {
 	 * Handle post preview against enabled rules.
 	 */
 	public static function handle_post_preview(): void {
-		self::require_capability( Capabilities::VIEW_DECISIONS );
-		check_admin_referer( 'pressqueue_preview_post' );
+		AdminPostBoundary::check( 'pressqueue_preview_post', Capabilities::VIEW_DECISIONS, __( 'You are not allowed to view PressQueue decisions.', 'pressqueue' ) );
 
 		try {
 			$post_id = self::post_int( 'post_id', 0 );
@@ -418,7 +414,7 @@ final class AdminScreens {
 			self::store_preview_result( ( new Planner() )->preview( $event, $rules ) );
 			self::redirect( self::SLUG_PREVIEW, 'preview_ready' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_PREVIEW, 'preview_error', $throwable->getMessage() );
+			self::redirect( self::SLUG_PREVIEW, 'preview_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 

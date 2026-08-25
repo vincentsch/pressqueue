@@ -9,15 +9,26 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/plugin-check-results.php';
 
+// phpcs:disable Squiz.Strings.DoubleQuoteUsage -- Command diagnostics deliberately include shell-style fragments.
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals -- This is an isolated CLI script, not plugin runtime code.
+// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.system_calls_proc_open -- The runner shells out to WP-CLI by design.
+// phpcs:disable WordPress.Security.EscapeOutput -- CLI output is plain text or JSON, not rendered HTML.
+// phpcs:disable WordPress.WP.AlternativeFunctions -- This CLI tool manages local files and process IO directly.
+
 if ( PHP_SAPI !== 'cli' ) {
 	fwrite( STDERR, "This check must run from the command line.\n" );
 	exit( 1 );
 }
 
-$root              = dirname( __DIR__ );
-$wp_path           = getenv( 'WP_PATH' );
-$plugin_check_path = getenv( 'PLUGIN_CHECK_PATH' );
-$wp_cli_cache      = wp_cli_cache_dir();
+const PRESSQUEUE_WP_CLI_VERSION       = '2.12.0';
+const PRESSQUEUE_WP_CLI_SHA256        = 'ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c';
+const PRESSQUEUE_PLUGIN_CHECK_VERSION = '2.1.0';
+
+$root                           = dirname( __DIR__ );
+$wp_path                        = getenv( 'WP_PATH' );
+$plugin_check_path              = getenv( 'PLUGIN_CHECK_PATH' );
+$wp_cli_cache                   = wp_cli_cache_dir();
+$uses_default_plugin_check_path = false;
 
 if ( false === $wp_path || '' === $wp_path ) {
 	fwrite( STDERR, "WP_PATH must point to a disposable WordPress install for Plugin Check.\n" );
@@ -25,11 +36,28 @@ if ( false === $wp_path || '' === $wp_path ) {
 }
 
 if ( false === $plugin_check_path || '' === $plugin_check_path ) {
-	$plugin_check_path = rtrim( $wp_path, '/\\' ) . '/wp-content/plugins/plugin-check/cli.php';
+	$plugin_check_path              = rtrim( $wp_path, '/\\' ) . '/wp-content/plugins/plugin-check/cli.php';
+	$uses_default_plugin_check_path = true;
+}
+
+if ( $uses_default_plugin_check_path && ! file_exists( $plugin_check_path ) ) {
+	$command = array_merge(
+		resolve_wp_cli_command( $wp_cli_cache ),
+		array(
+			'plugin',
+			'install',
+			'plugin-check',
+			'--version=' . PRESSQUEUE_PLUGIN_CHECK_VERSION,
+			'--force',
+			'--path=' . $wp_path,
+		)
+	);
+
+	run_wp_cli_command( $command, $root );
 }
 
 if ( ! file_exists( $plugin_check_path ) ) {
-	fwrite( STDERR, "Plugin Check CLI file not found at " . $plugin_check_path . ".\n" );
+	fwrite( STDERR, "Pinned Plugin Check CLI file not found at " . $plugin_check_path . ".\n" );
 	exit( 1 );
 }
 
@@ -69,15 +97,15 @@ $command = array_merge(
 	)
 );
 
-$result = run_wp_cli_command( $command, $root, true );
-$stdout = $result['stdout'];
-$stderr = $result['stderr'];
-$status = $result['status'];
+$result      = run_wp_cli_command( $command, $root, true );
+$stdout      = $result['stdout'];
+$stderr      = $result['stderr'];
+$exit_status = $result['status'];
 
 $results = json_decode( $stdout, true );
 
 if ( ! is_array( $results ) ) {
-	if ( 0 === $status && pressqueue_plugin_check_output_is_success( $stdout . $stderr ) ) {
+	if ( 0 === $exit_status && pressqueue_plugin_check_output_is_success( $stdout . $stderr ) ) {
 		fwrite( STDOUT, "Plugin Check passed with zero errors and zero warnings.\n" );
 		exit( 0 );
 	}
@@ -93,9 +121,9 @@ if ( array() !== $failures ) {
 	exit( 1 );
 }
 
-if ( 0 !== $status ) {
+if ( 0 !== $exit_status ) {
 	fwrite( STDERR, $stdout . $stderr );
-	exit( $status );
+	exit( $exit_status );
 }
 
 fwrite( STDOUT, "Plugin Check passed with zero errors and zero warnings.\n" );
@@ -196,15 +224,34 @@ function resolve_wp_cli_command( string $scratch ): array {
 		throw new RuntimeException( 'Unable to create scratch directory: ' . $scratch );
 	}
 
-	$phar = $scratch . '/wp-cli-2.12.0.phar';
+	$phar = $scratch . '/wp-cli-' . PRESSQUEUE_WP_CLI_VERSION . '.phar';
 
 	if ( ! file_exists( $phar ) ) {
-		$url = 'https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar';
+		$url = 'https://github.com/wp-cli/wp-cli/releases/download/v' . PRESSQUEUE_WP_CLI_VERSION . '/wp-cli-' . PRESSQUEUE_WP_CLI_VERSION . '.phar';
 
 		if ( false === copy( $url, $phar ) ) {
 			throw new RuntimeException( 'Unable to download WP-CLI Phar.' );
 		}
 	}
 
+	verify_wp_cli_phar( $phar );
+
 	return array( PHP_BINARY, $phar );
+}
+
+/**
+ * Verify the pinned WP-CLI Phar checksum.
+ *
+ * @param string $phar Phar path.
+ */
+function verify_wp_cli_phar( string $phar ): void {
+	$actual = hash_file( 'sha256', $phar );
+
+	if ( PRESSQUEUE_WP_CLI_SHA256 === $actual ) {
+		return;
+	}
+
+	unlink( $phar );
+
+	throw new RuntimeException( 'WP-CLI Phar checksum did not match the pinned SHA-256.' );
 }

@@ -1,0 +1,188 @@
+# Copyright (C) 2026 Vincent Schmalbach
+# This file is distributed under the MIT license.
+msgid ""
+msgstr ""
+"Project-Id-Version: PressQueue 0.1.0-dev\n"
+"Report-Msgid-Bugs-To: https://github.com/vincentsch/pressqueue\n"
+"POT-Creation-Date: 2026-08-25 00:00+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: PressQueue manual catalog\n"
+"X-Domain: pressqueue\n"
+
+#: src/Admin/PrivacyController.php
+msgid "PressQueue Privacy"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Privacy"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "You are not allowed to manage PressQueue privacy settings."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Stored PressQueue privacy state is invalid. Runtime delivery remains disabled until it is repaired."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "You are not allowed to export PressQueue data."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "PressQueue data export failed."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "You are not allowed to run PressQueue retention."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Runtime State"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention and Uninstall"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Delete or redact eligible resolved local records after the retention period."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention days"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Uninstall deletion"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Delete local plugin data when PressQueue is uninstalled."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention confirmation"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Uninstall confirmation"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Save Privacy Settings"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Export"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Cursor"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Rendered payloads"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Include rendered social text and media URLs."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Export confirmation"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Download Export"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention Run"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Run Retention Chunk"
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Privacy operation failed."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Privacy settings saved."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention is already running."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention completed."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention processed one chunk."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention is disabled."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention did not run because runtime delivery is disabled."
+msgstr ""
+
+#: src/Admin/PrivacyController.php
+msgid "Retention did not run because storage is not ready."
+msgstr ""
+
+#: assets/admin/condition-builder.js
+msgid "All"
+msgstr ""
+
+#: assets/admin/condition-builder.js
+msgid "Any"
+msgstr ""
+
+#: assets/admin/condition-builder.js
+msgid "Add Group"
+msgstr ""
+
+#: assets/admin/condition-builder.js
+msgid "Add Condition"
+msgstr ""
+
+#: assets/admin/condition-builder.js
+msgid "Remove"
+msgstr ""
+
+#: assets/admin/condition-builder.js
+msgid "Field"
+msgstr ""
+
+#: assets/admin/condition-builder.js
+msgid "Operator"
+msgstr ""
+
+#: assets/admin/condition-builder.js
+msgid "Value"
+msgstr ""
+
+#: assets/editor/post-controls.js
+msgid "Preview unavailable."
+msgstr ""
+
+#: assets/editor/post-controls.js
+msgid "Refresh Preview"
+msgstr ""
+
+#: assets/editor/post-controls.js
+msgid "Preview reflects the current editor state and does not create delivery records."
+msgstr ""

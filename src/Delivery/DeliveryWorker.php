@@ -16,6 +16,7 @@ use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Provider\Dto\ProviderDeliveryRequest;
 use PressQueue\Provider\Dto\ProviderDeliveryResult;
 use PressQueue\Provider\ProviderRegistry;
+use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\CredentialEnvelope;
 use PressQueue\Security\CredentialEnvelopeException;
@@ -93,6 +94,10 @@ final class DeliveryWorker {
 	 * @param string $delivery_public_id Delivery public ID.
 	 */
 	public function run( string $delivery_public_id ): void {
+		if ( RuntimeDisabledLatch::is_closed() ) {
+			return;
+		}
+
 		if ( ! $this->schema_status->is_ready_for_planning() ) {
 			return;
 		}
@@ -151,7 +156,7 @@ final class DeliveryWorker {
 					$leased->public_id,
 					$owner,
 					array(
-						'classification' => 'kill_switch_enabled',
+						'classification' => $preflight['hold_class'] ?? 'kill_switch_enabled',
 						'schema_version' => 1,
 					)
 				);
@@ -169,6 +174,18 @@ final class DeliveryWorker {
 				return;
 			}
 
+			if ( $this->runtime_closed_during_submission() ) {
+				$this->transitions->hold_leased(
+					$leased->public_id,
+					$owner,
+					array(
+						'classification' => 'runtime_disabled',
+						'schema_version' => 1,
+					)
+				);
+				return;
+			}
+
 			$started = $this->transitions->submission_started( $leased->public_id, $owner, ! $this->is_manual_retry_action( $leased ) );
 			if ( null === $started ) {
 				return;
@@ -176,7 +193,18 @@ final class DeliveryWorker {
 
 			$submission_started = true;
 			$request            = $this->request_from_delivery( $started );
-			$result             = $preflight['provider']->submit( $request, $preflight['credential'] );
+			if ( $this->runtime_closed_during_submission() ) {
+				$this->transitions->hold_leased(
+					$leased->public_id,
+					$owner,
+					array(
+						'classification' => 'runtime_disabled',
+						'schema_version' => 1,
+					)
+				);
+				return;
+			}
+			$result = $preflight['provider']->submit( $request, $preflight['credential'] );
 			$this->store_result( $started, $owner, $result );
 		} catch ( Throwable $throwable ) {
 			$this->handle_exception( $leased, $owner, $request, $submission_started, $throwable );
@@ -203,16 +231,36 @@ final class DeliveryWorker {
 	}
 
 	/**
+	 * Recheck the runtime latch at submission boundaries.
+	 *
+	 * @phpstan-impure
+	 *
+	 * @return bool
+	 */
+	private function runtime_closed_during_submission(): bool {
+		return RuntimeDisabledLatch::is_closed();
+	}
+
+	/**
 	 * Recheck mutable gates while the delivery lease is held.
 	 *
 	 * @param DeliveryRecord $delivery Leased delivery.
 	 * @return array<string,mixed>
 	 */
 	private function preflight( DeliveryRecord $delivery ): array {
+		if ( RuntimeDisabledLatch::is_closed() ) {
+			return array(
+				'hold'       => true,
+				'hold_class' => 'runtime_disabled',
+				'ok'         => false,
+			);
+		}
+
 		if ( $this->settings->is_kill_switch_enabled() ) {
 			return array(
-				'hold' => true,
-				'ok'   => false,
+				'hold'       => true,
+				'hold_class' => 'kill_switch_enabled',
+				'ok'         => false,
 			);
 		}
 

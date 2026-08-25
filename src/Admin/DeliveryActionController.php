@@ -12,6 +12,7 @@ namespace PressQueue\Admin;
 use PressQueue\Delivery\OperatorActionService;
 use PressQueue\Delivery\ReconciliationService;
 use PressQueue\Security\Capabilities;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\PublicIds;
 use PressQueue\Storage\ValidationException;
 
@@ -119,7 +120,7 @@ final class DeliveryActionController {
 			wp_die( esc_html__( 'Delivery reconciliation outcome is not supported.', 'pressqueue' ) );
 		}
 
-		check_admin_referer( 'pressqueue_reconcile_delivery_' . $outcome );
+		AdminPostBoundary::check( 'pressqueue_reconcile_delivery_' . $outcome, Capabilities::OPERATE_DELIVERIES, __( 'You are not allowed to operate PressQueue deliveries.', 'pressqueue' ) );
 		self::require_confirmation();
 
 		$delivery_public_id = '';
@@ -144,9 +145,7 @@ final class DeliveryActionController {
 	 * @param string $nonce_action Nonce action.
 	 */
 	private static function mutation_boundary( string $nonce_action ): void {
-		self::require_capability();
-		self::require_post_request();
-		check_admin_referer( $nonce_action );
+		AdminPostBoundary::check( $nonce_action, Capabilities::OPERATE_DELIVERIES, __( 'You are not allowed to operate PressQueue deliveries.', 'pressqueue' ) );
 	}
 
 	/**
@@ -293,10 +292,6 @@ final class DeliveryActionController {
 	 * @return string
 	 */
 	private static function safe_error_detail( \Throwable $throwable ): string {
-		if ( $throwable instanceof ValidationException ) {
-			return $throwable->getMessage();
-		}
-
-		return 'redacted_error';
+		return SafeOperatorError::redirect_detail( $throwable );
 	}
 }

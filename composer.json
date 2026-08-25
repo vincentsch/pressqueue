@@ -42,6 +42,7 @@
     "analyse": "phpstan analyse --configuration=phpstan.neon.dist",
     "plugin-check": "php tools/run-plugin-check.php",
     "audit": "composer audit --locked",
+    "matrix:local": "php tools/local-matrix.php",
     "smoke:runtime": "php tools/runtime-guard-smoke.php wordpress && php tools/runtime-guard-smoke.php network && php tools/runtime-guard-smoke.php package",
     "package:smoke": "php tools/package-smoke.php",
     "ci": [

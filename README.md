@@ -34,10 +34,15 @@ Administrators can manage reusable template snapshots and run bounded manual
 bulk or selected repost batches that hand off confirmed local work to the same
 delivery queue.
 
+The current build includes a fail-closed runtime latch, privacy settings,
+administrator full-site export, WordPress personal data exporter and eraser
+callbacks, disabled-by-default retention, and preserve-by-default uninstall
+cleanup. Rendered social text, media URLs, and provider credentials are
+excluded from exports by default.
+
 Default validation uses HTTP fakes and local test doubles. No live Buffer
-canary, public release package, WordPress.org publication, OAuth, standing
-evergreen automation, retention, export, compaction, or uninstall deletion
-workflow is part of the current build.
+canary, public release, WordPress.org publication, OAuth, standing evergreen
+automation, or live social publishing proof is part of the current build.
 
 The project will begin privately and be made public when its first release is
 tested, documented, license-clean, and useful.
@@ -59,9 +64,18 @@ of WordPress social publishing tools. It is not affiliated with Buffer, WP
 Zinc, or WordPress.org. No third-party proprietary code, branding, or protected
 assets may be copied into this project.
 
+See [docs/clean-room.md](docs/clean-room.md).
+
+## Privacy and uninstall
+
+PressQueue preserves data by default on uninstall. Retention and destructive
+uninstall cleanup are disabled until an administrator enables them with exact
+confirmation text. See [docs/privacy.md](docs/privacy.md).
+
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT for PressQueue source. Bundled dependencies keep their own notices. See
+[LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Development
 
@@ -88,6 +102,10 @@ Prerequisites:
   is not under `wp-content/plugins/plugin-check/`.
   Run `composer run package:smoke` first so the private package is installed as
   the `pressqueue` plugin slug.
+- Docker for `composer run matrix:local`. The local matrix covers PHP 8.1,
+  8.2, 8.3, and 8.4 against WordPress 6.8.8 and 7.1 by default. It stages a
+  disposable source copy and can be previewed with `composer run matrix:local
+  -- --dry-run`.
 
 The package smoke artifact is private local evidence and is not a release
 package.

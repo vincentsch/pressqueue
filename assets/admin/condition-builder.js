@@ -1,5 +1,9 @@
-( function () {
+( function ( wp ) {
 	'use strict';
+
+	var __ = wp && wp.i18n && wp.i18n.__ ? wp.i18n.__ : function ( text ) {
+		return text;
+	};
 
 	function defaultCondition() {
 		return {
@@ -37,7 +41,7 @@
 			var parsed = JSON.parse( textarea.value || '{}' );
 			if ( ! parsed || parsed.type !== 'group' ) {
 				return {
-					error: 'Condition JSON must be an object with a group root.',
+					error: __( 'Condition JSON must be an object with a group root.', 'pressqueue' ),
 					rawInvalid: true,
 					tree: fallbackTree || rootDocument()
 				};
@@ -50,7 +54,7 @@
 			};
 		} catch ( error ) {
 			return {
-				error: 'Condition JSON is invalid: ' + error.message,
+				error: __( 'Condition JSON is invalid:', 'pressqueue' ) + ' ' + error.message,
 				rawInvalid: true,
 				tree: fallbackTree || rootDocument()
 			};
@@ -107,6 +111,7 @@
 	function renderBuilder( container, textarea, state ) {
 		var treeHost = container.querySelector( '.pressqueue-condition-builder__tree' );
 		treeHost.innerHTML = '';
+		state.controlIndex = 0;
 		renderNode( treeHost, state.tree, [], state );
 		renderError( container, state.error );
 		var selected = treeHost.querySelector( '[data-path="' + pathToString( state.selectedPath ) + '"]' );
@@ -138,23 +143,24 @@
 	}
 
 	function renderNode( host, node, path, state ) {
-		var row = document.createElement( 'div' );
-		row.setAttribute( 'role', 'treeitem' );
+		var row = document.createElement( 'li' );
 		row.setAttribute( 'tabindex', '0' );
 		row.setAttribute( 'data-path', pathToString( path ) );
-		row.style.marginLeft = ( path.length * 16 ) + 'px';
 		row.className = pathToString( path ) === pathToString( state.selectedPath ) ? 'is-selected' : '';
 		row.addEventListener( 'focus', function () {
 			state.selectedPath = path.slice();
 		} );
 
 		if ( node.type === 'group' ) {
-			row.textContent = 'Group ';
+			var groupId = nextControlId( state, path, 'mode' );
+			var label = controlLabel( groupId, __( 'Group mode', 'pressqueue' ) );
+			row.appendChild( label );
 			var select = document.createElement( 'select' );
+			select.id = groupId;
 			[ 'ALL', 'ANY' ].forEach( function ( mode ) {
 				var option = document.createElement( 'option' );
 				option.value = mode;
-				option.textContent = mode;
+				option.textContent = __( mode, 'pressqueue' );
 				option.selected = ( node.mode || node.operator ) === mode;
 				select.appendChild( option );
 			} );
@@ -172,18 +178,26 @@
 		host.appendChild( row );
 
 		if ( node.type === 'group' && Array.isArray( node.children ) ) {
+			var children = document.createElement( 'ul' );
+			children.className = 'pressqueue-condition-builder__children';
 			node.children.forEach( function ( child, index ) {
-				renderNode( host, child, path.concat( index ), state );
+				renderNode( children, child, path.concat( index ), state );
 			} );
+			row.appendChild( children );
 		}
 	}
 
 	function renderConditionControls( row, node, state ) {
+		var path = pathFromString( row.getAttribute( 'data-path' ) || '' );
+		var conditionId = nextControlId( state, path, 'condition' );
+		var operatorId = nextControlId( state, path, 'operator' );
+		var valueId = nextControlId( state, path, 'value' );
 		var condition = document.createElement( 'select' );
+		condition.id = conditionId;
 		[ 'post_type', 'post_status', 'author', 'taxonomy', 'metadata', 'post_policy' ].forEach( function ( name ) {
 			var option = document.createElement( 'option' );
 			option.value = name;
-			option.textContent = name;
+			option.textContent = labelForValue( name );
 			option.selected = node.condition === name;
 			condition.appendChild( option );
 		} );
@@ -196,10 +210,11 @@
 		} );
 
 		var operator = document.createElement( 'select' );
+		operator.id = operatorId;
 		operatorOptions( node.condition ).forEach( function ( name ) {
 			var option = document.createElement( 'option' );
 			option.value = name;
-			option.textContent = name;
+			option.textContent = labelForValue( name );
 			option.selected = node.operator === name;
 			operator.appendChild( option );
 		} );
@@ -213,6 +228,7 @@
 		} );
 
 		var value = document.createElement( 'input' );
+		value.id = valueId;
 		value.type = 'text';
 		value.value = JSON.stringify( node.value );
 		value.addEventListener( 'change', function () {
@@ -225,11 +241,50 @@
 			renderBuilder( state.container, state.textarea, state );
 		} );
 
+		row.appendChild( controlLabel( conditionId, __( 'Condition field', 'pressqueue' ) ) );
 		row.appendChild( condition );
 		row.appendChild( document.createTextNode( ' ' ) );
+		row.appendChild( controlLabel( operatorId, __( 'Condition operator', 'pressqueue' ) ) );
 		row.appendChild( operator );
 		row.appendChild( document.createTextNode( ' ' ) );
+		row.appendChild( controlLabel( valueId, __( 'Condition value', 'pressqueue' ) ) );
 		row.appendChild( value );
+	}
+
+	function nextControlId( state, path, name ) {
+		state.controlIndex += 1;
+		return 'pressqueue-condition-' + state.instanceId + '-' + ( path.length ? path.join( '-' ) : 'root' ) + '-' + name + '-' + state.controlIndex;
+	}
+
+	function controlLabel( id, text ) {
+		var label = document.createElement( 'label' );
+		label.className = 'screen-reader-text';
+		label.setAttribute( 'for', id );
+		label.textContent = text;
+		return label;
+	}
+
+	function labelForValue( value ) {
+		var labels = {
+			ALL: __( 'ALL', 'pressqueue' ),
+			ANY: __( 'ANY', 'pressqueue' ),
+			author: __( 'Author', 'pressqueue' ),
+			equals: __( 'Equals', 'pressqueue' ),
+			exists: __( 'Exists', 'pressqueue' ),
+			has_all: __( 'Has all', 'pressqueue' ),
+			has_any: __( 'Has any', 'pressqueue' ),
+			has_none: __( 'Has none', 'pressqueue' ),
+			in: __( 'In', 'pressqueue' ),
+			metadata: __( 'Metadata', 'pressqueue' ),
+			not_equals: __( 'Does not equal', 'pressqueue' ),
+			not_exists: __( 'Does not exist', 'pressqueue' ),
+			post_policy: __( 'Post policy', 'pressqueue' ),
+			post_status: __( 'Post status', 'pressqueue' ),
+			post_type: __( 'Post type', 'pressqueue' ),
+			taxonomy: __( 'Taxonomy', 'pressqueue' )
+		};
+
+		return labels[ value ] || value;
 	}
 
 	function operatorOptions( condition ) {
@@ -344,7 +399,7 @@
 	}
 
 	document.addEventListener( 'DOMContentLoaded', function () {
-		document.querySelectorAll( '.pressqueue-condition-builder' ).forEach( function ( container ) {
+		document.querySelectorAll( '.pressqueue-condition-builder' ).forEach( function ( container, index ) {
 			var textarea = document.getElementById( container.getAttribute( 'data-target' ) );
 			if ( ! textarea ) {
 				return;
@@ -353,7 +408,9 @@
 			var parsed = parseTextarea( textarea, rootDocument() );
 			var state = {
 				container: container,
+				controlIndex: 0,
 				error: parsed.error,
+				instanceId: index + 1,
 				rawInvalid: parsed.rawInvalid,
 				selectedPath: [],
 				textarea: textarea,
@@ -404,4 +461,4 @@
 			renderBuilder( container, textarea, state );
 		} );
 	} );
-}() );
+}( window.wp || {} ) );

@@ -12,6 +12,7 @@ namespace PressQueue\Admin;
 use PressQueue\Editorial\PostControlAuthorization;
 use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Editorial\PostControlPreviewService;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\ValidationException;
 
 /**
@@ -106,9 +107,9 @@ final class PostPreviewController {
 
 			return self::rest_response( $service->response( $result ), 200 );
 		} catch ( ValidationException $exception ) {
-			return self::error_response( 'invalid_preview', $exception->getMessage(), 400, array( 'preview' => $exception->getMessage() ) );
+			return self::error_response( 'invalid_preview', SafeOperatorError::message( $exception ), 400, SafeOperatorError::field_errors( $exception, 'preview' ) );
 		} catch ( \Throwable $throwable ) {
-			return self::error_response( 'forbidden', $throwable->getMessage(), 403 );
+			return self::error_response( 'forbidden', SafeOperatorError::message( $throwable, __( 'PressQueue preview could not be created.', 'pressqueue' ) ), 403 );
 		}
 	}
 

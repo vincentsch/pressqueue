@@ -11,6 +11,7 @@ namespace PressQueue\Admin;
 
 use PressQueue\Delivery\DeliveryDisplaySnapshot;
 use PressQueue\Security\Capabilities;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\Record\DeliveryRecord;
 use PressQueue\Storage\Repository\DecisionRepository;
 use PressQueue\Storage\Repository\DeliveryEventRepository;
@@ -48,7 +49,7 @@ final class DeliveryDetailController {
 		try {
 			$delivery = self::requested_delivery();
 		} catch ( ValidationException $exception ) {
-			wp_die( esc_html( $exception->getMessage() ) );
+			wp_die( esc_html( SafeOperatorError::message( $exception, __( 'PressQueue delivery could not be loaded.', 'pressqueue' ) ) ) );
 		}
 
 		$decision = ( new DecisionRepository() )->find_by_public_id( $delivery->decision_public_id );
@@ -215,7 +216,7 @@ final class DeliveryDetailController {
 	 */
 	private static function render_event_history( DeliveryDisplaySnapshot $snapshot, array $events ): void {
 		echo '<h2>' . esc_html__( 'Event History', 'pressqueue' ) . '</h2>';
-		echo '<table class="widefat striped"><thead><tr>';
+		echo '<table class="widefat striped"><caption class="screen-reader-text">' . esc_html__( 'PressQueue delivery events', 'pressqueue' ) . '</caption><thead><tr>';
 		foreach ( array( __( 'Time', 'pressqueue' ), __( 'Event', 'pressqueue' ), __( 'State', 'pressqueue' ), __( 'Attempt', 'pressqueue' ), __( 'Actor', 'pressqueue' ), __( 'Provider Result', 'pressqueue' ), __( 'Retry Safety', 'pressqueue' ), __( 'Detail', 'pressqueue' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}

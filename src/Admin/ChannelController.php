@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue\Admin;
 
 use PressQueue\Security\Capabilities;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\Record\ChannelRecord;
 use PressQueue\Storage\Repository\ChannelRepository;
 use PressQueue\Storage\ValidationException;
@@ -85,18 +86,7 @@ final class ChannelController {
 	 * @param string $nonce_action Nonce action.
 	 */
 	private static function mutation_boundary( string $nonce_action ): void {
-		if ( ! current_user_can( Capabilities::MANAGE_CONNECTIONS ) ) {
-			wp_die( esc_html__( 'You are not allowed to manage PressQueue channels.', 'pressqueue' ) );
-		}
-
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Request method is normalized on the next line.
-		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
-
-		if ( 'POST' !== $method ) {
-			wp_die( esc_html__( 'PressQueue changes require POST.', 'pressqueue' ) );
-		}
-
-		check_admin_referer( $nonce_action );
+		AdminPostBoundary::check( $nonce_action, Capabilities::MANAGE_CONNECTIONS, __( 'You are not allowed to manage PressQueue channels.', 'pressqueue' ) );
 	}
 
 	/**
@@ -137,10 +127,6 @@ final class ChannelController {
 	 * @return string
 	 */
 	private static function safe_error_detail( \Throwable $throwable ): string {
-		if ( $throwable instanceof ValidationException ) {
-			return $throwable->getMessage();
-		}
-
-		return 'redacted_error';
+		return SafeOperatorError::redirect_detail( $throwable );
 	}
 }

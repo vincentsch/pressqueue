@@ -11,6 +11,8 @@ namespace PressQueue\Planning;
 
 use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Provider\Capability\DeliveryCapability;
+use PressQueue\Runtime\RuntimeDisabledLatch;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\HashKeys;
@@ -149,6 +151,8 @@ final class Planner {
 	 * @return PlanningResult
 	 */
 	public function plan_runtime( NormalizedEvent $event ): PlanningResult {
+		RuntimeDisabledLatch::assert_open_for( 'runtime planning' );
+
 		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), true );
 	}
 
@@ -176,6 +180,7 @@ final class Planner {
 	 */
 	public function plan_runtime_destination( NormalizedEvent $event, string $channel_public_id, ?SchedulePolicy $schedule_override = null ): PlanningResult {
 		PublicIds::assert( $channel_public_id );
+		RuntimeDisabledLatch::assert_open_for( 'runtime destination planning' );
 
 		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), true, $channel_public_id, $schedule_override );
 	}
@@ -452,7 +457,7 @@ final class Planner {
 						array_merge(
 							$entry['reasons'],
 							array(
-								ReasonFactory::make( 'render_policy_error', $exception->getMessage(), 'error', 'payload', 'render', $rule->public_id, null ),
+								ReasonFactory::make( 'render_policy_error', SafeOperatorError::message( $exception ), 'error', 'payload', 'render', $rule->public_id, null ),
 							)
 						),
 						$destination['destination'],
@@ -673,7 +678,7 @@ final class Planner {
 				$evaluated[] = array(
 					'condition_result' => 'error',
 					'reasons'          => array(
-						ReasonFactory::make( 'malformed_rule', $exception->getMessage(), 'error', 'rule', 'valid_document', $rule->public_id, null ),
+						ReasonFactory::make( 'malformed_rule', SafeOperatorError::message( $exception ), 'error', 'rule', 'valid_document', $rule->public_id, null ),
 					),
 					'rule'             => $rule,
 				);

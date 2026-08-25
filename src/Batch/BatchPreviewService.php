@@ -15,6 +15,7 @@ use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\NormalizedEvent;
 use PressQueue\Planning\Planner;
 use PressQueue\Planning\PlanningResult;
+use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\HashKeys;
@@ -89,6 +90,8 @@ final class BatchPreviewService {
 	 * @return BatchRecord
 	 */
 	public function preview( string $batch_type, array $filters, array $batch_limits, int $created_by ): BatchRecord {
+		RuntimeDisabledLatch::assert_open_for( 'batch preview' );
+
 		StorageEnums::assert_batch_type( $batch_type );
 		$this->assert_json_size( $filters );
 		$this->assert_json_size( $batch_limits );

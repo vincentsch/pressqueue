@@ -12,6 +12,7 @@ namespace PressQueue\Admin;
 use PressQueue\Editorial\PostControlAuthorization;
 use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Security\Capabilities;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\Record\ChannelRecord;
 use PressQueue\Storage\Repository\ChannelRepository;
@@ -153,7 +154,7 @@ final class PostControlsController {
 
 			return self::rest_response( self::controls_response( $post_id ), 200 );
 		} catch ( \Throwable $throwable ) {
-			return self::error_response( 'forbidden', $throwable->getMessage(), 403 );
+			return self::error_response( 'forbidden', SafeOperatorError::message( $throwable, __( 'You are not allowed to read PressQueue controls for this post.', 'pressqueue' ) ), 403 );
 		}
 	}
 
@@ -187,11 +188,11 @@ final class PostControlsController {
 
 			return self::rest_response( self::controls_response( $post_id ), 200 );
 		} catch ( StaleRecordException $exception ) {
-			return self::error_response( 'conflict', $exception->getMessage(), 409 );
+			return self::error_response( 'conflict', SafeOperatorError::message( $exception ), 409 );
 		} catch ( ValidationException $exception ) {
-			return self::error_response( 'invalid_controls', $exception->getMessage(), 400, array( 'controls' => $exception->getMessage() ) );
+			return self::error_response( 'invalid_controls', SafeOperatorError::message( $exception ), 400, SafeOperatorError::field_errors( $exception, 'controls' ) );
 		} catch ( \Throwable $throwable ) {
-			return self::error_response( 'forbidden', $throwable->getMessage(), 403 );
+			return self::error_response( 'forbidden', SafeOperatorError::message( $throwable, __( 'PressQueue controls could not be saved.', 'pressqueue' ) ), 403 );
 		}
 	}
 
@@ -326,6 +327,12 @@ final class PostControlsController {
 		}
 
 		try {
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Request method is normalized on the next line.
+			$method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
+			if ( 'POST' !== strtoupper( $method ) ) {
+				throw new ValidationException( 'PressQueue changes require POST.' );
+			}
+
 			PostControlAuthorization::require_current_user_access( $post_id );
 			check_admin_referer( 'pressqueue_save_post_controls', 'pressqueue_controls_nonce' );
 
@@ -344,7 +351,7 @@ final class PostControlsController {
 			PostControlMetadata::replace_for_post( $post_id, $controls, $base_hash );
 		} catch ( \Throwable $throwable ) {
 			if ( function_exists( 'wp_die' ) ) {
-				wp_die( esc_html( $throwable->getMessage() ) );
+				wp_die( esc_html( SafeOperatorError::message( $throwable, __( 'PressQueue controls could not be saved.', 'pressqueue' ) ) ) );
 			}
 		}
 	}
@@ -365,10 +372,14 @@ final class PostControlsController {
 		wp_enqueue_script(
 			'pressqueue-post-controls',
 			plugins_url( 'assets/editor/post-controls.js', PRESSQUEUE_FILE ),
-			array( 'wp-api-fetch', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-element', 'wp-plugins' ),
+			array( 'wp-api-fetch', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-element', 'wp-i18n', 'wp-plugins' ),
 			defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0-dev',
 			true
 		);
+
+		if ( function_exists( 'wp_set_script_translations' ) ) {
+			wp_set_script_translations( 'pressqueue-post-controls', 'pressqueue', defined( 'PRESSQUEUE_DIR' ) ? PRESSQUEUE_DIR . 'languages' : '' );
+		}
 	}
 
 	/**

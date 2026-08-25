@@ -22,8 +22,9 @@ final class Capabilities {
 	public const OPERATE_DELIVERIES = 'operate_pressqueue_deliveries';
 	public const EDIT_POST_CONTROLS = 'edit_pressqueue_post_controls';
 	public const OPERATE_BATCHES    = 'operate_pressqueue_batches';
+	public const EXPORT_DATA        = 'export_pressqueue_data';
 	public const VERSION_OPTION     = 'pressqueue_capability_schema_version';
-	public const TARGET_VERSION     = 4;
+	public const TARGET_VERSION     = 5;
 
 	/**
 	 * Return the initial capability names.
@@ -40,6 +41,7 @@ final class Capabilities {
 			self::OPERATE_DELIVERIES,
 			self::EDIT_POST_CONTROLS,
 			self::OPERATE_BATCHES,
+			self::EXPORT_DATA,
 		);
 	}
 

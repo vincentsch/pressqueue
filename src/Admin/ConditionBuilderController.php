@@ -42,10 +42,14 @@ final class ConditionBuilderController {
 		wp_enqueue_script(
 			'pressqueue-condition-builder',
 			plugins_url( 'assets/admin/condition-builder.js', PRESSQUEUE_FILE ),
-			array(),
+			array( 'wp-i18n' ),
 			defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0-dev',
 			true
 		);
+
+		if ( function_exists( 'wp_set_script_translations' ) ) {
+			wp_set_script_translations( 'pressqueue-condition-builder', 'pressqueue', defined( 'PRESSQUEUE_DIR' ) ? PRESSQUEUE_DIR . 'languages' : '' );
+		}
 	}
 
 	/**
@@ -64,9 +68,9 @@ final class ConditionBuilderController {
 		foreach ( self::toolbar_actions() as $action => $button_label ) {
 			echo '<button type="button" class="button" data-pressqueue-condition-action="' . esc_attr( $action ) . '">' . esc_html( $button_label ) . '</button> ';
 		}
-		echo '<label>' . esc_html__( 'Group mode', 'pressqueue' ) . ' <select data-pressqueue-condition-action="set-mode"><option value="ALL">ALL</option><option value="ANY">ANY</option></select></label>';
+		echo '<label>' . esc_html__( 'Group mode', 'pressqueue' ) . ' <select data-pressqueue-condition-action="set-mode"><option value="ALL">' . esc_html__( 'ALL', 'pressqueue' ) . '</option><option value="ANY">' . esc_html__( 'ANY', 'pressqueue' ) . '</option></select></label>';
 		echo '</div>';
-		echo '<div class="pressqueue-condition-builder__tree" role="tree" aria-label="' . esc_attr__( 'PressQueue conditions', 'pressqueue' ) . '"></div>';
+		echo '<ul class="pressqueue-condition-builder__tree" aria-label="' . esc_attr__( 'PressQueue conditions', 'pressqueue' ) . '"></ul>';
 		echo '</div>';
 		echo '</td></tr>';
 	}

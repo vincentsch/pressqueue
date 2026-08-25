@@ -12,6 +12,7 @@ namespace PressQueue\Delivery;
 // phpcs:disable Squiz.Commenting.VariableComment.Missing -- Constructor wires service dependencies.
 
 use PressQueue\Provider\Capability\DeliveryCapability;
+use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\CredentialEnvelope;
 use PressQueue\Storage\Database;
@@ -200,6 +201,10 @@ final class OperatorActionService {
 	 * @param string         $action Operator action.
 	 */
 	private function assert_queue_gates_open( DeliveryRecord $delivery, ?int $actor_user_id, string $action ): void {
+		if ( RuntimeDisabledLatch::is_closed() ) {
+			$this->refuse( $delivery, $actor_user_id, $action . '_runtime_disabled' );
+		}
+
 		if ( $this->settings->is_kill_switch_enabled() ) {
 			$this->refuse( $delivery, $actor_user_id, $action . '_kill_switch_enabled' );
 		}

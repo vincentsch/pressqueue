@@ -13,6 +13,7 @@ use PressQueue\Delivery\DeliveryDisplaySnapshot;
 use PressQueue\Delivery\DeliveryQueryRepository;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\Repository\DecisionRepository;
 use PressQueue\Storage\StorageEnums;
 use PressQueue\Storage\ValidationException;
@@ -59,7 +60,7 @@ final class DeliveryListController {
 			self::render_table( $result['rows'] );
 			self::render_pagination( $result['page'], $result['page_size'], $result['total'], $filters );
 		} catch ( ValidationException $exception ) {
-			echo '<div class="notice notice-error"><p>' . esc_html( $exception->getMessage() ) . '</p></div>';
+			echo '<div class="notice notice-error"><p>' . esc_html( SafeOperatorError::message( $exception, __( 'PressQueue deliveries could not be loaded.', 'pressqueue' ) ) ) . '</p></div>';
 		}
 
 		echo '</div>';
@@ -106,7 +107,7 @@ final class DeliveryListController {
 		$decisions = new DecisionRepository();
 		$scheduler = new ActionSchedulerQueue();
 
-		echo '<table class="widefat striped"><thead><tr>';
+		echo '<table class="widefat striped"><caption class="screen-reader-text">' . esc_html__( 'PressQueue delivery log results', 'pressqueue' ) . '</caption><thead><tr>';
 		foreach ( array( __( 'Delivery', 'pressqueue' ), __( 'State Changed', 'pressqueue' ), __( 'Post', 'pressqueue' ), __( 'Destination', 'pressqueue' ), __( 'Attempts', 'pressqueue' ), __( 'Retry', 'pressqueue' ), __( 'Next Attempt', 'pressqueue' ), __( 'Remote ID', 'pressqueue' ), __( 'Last Error', 'pressqueue' ), __( 'Signal', 'pressqueue' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}

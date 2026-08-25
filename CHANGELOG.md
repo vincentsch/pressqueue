@@ -51,6 +51,22 @@
   mutation, release packaging, retention, export, and uninstall deletion out
   of scope.
 
+### Privacy, security, and private package
+
+- Added a fail-closed runtime latch that gates capture, durable planning,
+  batch handoff, queue sweep, retry, resume, worker entry, and the final
+  pre-provider HTTP boundary.
+- Added capability schema version 5 with `export_pressqueue_data`, while
+  keeping `access_pressqueue_admin` virtual.
+- Added privacy settings, administrator full-site JSON export, WordPress
+  personal data exporter and eraser callbacks, disabled-by-default retention,
+  and preserve-by-default uninstall cleanup.
+- Redacted credential envelopes, rendered social text, media URLs, provider
+  diagnostics, and raw exception text from export and operator flows.
+- Added package notices, a translation catalog, pinned external CI action
+  references, checksum-pinned WP-CLI tooling, private release docs, and a
+  Docker-based local compatibility matrix runner.
+
 ## 2026-08-24
 
 ### Bootstrap and local quality gate

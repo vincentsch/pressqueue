@@ -15,8 +15,10 @@ use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\Planner;
 use PressQueue\Planning\PlanningResult;
 use PressQueue\Planning\SchedulePolicy;
+use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\Record\BatchItemRecord;
 use PressQueue\Storage\Record\DeliveryRecord;
@@ -69,6 +71,10 @@ final class BatchQueueService {
 			return;
 		}
 
+		if ( RuntimeDisabledLatch::is_closed() ) {
+			return;
+		}
+
 		if ( ! ( new SchemaStatus() )->is_ready_for_planning() ) {
 			return;
 		}
@@ -86,6 +92,8 @@ final class BatchQueueService {
 	 * @param string $preview_snapshot_hash Snapshot hash.
 	 */
 	public function ensure_queue_action( string $batch_public_id, string $preview_snapshot_hash ): void {
+		RuntimeDisabledLatch::assert_open_for( 'batch queue recovery' );
+
 		if ( ! $this->scheduler->is_ready() || $this->scheduler->has_batch_queue_action( $batch_public_id, $preview_snapshot_hash ) ) {
 			return;
 		}
@@ -100,6 +108,10 @@ final class BatchQueueService {
 	 * @param string $preview_snapshot_hash Snapshot hash.
 	 */
 	public function process( string $batch_public_id, string $preview_snapshot_hash ): void {
+		if ( RuntimeDisabledLatch::is_closed() ) {
+			return;
+		}
+
 		$batch = $this->batches->find_by_public_id( $batch_public_id );
 		if ( null === $batch || 'queueing' !== $batch->status || $batch->preview_snapshot_hash !== $preview_snapshot_hash ) {
 			return;
@@ -178,7 +190,7 @@ final class BatchQueueService {
 				'failed',
 				array(
 					'code'           => 'batch_handoff_failed',
-					'message'        => $throwable->getMessage(),
+					'message'        => SafeOperatorError::message( $throwable ),
 					'schema_version' => 1,
 				)
 			);

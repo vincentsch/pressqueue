@@ -13,6 +13,7 @@ namespace PressQueue\Delivery;
 
 use PressQueue\Provider\ProviderRegistry;
 use PressQueue\Provider\Capability\DeliveryCapability;
+use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\DeliveryPayloadDocuments;
@@ -69,6 +70,10 @@ final class QueueSweep {
 	 * @return int Number of rows attempted.
 	 */
 	public function run(): int {
+		if ( RuntimeDisabledLatch::is_closed() ) {
+			return 0;
+		}
+
 		if ( ! $this->schema_status->is_ready_for_planning() ) {
 			return 0;
 		}

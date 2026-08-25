@@ -11,6 +11,7 @@ namespace PressQueue\Batch;
 
 // phpcs:disable Squiz.Commenting.VariableComment.Missing -- Constructor wires service dependencies.
 
+use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\Database;
@@ -60,6 +61,7 @@ final class BatchConfirmationService {
 	 */
 	public function confirm( string $batch_public_id, string $preview_snapshot_hash, int $actor_user_id ): BatchRecord {
 		$this->require_capability();
+		RuntimeDisabledLatch::assert_open_for( 'batch confirmation' );
 		StorageValidator::assert_hash( $preview_snapshot_hash );
 
 		$batch = $this->batches->find_by_public_id( $batch_public_id );

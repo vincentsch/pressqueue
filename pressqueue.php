@@ -253,11 +253,9 @@ function pressqueue_activate( $network_wide ): void {
 		PressQueue\Plugin::activate( (bool) $network_wide );
 	} catch ( \Throwable $throwable ) {
 		pressqueue_fail_activation(
-			sprintf(
-				/* translators: %s: activation failure reason. */
-				__( 'PressQueue could not complete activation setup: %s', 'pressqueue' ),
-				$throwable->getMessage()
-			)
+			class_exists( 'PressQueue\Security\SafeOperatorError' )
+				? PressQueue\Security\SafeOperatorError::activation_message( $throwable )
+				: __( 'PressQueue could not complete activation setup.', 'pressqueue' )
 		);
 	}
 }

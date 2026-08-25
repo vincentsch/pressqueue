@@ -15,6 +15,7 @@ use PressQueue\Provider\ProviderRegistry;
 use PressQueue\Security\Capabilities;
 use PressQueue\Security\CredentialEnvelope;
 use PressQueue\Security\CredentialEnvelopeException;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\Record\ConnectionRecord;
 use PressQueue\Storage\Repository\ChannelRepository;
@@ -528,16 +529,7 @@ final class ConnectionController {
 	 * @param string $nonce_action Nonce action.
 	 */
 	private static function mutation_boundary( string $nonce_action ): void {
-		self::require_capability();
-
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Request method is normalized on the next line.
-		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
-
-		if ( 'POST' !== $method ) {
-			wp_die( esc_html__( 'PressQueue changes require POST.', 'pressqueue' ) );
-		}
-
-		check_admin_referer( $nonce_action );
+		AdminPostBoundary::check( $nonce_action, Capabilities::MANAGE_CONNECTIONS, __( 'You are not allowed to manage PressQueue connections.', 'pressqueue' ) );
 	}
 
 	/**
@@ -645,12 +637,10 @@ final class ConnectionController {
 		}
 
 		if ( $throwable instanceof CredentialEnvelopeException || $throwable instanceof StaleRecordException || $throwable instanceof ValidationException ) {
-			$message = $throwable->getMessage();
-
-			return '' === $message ? 'redacted_error' : $message;
+			return SafeOperatorError::message( $throwable, 'redacted_error' );
 		}
 
-		return 'redacted_error';
+		return SafeOperatorError::redirect_detail( $throwable );
 	}
 
 	/**

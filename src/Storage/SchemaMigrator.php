@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace PressQueue\Storage;
 
+use PressQueue\Admin\AdminPostBoundary;
+use PressQueue\Security\SafeOperatorError;
 use Throwable;
 
 /**
@@ -124,11 +126,7 @@ final class SchemaMigrator {
 	 * Handle the nonce-protected administrator lock recovery action.
 	 */
 	public static function handle_lock_recovery(): void {
-		if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You are not allowed to recover PressQueue migrations.', 'pressqueue' ) );
-		}
-
-		check_admin_referer( 'pressqueue_recover_migration_lock' );
+		AdminPostBoundary::check( 'pressqueue_recover_migration_lock', 'manage_options', __( 'You are not allowed to recover PressQueue migrations.', 'pressqueue' ) );
 
 		$recovered = false;
 		if ( Database::has_global_database() ) {
@@ -532,10 +530,7 @@ final class SchemaMigrator {
 
 		update_option(
 			Schema::MIGRATION_FAILED_OPTION,
-			array(
-				'failed_at' => gmdate( 'Y-m-d H:i:s' ),
-				'message'   => $throwable->getMessage(),
-			),
+			SafeOperatorError::failure_marker( $throwable ),
 			false
 		);
 	}

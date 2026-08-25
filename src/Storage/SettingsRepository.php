@@ -115,7 +115,15 @@ final class SettingsRepository {
 
 		$value = get_option( $option, $default_value ? '1' : '0' );
 
-		return in_array( $value, array( true, 1, '1', 'true', 'yes', 'on' ), true );
+		if ( '1' === $value ) {
+			return true;
+		}
+
+		if ( '0' === $value ) {
+			return false;
+		}
+
+		return $default_value;
 	}
 
 	/**

@@ -14,6 +14,7 @@ use PressQueue\Batch\BatchConfirmationService;
 use PressQueue\Batch\BatchPreviewService;
 use PressQueue\Batch\BatchQueueService;
 use PressQueue\Security\Capabilities;
+use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Repository\BatchItemRepository;
 use PressQueue\Storage\Repository\BatchRepository;
@@ -88,8 +89,7 @@ final class BatchController {
 	 * Handle preview request.
 	 */
 	public static function handle_preview(): void {
-		self::require_capability();
-		check_admin_referer( 'pressqueue_preview_batch' );
+		AdminPostBoundary::check( 'pressqueue_preview_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
 
 		try {
 			$batch = ( new BatchPreviewService() )->preview(
@@ -100,7 +100,7 @@ final class BatchController {
 			);
 			self::redirect( 'batch_previewed', null, $batch->public_id );
 		} catch ( Throwable $throwable ) {
-			self::redirect( 'batch_error', $throwable->getMessage() );
+			self::redirect( 'batch_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -108,14 +108,13 @@ final class BatchController {
 	 * Handle confirmation request.
 	 */
 	public static function handle_confirm(): void {
-		self::require_capability();
-		check_admin_referer( 'pressqueue_confirm_batch' );
+		AdminPostBoundary::check( 'pressqueue_confirm_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
 
 		try {
 			$batch = ( new BatchConfirmationService() )->confirm( self::post_text( 'batch_public_id' ), self::post_text( 'preview_snapshot_hash' ), self::current_user_id() );
 			self::redirect( 'batch_confirmed', null, $batch->public_id );
 		} catch ( Throwable $throwable ) {
-			self::redirect( 'batch_error', $throwable->getMessage(), self::post_text( 'batch_public_id' ) );
+			self::redirect( 'batch_error', SafeOperatorError::redirect_detail( $throwable ), self::post_text( 'batch_public_id' ) );
 		}
 	}
 
@@ -123,15 +122,14 @@ final class BatchController {
 	 * Handle cancellation request.
 	 */
 	public static function handle_cancel(): void {
-		self::require_capability();
-		check_admin_referer( 'pressqueue_cancel_batch' );
+		AdminPostBoundary::check( 'pressqueue_cancel_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
 
 		try {
 			$batch_public_id = self::post_text( 'batch_public_id' );
 			( new BatchCancellationService() )->cancel( $batch_public_id, self::current_user_id() );
 			self::redirect( 'batch_cancelled', null, $batch_public_id );
 		} catch ( Throwable $throwable ) {
-			self::redirect( 'batch_error', $throwable->getMessage(), self::post_text( 'batch_public_id' ) );
+			self::redirect( 'batch_error', SafeOperatorError::redirect_detail( $throwable ), self::post_text( 'batch_public_id' ) );
 		}
 	}
 
@@ -139,8 +137,7 @@ final class BatchController {
 	 * Handle queue action recovery request.
 	 */
 	public static function handle_recover(): void {
-		self::require_capability();
-		check_admin_referer( 'pressqueue_recover_batch' );
+		AdminPostBoundary::check( 'pressqueue_recover_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
 
 		try {
 			$batch_public_id = self::post_text( 'batch_public_id' );
@@ -151,7 +148,7 @@ final class BatchController {
 			( new BatchQueueService() )->ensure_queue_action( $batch->public_id, $batch->preview_snapshot_hash );
 			self::redirect( 'batch_recovered', null, $batch->public_id );
 		} catch ( Throwable $throwable ) {
-			self::redirect( 'batch_error', $throwable->getMessage(), self::post_text( 'batch_public_id' ) );
+			self::redirect( 'batch_error', SafeOperatorError::redirect_detail( $throwable ), self::post_text( 'batch_public_id' ) );
 		}
 	}
 
@@ -189,7 +186,7 @@ final class BatchController {
 		);
 
 		echo '<h2>' . esc_html__( 'Recent Batches', 'pressqueue' ) . '</h2>';
-		echo '<table class="widefat striped"><thead><tr>';
+		echo '<table class="widefat striped"><caption class="screen-reader-text">' . esc_html__( 'Recent PressQueue batches', 'pressqueue' ) . '</caption><thead><tr>';
 		foreach ( array( __( 'Batch', 'pressqueue' ), __( 'Status', 'pressqueue' ), __( 'Created', 'pressqueue' ), __( 'Confirmed', 'pressqueue' ), __( 'Expiry', 'pressqueue' ), __( 'Counts', 'pressqueue' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}
@@ -305,7 +302,7 @@ final class BatchController {
 		$items = ( new BatchItemRepository() )->find_by_batch( $batch_public_id );
 
 		echo '<h2>' . esc_html__( 'Items', 'pressqueue' ) . '</h2>';
-		echo '<table class="widefat striped"><thead><tr>';
+		echo '<table class="widefat striped"><caption class="screen-reader-text">' . esc_html__( 'PressQueue batch items', 'pressqueue' ) . '</caption><thead><tr>';
 		foreach ( array( __( 'Item', 'pressqueue' ), __( 'Post', 'pressqueue' ), __( 'Destination', 'pressqueue' ), __( 'Message', 'pressqueue' ), __( 'Media', 'pressqueue' ), __( 'Schedule', 'pressqueue' ), __( 'Delivery', 'pressqueue' ), __( 'Reason', 'pressqueue' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}
