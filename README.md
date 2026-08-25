@@ -18,19 +18,26 @@ Buffer is the first provider. The intended product combines:
 
 PressQueue has an installable guarded development build with local storage,
 capability boundaries, dry-run and kill-switch settings, JSON-based rules,
-transport-neutral message previews, immutable decision records, and local
-delivery records.
+role-protected editor controls, a condition builder, transport-neutral
+previews, immutable decision records, and local delivery records.
 
 The current build also includes encrypted Buffer personal API-key storage,
 fakeable Buffer organization and channel discovery, disabled-by-default channel
-enablement, an Action Scheduler backed delivery outbox, immutable text-only
-Buffer submission, bounded retry handling, a redacted delivery log, local
-cancel and resume controls, manual retry gates, and ambiguity reconciliation.
+enablement, an Action Scheduler backed delivery outbox, immutable Buffer
+submission with text, scheduling, and image payload support, bounded retry
+handling, a redacted delivery log, local cancel and resume controls, manual
+retry gates, and ambiguity reconciliation.
+
+Editors can preview inherited policy, restrictive channel overrides, message
+overrides, schedule choices, and image media before durable work is created.
+Administrators can manage reusable template snapshots and run bounded manual
+bulk or selected repost batches that hand off confirmed local work to the same
+delivery queue.
 
 Default validation uses HTTP fakes and local test doubles. No live Buffer
-canary, public release package, WordPress.org publication, OAuth, media
-delivery, bulk publishing, evergreen reposting, retention, export, compaction,
-or uninstall deletion workflow is part of the current build.
+canary, public release package, WordPress.org publication, OAuth, standing
+evergreen automation, retention, export, compaction, or uninstall deletion
+workflow is part of the current build.
 
 The project will begin privately and be made public when its first release is
 tested, documented, license-clean, and useful.

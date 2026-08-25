@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-08-25
+
+### Editorial controls and preview planning
+
+- Added role-protected post controls for inherited policy, explicit include or
+  exclude policy, and restrictive channel overrides.
+- Added canonical post-control metadata, authenticated control routes, classic
+  editor fallback controls, and nondurable dirty-editor previews.
+- Split runtime trigger fingerprints from delivery revision fingerprints so
+  control-only saves do not create update events while delivery identities keep
+  the final control bundle.
+- Added a visual condition builder for the existing rule condition JSON
+  contract while keeping the raw JSON value canonical.
+- Centralized behavior-change rule disablement in the rule repository.
+
+### Templates, scheduling, and image media
+
+- Added reusable template records, immutable rule template snapshots,
+  service-specific messages, template provenance, and explicit template
+  adoption.
+- Added canonical message, schedule, and image media sections to post controls.
+- Added provider-neutral schedule resolution for immediate, next queue slot,
+  end of queue, and explicit local times with daylight-saving and horizon
+  validation.
+- Added image media planning, safe public URL probe contracts, media identity
+  snapshots, and provider capability validation before delivery rows are
+  created.
+- Added payload schema version 2 and Buffer encoder support for schedules and
+  ordered image assets.
+- Added version-aware delivery compatibility so legacy payloads remain
+  displayable but fail closed before queueing, resume, retry, or worker
+  submission.
+
+### Manual batch workflows
+
+- Added normalized batch and batch item storage for bounded bulk and selected
+  repost previews.
+- Added batch operation capability, batch administration screens, exact
+  confirmation, preview expiry, duplicate checks, occurrence identity, and
+  durable review evidence.
+- Added local batch queue handoff through Action Scheduler using the shared
+  planner and existing delivery queue.
+- Added idempotent batch recovery and local cancellation of unqueued work.
+- Hardened batch queue handoff so cancellation cannot leave a cancelled item
+  with an unlinked committed delivery.
+- Reused reviewed batch schedule overrides during runtime handoff and rejected
+  past staggered schedule starts.
+- Kept standing evergreen automation, live provider validation, remote post
+  mutation, release packaging, retention, export, and uninstall deletion out
+  of scope.
+
 ## 2026-08-24
 
 ### Bootstrap and local quality gate

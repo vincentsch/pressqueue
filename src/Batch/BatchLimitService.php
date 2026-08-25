@@ -164,7 +164,12 @@ final class BatchLimitService {
 		}
 
 		$due = $first->add( new DateInterval( 'PT' . ( (int) $schedule['interval_minutes'] * $queueable_index ) . 'M' ) );
-		if ( $due->getTimestamp() > time() + ( self::MAX_EXPLICIT_HORIZON_DAYS * DAY_IN_SECONDS ) ) {
+		$now = time();
+		if ( $due->getTimestamp() <= $now ) {
+			throw new ValidationException( 'Staggered schedule cannot be in the past.' );
+		}
+
+		if ( $due->getTimestamp() > $now + ( self::MAX_EXPLICIT_HORIZON_DAYS * DAY_IN_SECONDS ) ) {
 			throw new ValidationException( 'Staggered schedule exceeds the supported horizon.' );
 		}
 
@@ -209,7 +214,16 @@ final class BatchLimitService {
 		StorageValidator::assert_utc_timestamp( 'First due UTC time', $first_due_at_utc );
 
 		$first = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $first_due_at_utc, new DateTimeZone( 'UTC' ) );
-		if ( false === $first || $first->getTimestamp() > time() + ( self::MAX_EXPLICIT_HORIZON_DAYS * DAY_IN_SECONDS ) ) {
+		if ( false === $first ) {
+			throw new ValidationException( 'Staggered schedule start is invalid.' );
+		}
+
+		$now = time();
+		if ( $first->getTimestamp() <= $now ) {
+			throw new ValidationException( 'Staggered schedule cannot be in the past.' );
+		}
+
+		if ( $first->getTimestamp() > $now + ( self::MAX_EXPLICIT_HORIZON_DAYS * DAY_IN_SECONDS ) ) {
 			throw new ValidationException( 'Staggered schedule exceeds the supported horizon.' );
 		}
 

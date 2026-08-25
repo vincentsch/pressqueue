@@ -193,7 +193,7 @@ final class PostControlMetadata {
 	}
 
 	/**
-	 * Return virtual metadata facts used by the P01 condition vocabulary.
+	 * Return virtual metadata facts used by the rule condition vocabulary.
 	 *
 	 * @param array<string,mixed> $bundle Control bundle.
 	 * @return array<string,string>

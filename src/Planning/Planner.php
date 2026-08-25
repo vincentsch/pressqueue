@@ -155,27 +155,29 @@ final class Planner {
 	/**
 	 * Run non-durable runtime planning for one destination channel.
 	 *
-	 * @param NormalizedEvent $event Event.
-	 * @param string          $channel_public_id Destination channel public ID.
+	 * @param NormalizedEvent     $event Event.
+	 * @param string              $channel_public_id Destination channel public ID.
+	 * @param SchedulePolicy|null $schedule_override Reviewed schedule override.
 	 * @return PlanningResult
 	 */
-	public function preview_runtime_destination( NormalizedEvent $event, string $channel_public_id ): PlanningResult {
+	public function preview_runtime_destination( NormalizedEvent $event, string $channel_public_id, ?SchedulePolicy $schedule_override = null ): PlanningResult {
 		PublicIds::assert( $channel_public_id );
 
-		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), false, $channel_public_id );
+		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), false, $channel_public_id, $schedule_override );
 	}
 
 	/**
 	 * Run durable runtime planning for one destination channel.
 	 *
-	 * @param NormalizedEvent $event Event.
-	 * @param string          $channel_public_id Destination channel public ID.
+	 * @param NormalizedEvent     $event Event.
+	 * @param string              $channel_public_id Destination channel public ID.
+	 * @param SchedulePolicy|null $schedule_override Reviewed schedule override.
 	 * @return PlanningResult
 	 */
-	public function plan_runtime_destination( NormalizedEvent $event, string $channel_public_id ): PlanningResult {
+	public function plan_runtime_destination( NormalizedEvent $event, string $channel_public_id, ?SchedulePolicy $schedule_override = null ): PlanningResult {
 		PublicIds::assert( $channel_public_id );
 
-		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), true, $channel_public_id );
+		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), true, $channel_public_id, $schedule_override );
 	}
 
 	/**
@@ -185,9 +187,10 @@ final class Planner {
 	 * @param array<int,RuleRecord> $rules Rules to evaluate.
 	 * @param bool                  $durable Whether to write rows.
 	 * @param string|null           $only_channel_public_id Optional destination filter.
+	 * @param SchedulePolicy|null   $schedule_override Reviewed schedule override.
 	 * @return PlanningResult
 	 */
-	private function plan( NormalizedEvent $event, array $rules, bool $durable, ?string $only_channel_public_id = null ): PlanningResult {
+	private function plan( NormalizedEvent $event, array $rules, bool $durable, ?string $only_channel_public_id = null, ?SchedulePolicy $schedule_override = null ): PlanningResult {
 		if ( null !== $only_channel_public_id ) {
 			PublicIds::assert( $only_channel_public_id );
 		}
@@ -421,7 +424,7 @@ final class Planner {
 						$message_template = $event->control_bundle['message']['value'];
 					}
 
-					$schedule        = $this->schedules->resolve( $rule, $event->control_bundle );
+					$schedule        = $schedule_override ?? $this->schedules->resolve( $rule, $event->control_bundle );
 					$media           = $this->media->resolve( $rule, $event, $destination['destination']['capability_document'], ! $durable );
 					$payload_preview = $this->templates->payload_preview_v2(
 						$message_template,

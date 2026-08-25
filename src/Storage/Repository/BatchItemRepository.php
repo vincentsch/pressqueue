@@ -224,6 +224,21 @@ final class BatchItemRepository extends AbstractRepository {
 	}
 
 	/**
+	 * Lock a still-reserved item for queue handoff.
+	 *
+	 * @param BatchItemRecord $item Item from the reserved chunk.
+	 * @return BatchItemRecord|null
+	 */
+	public function lock_reserved_for_handoff( BatchItemRecord $item ): ?BatchItemRecord {
+		$row = $this->database->get_row(
+			'SELECT * FROM `' . $this->batch_items_table() . '` WHERE public_id = %s AND lock_version = %d AND state = %s FOR UPDATE',
+			array( $item->public_id, $item->lock_version, 'reserved' )
+		);
+
+		return $row ? $this->hydrate( $row ) : null;
+	}
+
+	/**
 	 * Count items for one batch by state.
 	 *
 	 * @param string $batch_public_id Batch public ID.

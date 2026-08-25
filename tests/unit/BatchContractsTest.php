@@ -13,12 +13,15 @@ use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use PressQueue\Batch\BatchLimitService;
 use PressQueue\Batch\BatchPreviewService;
+use PressQueue\Batch\BatchQueueService;
 use PressQueue\Batch\RepostCriteriaService;
 use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\NormalizedEvent;
+use PressQueue\Planning\SchedulePolicy;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\HashKeys;
 use PressQueue\Storage\Record\BatchRecord;
+use PressQueue\Storage\Record\BatchItemRecord;
 use PressQueue\Storage\StorageEnums;
 use PressQueue\Storage\ValidationException;
 use WP_Post;
@@ -26,6 +29,7 @@ use WP_Post;
 /**
  * @covers \PressQueue\Batch\BatchLimitService
  * @covers \PressQueue\Batch\BatchPreviewService
+ * @covers \PressQueue\Batch\BatchQueueService
  * @covers \PressQueue\Batch\RepostCriteriaService
  * @covers \PressQueue\Planning\NormalizedEvent
  * @covers \PressQueue\Storage\HashKeys
@@ -177,6 +181,23 @@ final class BatchContractsTest extends TestCase {
 		);
 	}
 
+	public function test_staggered_schedule_rejects_past_start(): void {
+		$this->expectException( ValidationException::class );
+
+		( new BatchLimitService() )->normalize(
+			array(
+				'schema_version' => 1,
+				'schedule'       => array(
+					'first_due_at_utc' => gmdate( 'Y-m-d H:i:s', time() - MINUTE_IN_SECONDS ),
+					'interval_minutes' => 15,
+					'mode'             => 'staggered_explicit_time',
+					'schema_version'   => 1,
+					'timezone'         => 'UTC',
+				),
+			)
+		);
+	}
+
 	public function test_staggered_schedule_rejects_later_item_beyond_horizon(): void {
 		$service = new BatchLimitService();
 		$limits  = $service->normalize(
@@ -276,10 +297,30 @@ final class BatchContractsTest extends TestCase {
 					'scheduled_for_utc'      => null,
 					'schedule_slot'          => 'immediate',
 					'trigger'                => 'bulk',
-				)
-			),
+					)
+				),
 			$prepared['preview_item']['delivery']['payload_hash']
 		);
+	}
+
+	public function test_queue_handoff_rehydrates_reviewed_explicit_schedule(): void {
+		$preview                                                     = $this->preview_item()['preview_item'];
+		$preview['delivery']['payload_preview']['schedule_slot']     = 'explicit_time';
+		$preview['delivery']['payload_preview']['scheduled_for_utc'] = '2026-08-26 15:30:00';
+		$preview['delivery']['payload_preview']['schedule_timezone'] = 'Europe/Berlin';
+		$service                                                     = ( new \ReflectionClass( BatchQueueService::class ) )->newInstanceWithoutConstructor();
+		$method                                                      = new \ReflectionMethod( BatchQueueService::class, 'reviewed_schedule' );
+		$method->setAccessible( true );
+
+		$schedule = $method->invoke( $service, $this->batch_item_with_preview( $preview ) );
+		if ( ! $schedule instanceof SchedulePolicy ) {
+			self::fail( 'Reviewed schedule did not rehydrate.' );
+		}
+
+		self::assertSame( 'explicit_time', $schedule->slot );
+		self::assertSame( '2026-08-26 15:30:00', $schedule->scheduled_for_storage() );
+		self::assertSame( 'Europe/Berlin', $schedule->timezone );
+		self::assertSame( array( 'kind' => 'batch_review' ), $schedule->source );
 	}
 
 	private function event( ?string $intent_occurrence_key = null ): NormalizedEvent {
@@ -374,6 +415,41 @@ final class BatchContractsTest extends TestCase {
 			),
 			'semantic_preview_hash' => $semantic,
 			'state'                 => 'previewed',
+		);
+	}
+
+	/**
+	 * Return a stored batch item with a supplied preview document.
+	 *
+	 * @param array<string,mixed> $preview Preview item.
+	 * @return BatchItemRecord
+	 */
+	private function batch_item_with_preview( array $preview ): BatchItemRecord {
+		$now = new DateTimeImmutable( '2026-08-25 11:30:00' );
+
+		return new BatchItemRecord(
+			1,
+			'01K8Z8D0PKH2N8J7S3K5A9C6DF',
+			1,
+			'01K8Z8D0PKH2N8J7S3K5A9C6DE',
+			str_repeat( '4', 64 ),
+			str_repeat( '5', 64 ),
+			0,
+			42,
+			'01K8Z8D0PKH2N8J7S3K5A9C6DH',
+			'reserved',
+			str_repeat( '6', 64 ),
+			null,
+			null,
+			null,
+			'01K8Z8D0PKH2N8J7S3K5A9C6DJ',
+			1,
+			null,
+			$preview,
+			array( 'schema_version' => 1 ),
+			1,
+			$now,
+			$now
 		);
 	}
 }

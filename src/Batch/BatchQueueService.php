@@ -14,6 +14,7 @@ namespace PressQueue\Batch;
 use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\Planner;
 use PressQueue\Planning\PlanningResult;
+use PressQueue\Planning\SchedulePolicy;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\Database;
@@ -23,7 +24,10 @@ use PressQueue\Storage\Repository\BatchItemRepository;
 use PressQueue\Storage\Repository\BatchRepository;
 use PressQueue\Storage\Repository\DeliveryRepository;
 use PressQueue\Storage\Repository\RuleRepository;
+use PressQueue\Storage\Schema;
 use PressQueue\Storage\SchemaStatus;
+use PressQueue\Storage\StorageEnums;
+use PressQueue\Storage\StorageException;
 use PressQueue\Storage\StorageValidator;
 use Throwable;
 
@@ -132,18 +136,8 @@ final class BatchQueueService {
 	 */
 	private function handoff_item( BatchItemRecord $item ): void {
 		try {
-			$existing = $this->deliveries->find_by_intent_occurrence_key( $item->intent_occurrence_key );
-			if ( null !== $existing ) {
-				if ( ! $this->existing_delivery_matches_review( $item, $existing->delivery_key, $existing->payload_hash ) ) {
-					$this->items->mark_terminal(
-						$item,
-						'failed',
-						$this->reason( 'batch_existing_delivery_changed', 'Existing local delivery for this occurrence does not match the reviewed batch payload.' )
-					);
-					return;
-				}
-
-				$this->items->mark_queued( $item, $existing->decision_public_id, $existing->public_id, null === $existing->scheduled_for_utc ? null : $existing->scheduled_for_utc->format( 'Y-m-d H:i:s' ) );
+			if ( null !== $this->deliveries->find_by_intent_occurrence_key( $item->intent_occurrence_key ) ) {
+				$this->link_existing_delivery( $item );
 				return;
 			}
 
@@ -158,7 +152,8 @@ final class BatchQueueService {
 				return;
 			}
 
-			$gate             = $this->planner->preview_runtime_destination( $event, $item->channel_public_id );
+			$schedule         = $this->reviewed_schedule( $item );
+			$gate             = $this->planner->preview_runtime_destination( $event, $item->channel_public_id, $schedule );
 			$reviewed_preview = $this->matching_delivery( $gate, $item );
 
 			if ( null === $reviewed_preview ) {
@@ -171,33 +166,15 @@ final class BatchQueueService {
 				return;
 			}
 
-			$runtime  = $this->planner->plan_runtime_destination( $event, $item->channel_public_id );
-			$delivery = $this->matching_delivery( $runtime, $item );
-			if ( null === $delivery || ! isset( $delivery['stored_record'] ) || ! $delivery['stored_record'] instanceof DeliveryRecord ) {
-				$this->items->mark_terminal( $item, $this->terminal_state_from_result( $runtime ), $this->reason( 'batch_runtime_handoff_blocked', 'Runtime planner did not create a local delivery row for this batch item.' ) );
-				return;
-			}
-
-			$record = $delivery['stored_record'];
-			$this->items->mark_queued( $item, $record->decision_public_id, $record->public_id, null === $record->scheduled_for_utc ? null : $record->scheduled_for_utc->format( 'Y-m-d H:i:s' ) );
+			$this->handoff_reviewed_delivery( $item, $event, $schedule );
 		} catch ( Throwable $throwable ) {
-			$existing = $this->deliveries->find_by_intent_occurrence_key( $item->intent_occurrence_key );
-			if ( null !== $existing ) {
-				if ( ! $this->existing_delivery_matches_review( $item, $existing->delivery_key, $existing->payload_hash ) ) {
-					$this->items->mark_terminal(
-						$item,
-						'failed',
-						$this->reason( 'batch_existing_delivery_changed', 'Existing local delivery for this occurrence does not match the reviewed batch payload.' )
-					);
-					return;
-				}
-
-				$this->items->mark_queued( $item, $existing->decision_public_id, $existing->public_id, null === $existing->scheduled_for_utc ? null : $existing->scheduled_for_utc->format( 'Y-m-d H:i:s' ) );
+			$current = $this->items->find_by_public_id( $item->public_id );
+			if ( null === $current || 'reserved' !== $current->state ) {
 				return;
 			}
 
 			$this->items->mark_terminal(
-				$item,
+				$current,
 				'failed',
 				array(
 					'code'           => 'batch_handoff_failed',
@@ -206,6 +183,176 @@ final class BatchQueueService {
 				)
 			);
 		}
+	}
+
+	/**
+	 * Link an existing local delivery row after locking the item.
+	 *
+	 * @param BatchItemRecord $item Item.
+	 */
+	private function link_existing_delivery( BatchItemRecord $item ): void {
+		$this->database->transaction(
+			function () use ( $item ): void {
+				$locked = $this->items->lock_reserved_for_handoff( $item );
+				if ( null === $locked ) {
+					return;
+				}
+
+				$existing = $this->deliveries->find_by_intent_occurrence_key( $locked->intent_occurrence_key );
+				if ( null === $existing ) {
+					return;
+				}
+
+				if ( ! $this->existing_delivery_matches_review( $locked, $existing->delivery_key, $existing->payload_hash ) ) {
+					$this->items->mark_terminal(
+						$locked,
+						'failed',
+						$this->reason( 'batch_existing_delivery_changed', 'Existing local delivery for this occurrence does not match the reviewed batch payload.' )
+					);
+					return;
+				}
+
+				$this->mark_queued_or_fail(
+					$locked,
+					$existing->decision_public_id,
+					$existing->public_id,
+					null === $existing->scheduled_for_utc ? null : $existing->scheduled_for_utc->format( 'Y-m-d H:i:s' )
+				);
+			},
+			array( Schema::BATCH_ITEMS, Schema::DELIVERIES )
+		);
+	}
+
+	/**
+	 * Store and link a reviewed delivery after locking the item.
+	 *
+	 * @param BatchItemRecord                      $item Item.
+	 * @param \PressQueue\Planning\NormalizedEvent $event Runtime event.
+	 * @param SchedulePolicy                       $schedule Reviewed schedule.
+	 */
+	private function handoff_reviewed_delivery( BatchItemRecord $item, \PressQueue\Planning\NormalizedEvent $event, SchedulePolicy $schedule ): void {
+		$this->database->transaction(
+			function () use ( $item, $event, $schedule ): void {
+				$locked = $this->items->lock_reserved_for_handoff( $item );
+				if ( null === $locked ) {
+					return;
+				}
+
+				$existing = $this->deliveries->find_by_intent_occurrence_key( $locked->intent_occurrence_key );
+				if ( null !== $existing ) {
+					if ( ! $this->existing_delivery_matches_review( $locked, $existing->delivery_key, $existing->payload_hash ) ) {
+						$this->items->mark_terminal(
+							$locked,
+							'failed',
+							$this->reason( 'batch_existing_delivery_changed', 'Existing local delivery for this occurrence does not match the reviewed batch payload.' )
+						);
+						return;
+					}
+
+					$this->mark_queued_or_fail(
+						$locked,
+						$existing->decision_public_id,
+						$existing->public_id,
+						null === $existing->scheduled_for_utc ? null : $existing->scheduled_for_utc->format( 'Y-m-d H:i:s' )
+					);
+					return;
+				}
+
+				if ( null === $locked->channel_public_id ) {
+					$this->items->mark_terminal( $locked, 'policy_error', $this->reason( 'batch_item_has_no_destination', 'Reserved batch item has no destination channel.' ) );
+					return;
+				}
+
+				$runtime  = $this->planner->plan_runtime_destination( $event, $locked->channel_public_id, $schedule );
+				$delivery = $this->matching_delivery( $runtime, $locked );
+				if ( null === $delivery || ! isset( $delivery['stored_record'] ) || ! $delivery['stored_record'] instanceof DeliveryRecord ) {
+					$this->items->mark_terminal( $locked, $this->terminal_state_from_result( $runtime ), $this->reason( 'batch_runtime_handoff_blocked', 'Runtime planner did not create a local delivery row for this batch item.' ) );
+					return;
+				}
+
+				if ( ! $this->runtime_delivery_matches_review( $locked, $delivery ) ) {
+					throw new StorageException( 'Runtime planning no longer matches the reviewed batch payload.' );
+				}
+
+				$record = $delivery['stored_record'];
+				$this->mark_queued_or_fail(
+					$locked,
+					$record->decision_public_id,
+					$record->public_id,
+					null === $record->scheduled_for_utc ? null : $record->scheduled_for_utc->format( 'Y-m-d H:i:s' )
+				);
+			},
+			array( Schema::BATCH_ITEMS, Schema::DECISIONS, Schema::DELIVERIES )
+		);
+	}
+
+	/**
+	 * Mark a locked item queued or roll back the handoff transaction.
+	 *
+	 * @param BatchItemRecord $item Item.
+	 * @param string          $decision_public_id Decision public ID.
+	 * @param string          $delivery_public_id Delivery public ID.
+	 * @param string|null     $scheduled_for_utc Scheduled UTC time.
+	 */
+	private function mark_queued_or_fail( BatchItemRecord $item, string $decision_public_id, string $delivery_public_id, ?string $scheduled_for_utc ): void {
+		if ( null !== $this->items->mark_queued( $item, $decision_public_id, $delivery_public_id, $scheduled_for_utc ) ) {
+			return;
+		}
+
+		throw new StorageException( 'Batch item changed before the delivery link could be stored.' );
+	}
+
+	/**
+	 * Rehydrate the reviewed schedule stored in the batch preview.
+	 *
+	 * @param BatchItemRecord $item Item.
+	 * @return SchedulePolicy
+	 */
+	private function reviewed_schedule( BatchItemRecord $item ): SchedulePolicy {
+		$delivery = isset( $item->preview_item['delivery'] ) && is_array( $item->preview_item['delivery'] ) ? $item->preview_item['delivery'] : array();
+		$payload  = isset( $delivery['payload_preview'] ) && is_array( $delivery['payload_preview'] ) ? $delivery['payload_preview'] : array();
+		if ( array() === $payload ) {
+			throw new StorageException( 'Reviewed delivery schedule is missing.' );
+		}
+
+		$slot = isset( $payload['schedule_slot'] ) && is_string( $payload['schedule_slot'] ) ? $payload['schedule_slot'] : 'immediate';
+		StorageEnums::assert_schedule_slot( $slot );
+
+		$scheduled_for_utc = null;
+		if ( array_key_exists( 'scheduled_for_utc', $payload ) && null !== $payload['scheduled_for_utc'] && '' !== $payload['scheduled_for_utc'] ) {
+			if ( ! is_string( $payload['scheduled_for_utc'] ) ) {
+				throw new StorageException( 'Reviewed delivery schedule time is invalid.' );
+			}
+
+			StorageValidator::assert_utc_timestamp( 'Scheduled UTC time', $payload['scheduled_for_utc'] );
+			$scheduled_for_utc = StorageValidator::parse_date_time( $payload['scheduled_for_utc'] );
+		}
+
+		if ( 'explicit_time' === $slot && null === $scheduled_for_utc ) {
+			throw new StorageException( 'Reviewed explicit schedule is incomplete.' );
+		}
+
+		if ( 'explicit_time' !== $slot && null !== $scheduled_for_utc ) {
+			throw new StorageException( 'Reviewed non-explicit schedule cannot carry a UTC time.' );
+		}
+
+		$timezone = null;
+		if ( array_key_exists( 'schedule_timezone', $payload ) && null !== $payload['schedule_timezone'] && '' !== $payload['schedule_timezone'] ) {
+			if ( ! is_string( $payload['schedule_timezone'] ) ) {
+				throw new StorageException( 'Reviewed delivery schedule timezone is invalid.' );
+			}
+
+			$timezone = $payload['schedule_timezone'];
+		}
+
+		return new SchedulePolicy(
+			$slot,
+			$scheduled_for_utc,
+			$timezone,
+			array(
+				'kind' => 'batch_review',
+			)
+		);
 	}
 
 	/**
