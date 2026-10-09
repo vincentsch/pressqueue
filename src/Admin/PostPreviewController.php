@@ -105,9 +105,12 @@ final class PostPreviewController {
 				$trigger
 			);
 
-			return self::rest_response( $service->response( $result ), 200 );
+			$body            = $service->response( $result );
+			$body['display'] = PostSharingSummary::from_preview( $result->to_array() );
+
+			return self::rest_response( $body, 200 );
 		} catch ( ValidationException $exception ) {
-			return self::error_response( 'invalid_preview', SafeOperatorError::message( $exception ), 400, SafeOperatorError::field_errors( $exception, 'preview' ) );
+			return self::error_response( 'invalid_preview', PostControlsController::control_error_message( $exception ), 400, SafeOperatorError::field_errors( $exception, 'preview' ) );
 		} catch ( \Throwable $throwable ) {
 			return self::error_response( 'forbidden', SafeOperatorError::message( $throwable, __( 'PressQueue preview could not be created.', 'pressqueue' ) ), 403 );
 		}

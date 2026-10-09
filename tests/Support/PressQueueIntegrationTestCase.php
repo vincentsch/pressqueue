@@ -20,7 +20,8 @@ abstract class PressQueueIntegrationTestCase extends WP_UnitTestCase {
 	 * Start a core transaction without rewriting plugin DDL into temporary tables.
 	 */
 	public function start_transaction() {
-		if ( ! defined( 'DB_NAME' ) || 'pressqueue_tests' !== DB_NAME ) {
+		// Parallel local runs may use suffixed disposable databases such as pressqueue_tests_editor.
+		if ( ! defined( 'DB_NAME' ) || ( 'pressqueue_tests' !== DB_NAME && ! str_starts_with( (string) DB_NAME, 'pressqueue_tests_' ) ) ) {
 			throw new RuntimeException( 'PressQueue integration tests require the disposable pressqueue_tests database.' );
 		}
 		parent::start_transaction();

@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Admin;
 
+use PressQueue\Editorial\NewPostDefaults;
 use PressQueue\Editorial\PostControlAuthorization;
 use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Security\Capabilities;
@@ -46,8 +47,11 @@ final class PostControlsController {
 		add_action( 'init', array( self::class, 'register_post_meta' ) );
 		add_action( 'rest_api_init', array( self::class, 'register_routes' ) );
 		add_action( 'add_meta_boxes', array( self::class, 'register_meta_boxes' ), 10, 2 );
+		add_action( 'pre_post_update', array( self::class, 'handle_classic_pre_update' ), 10, 2 );
 		add_action( 'save_post', array( self::class, 'handle_classic_save' ), 15, 3 );
 		add_action( 'enqueue_block_editor_assets', array( self::class, 'enqueue_block_editor_assets' ) );
+		add_action( 'admin_enqueue_scripts', array( self::class, 'enqueue_classic_assets' ) );
+		NewPostDefaults::register_hooks();
 
 		if ( function_exists( 'add_filter' ) ) {
 			add_filter( 'add_post_metadata', array( self::class, 'guard_control_meta_write' ), 10, 5 );
@@ -135,6 +139,16 @@ final class PostControlsController {
 				),
 			)
 		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/posts/(?P<post_id>\d+)/activity',
+			array(
+				'callback'            => array( self::class, 'handle_get_activity' ),
+				'methods'             => 'GET',
+				'permission_callback' => array( self::class, 'rest_permission_callback' ),
+			)
+		);
 	}
 
 	/**
@@ -162,6 +176,24 @@ final class PostControlsController {
 			return self::rest_response( self::controls_response( $post_id ), 200 );
 		} catch ( \Throwable $throwable ) {
 			return self::error_response( 'forbidden', SafeOperatorError::message( $throwable, __( 'You are not allowed to read PressQueue controls for this post.', 'pressqueue' ) ), 403 );
+		}
+	}
+
+	/**
+	 * Handle GET activity: what happened to the post per channel.
+	 *
+	 * @param \WP_REST_Request $request Request.
+	 * @return \WP_REST_Response
+	 */
+	public static function handle_get_activity( \WP_REST_Request $request ): \WP_REST_Response {
+		$post_id = self::post_id_from_rest_request( $request );
+
+		try {
+			PostControlAuthorization::require_current_user_access( $post_id );
+
+			return self::rest_response( array( 'activity' => PostSharingSummary::activity( $post_id ) ), 200 );
+		} catch ( \Throwable $throwable ) {
+			return self::error_response( 'forbidden', SafeOperatorError::message( $throwable, __( 'You are not allowed to read PressQueue activity for this post.', 'pressqueue' ) ), 403 );
 		}
 	}
 
@@ -197,7 +229,7 @@ final class PostControlsController {
 		} catch ( StaleRecordException $exception ) {
 			return self::error_response( 'conflict', SafeOperatorError::message( $exception ), 409 );
 		} catch ( ValidationException $exception ) {
-			return self::error_response( 'invalid_controls', SafeOperatorError::message( $exception ), 400, SafeOperatorError::field_errors( $exception, 'controls' ) );
+			return self::error_response( 'invalid_controls', self::control_error_message( $exception ), 400, SafeOperatorError::field_errors( $exception, 'controls' ) );
 		} catch ( \Throwable $throwable ) {
 			return self::error_response( 'forbidden', SafeOperatorError::message( $throwable, __( 'PressQueue controls could not be saved.', 'pressqueue' ) ), 403 );
 		}
@@ -220,7 +252,7 @@ final class PostControlsController {
 
 		add_meta_box(
 			'pressqueue-post-controls',
-			__( 'PressQueue', 'pressqueue' ),
+			__( 'Social sharing', 'pressqueue' ),
 			array( self::class, 'render_meta_box' ),
 			$post_type,
 			'side',
@@ -236,84 +268,369 @@ final class PostControlsController {
 	 */
 	public static function render_meta_box( $post ): void {
 		if ( ! $post instanceof \WP_Post || ! PostControlAuthorization::current_user_can_access( (int) $post->ID ) ) {
-			echo '<p>' . esc_html__( 'PressQueue controls are unavailable for this user.', 'pressqueue' ) . '</p>';
+			echo '<p>' . esc_html__( 'You do not have permission to change social sharing for this post.', 'pressqueue' ) . '</p>';
 			return;
 		}
 
-		$bundle   = PostControlMetadata::read_for_post( (int) $post->ID );
-		$channels = self::channel_summaries();
-		$selected = $bundle['channels']['channel_public_ids'] ?? array();
-		$selected = is_array( $selected ) ? $selected : array();
+		$post_id   = (int) $post->ID;
+		$bundle    = PostControlMetadata::read_for_post( $post_id );
+		$is_on     = 'exclude' !== $bundle['policy'];
+		$published = 'publish' === (string) $post->post_status;
+		$context   = PostSharingSummary::editor_context( $post_id );
+		$on_bundle = $bundle;
 
-		wp_nonce_field( 'pressqueue_save_post_controls_' . $post->ID, 'pressqueue_controls_nonce' );
+		if ( ! $is_on ) {
+			$on_bundle['policy'] = 'inherit';
+		}
+
+		$display = '' === (string) $post->post_password ? PostSharingSummary::saved_post_preview( $post, $on_bundle ) : null;
+
+		echo '<div class="pq-editor pq-editor--classic" data-pq-classic>';
+		wp_nonce_field( 'pressqueue_save_post_controls_' . $post_id, 'pressqueue_controls_nonce' );
 		echo '<input type="hidden" name="pressqueue_controls_present" value="1" />';
+		echo '<input type="hidden" name="pressqueue_share_form" value="1" />';
 		echo '<input type="hidden" name="pressqueue_base_control_bundle_hash" value="' . esc_attr( PostControlMetadata::bundle_hash( $bundle ) ) . '" />';
 
-		echo '<p><label for="pressqueue-policy">' . esc_html__( 'Policy', 'pressqueue' ) . '</label><br />';
-		echo '<select id="pressqueue-policy" name="pressqueue_policy">';
-		foreach ( array( 'inherit', 'include', 'exclude' ) as $policy ) {
-			echo '<option value="' . esc_attr( $policy ) . '" ' . selected( $bundle['policy'], $policy, false ) . '>' . esc_html( ucfirst( $policy ) ) . '</option>';
-		}
-		echo '</select></p>';
+		echo '<p class="pq-ed-switch"><label for="pressqueue-share"><input type="checkbox" id="pressqueue-share" name="pressqueue_share" value="1" data-pq-share ' . checked( $is_on, true, false ) . ' /> ' . esc_html__( 'Share this post', 'pressqueue' ) . '</label></p>';
 
-		$mode = (string) ( $bundle['channels']['mode'] ?? 'inherit' );
-		echo '<p><label for="pressqueue-channel-mode">' . esc_html__( 'Destinations', 'pressqueue' ) . '</label><br />';
-		echo '<select id="pressqueue-channel-mode" name="pressqueue_channel_mode">';
-		echo '<option value="inherit" ' . selected( $mode, 'inherit', false ) . '>' . esc_html__( 'Inherit', 'pressqueue' ) . '</option>';
-		echo '<option value="override" ' . selected( $mode, 'override', false ) . '>' . esc_html__( 'Restrict channels', 'pressqueue' ) . '</option>';
-		echo '</select></p>';
-
-		echo '<fieldset><legend class="screen-reader-text">' . esc_html__( 'Channel restrictions', 'pressqueue' ) . '</legend>';
-		if ( array() === $channels ) {
-			echo '<p>' . esc_html__( 'No local destinations are available.', 'pressqueue' ) . '</p>';
+		if ( $published ) {
+			self::render_classic_activity( PostSharingSummary::activity( $post_id ) );
 		}
 
-		foreach ( $channels as $channel ) {
-			$checked = in_array( $channel['public_id'], $selected, true );
-			echo '<label><input type="checkbox" name="pressqueue_channel_public_ids[]" value="' . esc_attr( $channel['public_id'] ) . '" ' . checked( $checked, true, false ) . ' /> ' . esc_html( $channel['label'] ) . '</label><br />';
-		}
-		echo '</fieldset>';
+		echo '<div class="pq-ed-when-on" data-pq-when="on"' . ( $is_on ? '' : ' hidden' ) . '>';
+		self::render_classic_summary( $post, $display, $published );
+		echo '</div>';
 
-		$message      = is_array( $bundle['message'] ?? null ) ? $bundle['message'] : array( 'mode' => 'inherit' );
-		$message_mode = (string) ( $message['mode'] ?? 'inherit' );
-		echo '<p><label for="pressqueue-message-mode">' . esc_html__( 'Message', 'pressqueue' ) . '</label><br />';
-		echo '<select id="pressqueue-message-mode" name="pressqueue_message_mode">';
-		echo '<option value="inherit" ' . selected( $message_mode, 'inherit', false ) . '>' . esc_html__( 'Inherit', 'pressqueue' ) . '</option>';
-		echo '<option value="override" ' . selected( $message_mode, 'override', false ) . '>' . esc_html__( 'Override', 'pressqueue' ) . '</option>';
-		echo '</select></p>';
-		echo '<p><textarea name="pressqueue_message_value" class="widefat" rows="3">' . esc_textarea( (string) ( $message['value'] ?? '' ) ) . '</textarea></p>';
+		echo '<p class="pq-ed-muted pq-ed-when-off" data-pq-when="off"' . ( $is_on ? ' hidden' : '' ) . '>';
+		echo esc_html(
+			$published
+				? __( 'Sharing is off for this post. Updates and Share old posts leave it out.', 'pressqueue' )
+				: __( 'This post will not be shared. You can switch it on any time before publishing.', 'pressqueue' )
+		);
+		echo '</p>';
 
-		$schedule      = is_array( $bundle['schedule'] ?? null ) ? $bundle['schedule'] : array( 'mode' => 'inherit' );
-		$schedule_mode = (string) ( $schedule['mode'] ?? 'inherit' );
-		echo '<p><label for="pressqueue-schedule-mode">' . esc_html__( 'Schedule', 'pressqueue' ) . '</label><br />';
-		echo '<select id="pressqueue-schedule-mode" name="pressqueue_schedule_mode">';
-		foreach ( array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' ) as $schedule_option ) {
-			echo '<option value="' . esc_attr( $schedule_option ) . '" ' . selected( $schedule_mode, $schedule_option, false ) . '>' . esc_html( $schedule_option ) . '</option>';
-		}
-		echo '</select></p>';
-		echo '<p><label>' . esc_html__( 'Local date', 'pressqueue' ) . '<br /><input name="pressqueue_schedule_local_date" type="date" value="' . esc_attr( (string) ( $schedule['local_date'] ?? '' ) ) . '" /></label></p>';
-		echo '<p><label>' . esc_html__( 'Local time', 'pressqueue' ) . '<br /><input name="pressqueue_schedule_local_time" type="time" value="' . esc_attr( (string) ( $schedule['local_time'] ?? '' ) ) . '" /></label></p>';
-		echo '<p><label>' . esc_html__( 'Timezone', 'pressqueue' ) . '<br /><input name="pressqueue_schedule_timezone" type="text" class="widefat" value="' . esc_attr( (string) ( $schedule['timezone'] ?? '' ) ) . '" placeholder="Europe/Berlin" /></label></p>';
-		echo '<p><label>' . esc_html__( 'UTC offset', 'pressqueue' ) . '<br /><input name="pressqueue_schedule_utc_offset" type="text" class="widefat" value="' . esc_attr( (string) ( $schedule['utc_offset'] ?? '' ) ) . '" placeholder="+01:00" /></label></p>';
-
-		$media      = is_array( $bundle['media'] ?? null ) ? $bundle['media'] : array( 'mode' => 'inherit' );
-		$media_mode = (string) ( $media['mode'] ?? 'inherit' );
-		$media_ids  = '';
-		if ( isset( $media['post_media']['attachment_ids'] ) && is_array( $media['post_media']['attachment_ids'] ) ) {
-			$media_ids = implode( ',', array_map( 'strval', $media['post_media']['attachment_ids'] ) );
+		if ( ! $published && '' !== (string) $context['opt_in_hint'] ) {
+			echo '<p class="pq-ed-hint">' . esc_html( (string) $context['opt_in_hint'] ) . '</p>';
 		}
 
-		echo '<p><label for="pressqueue-media-mode">' . esc_html__( 'Media', 'pressqueue' ) . '</label><br />';
-		echo '<select id="pressqueue-media-mode" name="pressqueue_media_mode">';
-		foreach ( array( 'inherit', 'none', 'featured_image', 'featured_image_optional', 'post_media' ) as $media_option ) {
-			echo '<option value="' . esc_attr( $media_option ) . '" ' . selected( $media_mode, $media_option, false ) . '>' . esc_html( $media_option ) . '</option>';
+		if ( '' !== (string) $context['mode_note'] ) {
+			echo '<p class="pq-ed-note pq-ed-note--' . esc_attr( (string) $context['sharing_mode'] ) . '">' . esc_html( (string) $context['mode_note'] ) . '</p>';
 		}
-		echo '</select></p>';
-		echo '<p><label>' . esc_html__( 'Attachment IDs', 'pressqueue' ) . '<br /><input name="pressqueue_media_attachment_ids" type="text" class="widefat" value="' . esc_attr( $media_ids ) . '" /></label></p>';
+
+		self::render_classic_customize( $bundle, $display, $context );
+		echo '</div>';
 	}
 
 	/**
-	 * Save classic editor controls.
+	 * Render the classic summary of where the post goes.
+	 *
+	 * @param \WP_Post                 $post Post.
+	 * @param array<string,mixed>|null $display Preview display.
+	 * @param bool                     $published Whether the post is published.
+	 */
+	private static function render_classic_summary( \WP_Post $post, ?array $display, bool $published ): void {
+		if ( '' !== (string) $post->post_password ) {
+			echo '<p class="pq-ed-muted">' . esc_html__( 'Password-protected posts are not shared.', 'pressqueue' ) . '</p>';
+			return;
+		}
+
+		if ( 'private' === (string) $post->post_status ) {
+			echo '<p class="pq-ed-muted">' . esc_html__( 'Private posts are not shared.', 'pressqueue' ) . '</p>';
+			return;
+		}
+
+		if ( null === $display ) {
+			echo '<p class="pq-ed-muted">' . esc_html__( 'PressQueue checks this post against your sharing rules when you publish it.', 'pressqueue' ) . '</p>';
+			return;
+		}
+
+		if ( empty( $display['will_share'] ) ) {
+			if ( $published ) {
+				echo '<p class="pq-ed-muted">' . esc_html__( 'Updating this post does not share it again.', 'pressqueue' ) . '</p>';
+				return;
+			}
+
+			echo '<div class="pq-ed-goes pq-ed-goes--none"><p><strong>' . esc_html__( 'Not shared when you publish.', 'pressqueue' ) . '</strong> ' . esc_html( (string) $display['reason'] ) . '</p>';
+			echo '<p class="pq-ed-small pq-ed-muted">' . esc_html__( 'Based on the last saved version of this post.', 'pressqueue' ) . '</p></div>';
+			return;
+		}
+
+		echo '<div class="pq-ed-goes">';
+		echo '<p class="pq-ed-small pq-ed-muted">' . esc_html( (string) $display['heading'] ) . '</p>';
+		echo '<ul class="pq-ed-channels">';
+		foreach ( (array) $display['channels'] as $channel ) {
+			if ( ! is_array( $channel ) ) {
+				continue;
+			}
+			echo '<li>';
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
+			echo Ui::channel_name( (string) $channel['service'], (string) $channel['name'] );
+			if ( '' === (string) $display['details'] ) {
+				echo '<span class="pq-ed-small pq-ed-muted pq-ed-channel-detail">' . esc_html( trim( (string) $channel['timing'] . ' · ' . (string) $channel['image'], ' ·' ) ) . '</span>';
+			}
+			echo '</li>';
+		}
+		echo '</ul>';
+		if ( '' !== (string) $display['details'] ) {
+			echo '<p class="pq-ed-small pq-ed-muted">' . esc_html( (string) $display['details'] ) . '</p>';
+		}
+		foreach ( (array) ( $display['left_out'] ?? array() ) as $channel ) {
+			if ( is_array( $channel ) ) {
+				/* translators: 1: channel name, 2: reason. */
+				echo '<p class="pq-ed-small pq-ed-muted pq-ed-left-out">' . esc_html( sprintf( __( 'Not sent to %1$s: %2$s', 'pressqueue' ), (string) $channel['name'], (string) $channel['reason'] ) ) . '</p>';
+			}
+		}
+		echo '<p class="pq-ed-small pq-ed-muted">' . esc_html__( 'Based on the last saved version of this post.', 'pressqueue' ) . '</p>';
+		echo '</div>';
+	}
+
+	/**
+	 * Render what happened to a published post.
+	 *
+	 * @param array<string,mixed> $activity Activity summary.
+	 */
+	private static function render_classic_activity( array $activity ): void {
+		$items = isset( $activity['items'] ) && is_array( $activity['items'] ) ? $activity['items'] : array();
+
+		echo '<div class="pq-ed-activity">';
+		if ( array() !== $items ) {
+			echo '<ul class="pq-ed-channels">';
+			foreach ( $items as $item ) {
+				echo '<li class="pq-ed-activity-row">';
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
+				echo Ui::channel_name( (string) $item['service'], (string) $item['name'] );
+				echo '<span class="pq-ed-activity-state">';
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
+				echo Ui::pill( (string) $item['tone'], (string) $item['label'], (string) $item['help'] );
+				echo ' <span class="pq-ed-small pq-ed-muted" title="' . esc_attr( (string) $item['time_full'] ) . '">' . esc_html( (string) $item['time'] ) . '</span>';
+				echo '</span></li>';
+			}
+			echo '</ul>';
+		} elseif ( '' !== (string) $activity['not_shared_title'] ) {
+			echo '<p><strong>' . esc_html( (string) $activity['not_shared_title'] ) . '</strong> ' . esc_html( (string) $activity['not_shared'] ) . '</p>';
+		} else {
+			echo '<p class="pq-ed-muted">' . esc_html__( 'PressQueue has not shared this post.', 'pressqueue' ) . '</p>';
+		}
+
+		if ( '' !== (string) $activity['url'] && function_exists( 'current_user_can' ) && current_user_can( Capabilities::VIEW_DELIVERIES ) ) {
+			echo '<p class="pq-ed-small"><a href="' . esc_url( (string) $activity['url'] ) . '">' . esc_html__( 'See in Activity', 'pressqueue' ) . '</a></p>';
+		}
+		echo '</div>';
+	}
+
+	/**
+	 * Render the classic "Customize for this post" section.
+	 *
+	 * @param array<string,mixed>      $bundle Stored controls.
+	 * @param array<string,mixed>|null $display Preview display.
+	 * @param array<string,mixed>      $context Editor context.
+	 */
+	private static function render_classic_customize( array $bundle, ?array $display, array $context ): void {
+		$message   = is_array( $bundle['message'] ?? null ) ? $bundle['message'] : array( 'mode' => 'inherit' );
+		$schedule  = is_array( $bundle['schedule'] ?? null ) ? $bundle['schedule'] : array( 'mode' => 'inherit' );
+		$media     = is_array( $bundle['media'] ?? null ) ? $bundle['media'] : array( 'mode' => 'inherit' );
+		$channels  = is_array( $bundle['channels'] ?? null ) ? $bundle['channels'] : array( 'mode' => 'inherit' );
+		$customize = 'inherit' !== ( $message['mode'] ?? 'inherit' ) || 'inherit' !== ( $schedule['mode'] ?? 'inherit' ) || 'inherit' !== ( $media['mode'] ?? 'inherit' ) || 'inherit' !== ( $channels['mode'] ?? 'inherit' );
+		$rule      = is_array( $display['rule'] ?? null ) ? $display['rule'] : array();
+		$info      = is_array( $display['message'] ?? null ) ? $display['message'] : array();
+
+		echo '<details class="pq-ed-more"' . ( $customize ? ' open' : '' ) . '><summary>' . esc_html__( 'Customize for this post', 'pressqueue' ) . '</summary><div class="pq-ed-more-body">';
+
+		// Message.
+		$value = 'override' === ( $message['mode'] ?? '' ) ? (string) ( $message['value'] ?? '' ) : '';
+		echo '<p class="pq-ed-field"><label for="pressqueue-message">' . esc_html__( 'Message', 'pressqueue' ) . '</label>';
+		echo '<textarea id="pressqueue-message" name="pressqueue_message_value" rows="3" class="widefat" data-pq-message data-limit="' . esc_attr( (string) (int) ( $info['limit'] ?? 0 ) ) . '" data-limit-service="' . esc_attr( (string) ( $info['limit_service'] ?? '' ) ) . '" data-url-length="' . esc_attr( (string) (int) ( $info['url_length'] ?? 0 ) ) . '" placeholder="' . esc_attr( (string) ( $info['rule_message'] ?? '' ) ) . '" aria-describedby="pressqueue-message-help">' . esc_textarea( $value ) . '</textarea>';
+		echo '<span class="pq-ed-help" id="pressqueue-message-help">' . esc_html__( 'Leave empty to use the rule\'s message.', 'pressqueue' ) . ' <span data-pq-count aria-live="polite"></span></span></p>';
+
+		// Channels.
+		$listed   = self::listed_channels( $context, $channels );
+		$selected = 'override' === ( $channels['mode'] ?? '' ) && is_array( $channels['channel_public_ids'] ?? null ) ? $channels['channel_public_ids'] : null;
+		if ( array() !== $listed ) {
+			echo '<fieldset class="pq-ed-field"><legend>' . esc_html__( 'Channels', 'pressqueue' ) . '</legend>';
+			foreach ( $listed as $channel ) {
+				$checked = null === $selected || in_array( $channel['public_id'], $selected, true );
+				echo '<input type="hidden" name="pressqueue_channel_listed[]" value="' . esc_attr( (string) $channel['public_id'] ) . '" />';
+				echo '<label class="pq-ed-check"><input type="checkbox" name="pressqueue_channel_public_ids[]" value="' . esc_attr( (string) $channel['public_id'] ) . '" ' . checked( $checked, true, false ) . ' /> ';
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
+				echo Ui::channel_name( (string) $channel['service'], (string) $channel['name'] );
+				echo '</label>';
+			}
+			echo '<span class="pq-ed-help">' . esc_html__( 'Untick a channel to leave it out for this post.', 'pressqueue' ) . '</span></fieldset>';
+		}
+
+		// Timing.
+		$schedule_mode = (string) ( $schedule['mode'] ?? 'inherit' );
+		echo '<p class="pq-ed-field"><label for="pressqueue-schedule-mode">' . esc_html__( 'Timing', 'pressqueue' ) . '</label>';
+		echo '<select id="pressqueue-schedule-mode" name="pressqueue_schedule_mode" class="widefat" data-pq-toggle-for="schedule">';
+		foreach ( self::schedule_options() as $option_value => $option_label ) {
+			echo '<option value="' . esc_attr( $option_value ) . '" ' . selected( $schedule_mode, $option_value, false ) . '>' . esc_html( $option_label ) . '</option>';
+		}
+		echo '</select>';
+		self::render_rule_help( (string) ( $rule['timing'] ?? '' ), 'schedule' );
+		echo '</p>';
+
+		$timezone = (string) ( $schedule['timezone'] ?? $context['timezone'] );
+		echo '<div class="pq-ed-field pq-ed-datetime" data-pq-show-for="schedule:explicit_time">';
+		echo '<p class="pq-ed-field-row"><label>' . esc_html__( 'Date', 'pressqueue' ) . '<input type="date" name="pressqueue_schedule_local_date" value="' . esc_attr( (string) ( $schedule['local_date'] ?? '' ) ) . '" /></label>';
+		echo '<label>' . esc_html__( 'Time', 'pressqueue' ) . '<input type="time" name="pressqueue_schedule_local_time" value="' . esc_attr( (string) ( $schedule['local_time'] ?? '' ) ) . '" /></label></p>';
+		echo '<p><label for="pressqueue-schedule-timezone">' . esc_html__( 'Time zone', 'pressqueue' ) . '</label>';
+		echo '<select id="pressqueue-schedule-timezone" name="pressqueue_schedule_timezone" class="widefat">';
+		foreach ( self::timezone_options( (string) $context['timezone'], (string) $context['timezone_label'], $timezone ) as $zone_value => $zone_label ) {
+			echo '<option value="' . esc_attr( $zone_value ) . '" ' . selected( $timezone, $zone_value, false ) . '>' . esc_html( $zone_label ) . '</option>';
+		}
+		echo '</select></p>';
+		if ( isset( $schedule['utc_offset'] ) && is_string( $schedule['utc_offset'] ) ) {
+			echo '<input type="hidden" name="pressqueue_schedule_utc_offset" value="' . esc_attr( $schedule['utc_offset'] ) . '" />';
+		}
+		echo '</div>';
+
+		// Image.
+		$media_mode = (string) ( $media['mode'] ?? 'inherit' );
+		$ids        = 'post_media' === $media_mode && is_array( $media['post_media']['attachment_ids'] ?? null ) ? array_map( 'intval', $media['post_media']['attachment_ids'] ) : array();
+		echo '<p class="pq-ed-field"><label for="pressqueue-media-mode">' . esc_html__( 'Image', 'pressqueue' ) . '</label>';
+		echo '<select id="pressqueue-media-mode" name="pressqueue_media_mode" class="widefat" data-pq-toggle-for="media">';
+		foreach ( self::media_options( $media_mode ) as $option_value => $option_label ) {
+			echo '<option value="' . esc_attr( $option_value ) . '" ' . selected( $media_mode, $option_value, false ) . '>' . esc_html( $option_label ) . '</option>';
+		}
+		echo '</select>';
+		self::render_rule_help( (string) ( $rule['image'] ?? '' ), 'media' );
+		echo '</p>';
+		echo '<div class="pq-ed-field" data-pq-show-for="media:post_media">';
+		echo '<input type="hidden" name="pressqueue_media_attachment_ids" value="' . esc_attr( implode( ',', $ids ) ) . '" data-pq-media-ids />';
+		echo '<ul class="pq-ed-thumbs" data-pq-media-list>';
+		foreach ( $ids as $attachment_id ) {
+			$thumb = function_exists( 'wp_get_attachment_image' ) ? wp_get_attachment_image( $attachment_id, 'thumbnail' ) : '';
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_get_attachment_image returns escaped markup.
+			echo '<li>' . ( '' === $thumb ? esc_html( '#' . $attachment_id ) : $thumb ) . '</li>';
+		}
+		echo '</ul>';
+		echo '<button type="button" class="button" data-pq-media-pick>' . esc_html__( 'Choose images', 'pressqueue' ) . '</button>';
+		echo '<span class="pq-ed-help">' . esc_html__( 'Up to four images from the media library.', 'pressqueue' ) . '</span>';
+		echo '</div>';
+
+		echo '</div></details>';
+	}
+
+	/**
+	 * Return the channels listed under "Channels".
+	 *
+	 * @param array<string,mixed> $context Editor context.
+	 * @param array<string,mixed> $channels Stored channel controls.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private static function listed_channels( array $context, array $channels ): array {
+		$stored = 'override' === ( $channels['mode'] ?? '' ) && is_array( $channels['channel_public_ids'] ?? null ) ? $channels['channel_public_ids'] : array();
+		$listed = array();
+
+		foreach ( (array) $context['channels'] as $channel ) {
+			if ( ! is_array( $channel ) ) {
+				continue;
+			}
+
+			if ( ( ! empty( $channel['in_rules'] ) && ! empty( $channel['usable'] ) ) || in_array( $channel['public_id'], $stored, true ) ) {
+				$listed[] = $channel;
+			}
+		}
+
+		return $listed;
+	}
+
+	/**
+	 * Render the "From the rule" hint under a select while it inherits.
+	 *
+	 * @param string $text Rule setting in words.
+	 * @param string $group Toggle group of the select.
+	 */
+	private static function render_rule_help( string $text, string $group ): void {
+		if ( '' === $text ) {
+			return;
+		}
+
+		/* translators: %s: setting used by the matching rule, for example "Add to the end of the Buffer queue". */
+		echo '<span class="pq-ed-help" data-pq-show-for="' . esc_attr( $group . ':inherit' ) . '">' . esc_html( sprintf( __( 'From the rule: %s', 'pressqueue' ), $text ) ) . '</span>';
+	}
+
+	/**
+	 * Return timing choices.
+	 *
+	 * @return array<string,string>
+	 */
+	public static function schedule_options(): array {
+		$labels = Labels::schedules();
+
+		return array(
+			'inherit'       => __( 'Use the rule', 'pressqueue' ),
+			'queue_end'     => $labels['queue_end']['label'],
+			'queue_next'    => $labels['queue_next']['label'],
+			'immediate'     => $labels['immediate']['label'],
+			'draft'         => $labels['draft']['label'],
+			'explicit_time' => __( 'Pick a date and time', 'pressqueue' ),
+		);
+	}
+
+	/**
+	 * Return image choices.
+	 *
+	 * @param string $current Current media mode.
+	 * @return array<string,string>
+	 */
+	public static function media_options( string $current = '' ): array {
+		$options = array(
+			'inherit'                 => __( 'Use the rule', 'pressqueue' ),
+			'none'                    => __( 'No image', 'pressqueue' ),
+			'featured_image_optional' => __( 'Featured image', 'pressqueue' ),
+		);
+
+		if ( 'featured_image' === $current ) {
+			$options['featured_image'] = __( 'Featured image, hold the post back without one', 'pressqueue' );
+		}
+
+		$options['post_media'] = __( 'Choose images', 'pressqueue' );
+
+		return $options;
+	}
+
+	/**
+	 * Return time zone choices with the site time zone first.
+	 *
+	 * @param string $site_zone Site time zone.
+	 * @param string $site_label Site time zone as shown in WordPress settings.
+	 * @param string $current Current value.
+	 * @return array<string,string>
+	 */
+	private static function timezone_options( string $site_zone, string $site_label, string $current ): array {
+		/* translators: %s: site time zone, for example Europe/Berlin. */
+		$options = array( $site_zone => sprintf( __( 'Site time zone (%s)', 'pressqueue' ), '' === $site_label ? $site_zone : $site_label ) );
+
+		if ( '' !== $current && ! isset( $options[ $current ] ) ) {
+			$options[ $current ] = $current;
+		}
+
+		foreach ( timezone_identifiers_list() as $zone ) {
+			if ( ! isset( $options[ $zone ] ) ) {
+				$options[ $zone ] = str_replace( '_', ' ', $zone );
+			}
+		}
+
+		return $options;
+	}
+
+	/**
+	 * Save classic editor controls before WordPress writes the post.
+	 *
+	 * Running here, before the status transition, means a failed save stops the
+	 * post update, so a post is never published with an unsaved "off" switch.
+	 *
+	 * @param int   $post_id Post ID.
+	 * @param mixed $data Post data about to be written.
+	 */
+	public static function handle_classic_pre_update( $post_id, $data = null ): void {
+		unset( $data );
+		self::save_classic_controls( (int) $post_id );
+	}
+
+	/**
+	 * Save classic editor controls after the post was written (fallback for new posts).
 	 *
 	 * @param int      $post_id Post ID.
 	 * @param \WP_Post $post Post.
@@ -322,13 +639,26 @@ final class PostControlsController {
 	public static function handle_classic_save( int $post_id, $post, bool $update ): void {
 		unset( $update );
 
-		if ( ! $post instanceof \WP_Post || ! isset( $_POST['pressqueue_controls_present'] ) ) {
+		if ( ! $post instanceof \WP_Post ) {
+			return;
+		}
+
+		self::save_classic_controls( $post_id );
+	}
+
+	/**
+	 * Save the classic form for one post once per request.
+	 *
+	 * @param int $post_id Post ID.
+	 */
+	private static function save_classic_controls( int $post_id ): void {
+		if ( ! isset( $_POST['pressqueue_controls_present'] ) ) {
 			return;
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Only identifies the originating form; its nonce is verified below.
-		$form_post_id = isset( $_POST['post_ID'] ) ? absint( $_POST['post_ID'] ) : 0;
-		if ( $form_post_id !== $post_id || isset( self::$classic_saves[ $post_id ] ) ) {
+		$form_post_id = isset( $_POST['post_ID'] ) ? max( 0, (int) $_POST['post_ID'] ) : 0;
+		if ( $post_id <= 0 || $form_post_id !== $post_id || isset( self::$classic_saves[ $post_id ] ) ) {
 			return;
 		}
 
@@ -360,15 +690,165 @@ final class PostControlsController {
 			$base_hash = isset( $_POST['pressqueue_base_control_bundle_hash'] ) ? sanitize_text_field( wp_unslash( $_POST['pressqueue_base_control_bundle_hash'] ) ) : '';
 			StorageValidator::assert_hash( $base_hash );
 
-			$controls = PostControlMetadata::bundle_from_form( $input );
+			$controls = isset( $input['pressqueue_share_form'] )
+				? self::bundle_from_share_form( $input, PostControlMetadata::read_for_post( $post_id ) )
+				: PostControlMetadata::bundle_from_form( $input );
 			self::assert_media_control_authority( $post_id, $controls );
 			self::$classic_saves[ $post_id ] = true;
 			PostControlMetadata::replace_for_post( $post_id, $controls, $base_hash );
 		} catch ( \Throwable $throwable ) {
 			if ( function_exists( 'wp_die' ) ) {
-				wp_die( esc_html( SafeOperatorError::message( $throwable, __( 'PressQueue controls could not be saved.', 'pressqueue' ) ) ) );
+				wp_die(
+					esc_html(
+						sprintf(
+							/* translators: %s: reason the sharing settings could not be saved. */
+							__( 'The post was not saved because its social sharing settings could not be saved: %s Go back, check the Social sharing box, and save again.', 'pressqueue' ),
+							self::control_error_message( $throwable )
+						)
+					),
+					esc_html__( 'Social sharing settings not saved', 'pressqueue' ),
+					array(
+						'back_link' => true,
+						'response'  => $throwable instanceof StaleRecordException ? 409 : 400,
+					)
+				);
 			}
 		}
+	}
+
+	/**
+	 * Explain a failed controls save in words that say how to fix it.
+	 *
+	 * Internal validation messages are only matched, never shown.
+	 *
+	 * @param \Throwable $throwable Failure.
+	 * @return string
+	 */
+	public static function control_error_message( \Throwable $throwable ): string {
+		if ( $throwable instanceof StaleRecordException ) {
+			return __( 'Someone changed the sharing settings for this post while you were editing it. Reload the page to see them.', 'pressqueue' );
+		}
+
+		if ( $throwable instanceof ValidationException ) {
+			$message = $throwable->getMessage();
+			$known   = array(
+				'explicit schedule' => __( 'Pick a valid date, time and time zone for sharing, or choose another timing.', 'pressqueue' ),
+				'media'             => __( 'One of the chosen images cannot be used. Choose up to four images from the media library, or pick another image setting.', 'pressqueue' ),
+				'message override'  => __( 'The custom message must be 2,000 characters or fewer.', 'pressqueue' ),
+				'channel'           => __( 'One of the chosen channels cannot be used. Reload the page and pick the channels again.', 'pressqueue' ),
+			);
+
+			foreach ( $known as $fragment => $text ) {
+				if ( false !== stripos( $message, $fragment ) ) {
+					return $text;
+				}
+			}
+		}
+
+		return SafeOperatorError::message( $throwable, __( 'PressQueue controls could not be saved.', 'pressqueue' ) );
+	}
+
+	/**
+	 * Build a control bundle from the simple classic form.
+	 *
+	 * @param array<string,mixed> $input Unslashed request input.
+	 * @param array<string,mixed> $current Currently stored controls.
+	 * @return array<string,mixed>
+	 */
+	public static function bundle_from_share_form( array $input, array $current ): array {
+		$policy = ! empty( $input['pressqueue_share'] )
+			? ( 'include' === ( $current['policy'] ?? '' ) ? 'include' : 'inherit' )
+			: 'exclude';
+
+		$listed  = self::string_list( $input['pressqueue_channel_listed'] ?? array() );
+		$checked = array_values( array_intersect( self::string_list( $input['pressqueue_channel_public_ids'] ?? array() ), $listed ) );
+		$form    = array(
+			'pressqueue_channel_mode' => 'inherit',
+			'pressqueue_media_mode'   => self::scalar_input( $input, 'pressqueue_media_mode', 'inherit' ),
+			'pressqueue_message_mode' => 'inherit',
+			'pressqueue_policy'       => $policy,
+		);
+
+		if ( array() === $listed ) {
+			$stored = is_array( $current['channels'] ?? null ) ? $current['channels'] : array( 'mode' => 'inherit' );
+			if ( 'override' === ( $stored['mode'] ?? '' ) ) {
+				$form['pressqueue_channel_mode']       = 'override';
+				$form['pressqueue_channel_public_ids'] = is_array( $stored['channel_public_ids'] ?? null ) ? $stored['channel_public_ids'] : array();
+			}
+		} elseif ( count( $checked ) < count( array_unique( $listed ) ) ) {
+			$form['pressqueue_channel_mode']       = 'override';
+			$form['pressqueue_channel_public_ids'] = array_values( array_unique( $checked ) );
+		}
+
+		$message = isset( $input['pressqueue_message_value'] ) && is_string( $input['pressqueue_message_value'] ) ? $input['pressqueue_message_value'] : '';
+		if ( function_exists( 'sanitize_textarea_field' ) ) {
+			$message = sanitize_textarea_field( $message );
+		}
+		if ( '' !== trim( $message ) ) {
+			$form['pressqueue_message_mode']  = 'override';
+			$form['pressqueue_message_value'] = $message;
+		}
+
+		$schedule_mode                    = self::scalar_input( $input, 'pressqueue_schedule_mode', 'inherit' );
+		$form['pressqueue_schedule_mode'] = $schedule_mode;
+		if ( 'explicit_time' === $schedule_mode ) {
+			foreach ( array( 'local_date', 'local_time', 'timezone' ) as $key ) {
+				$form[ 'pressqueue_schedule_' . $key ] = self::scalar_input( $input, 'pressqueue_schedule_' . $key, '' );
+			}
+
+			$stored = is_array( $current['schedule'] ?? null ) ? $current['schedule'] : array();
+			$offset = self::scalar_input( $input, 'pressqueue_schedule_utc_offset', '' );
+			if (
+				'' !== $offset
+				&& ( $stored['local_date'] ?? null ) === $form['pressqueue_schedule_local_date']
+				&& ( $stored['local_time'] ?? null ) === $form['pressqueue_schedule_local_time']
+				&& ( $stored['timezone'] ?? null ) === $form['pressqueue_schedule_timezone']
+			) {
+				$form['pressqueue_schedule_utc_offset'] = $offset;
+			}
+		}
+
+		if ( 'post_media' === $form['pressqueue_media_mode'] ) {
+			$form['pressqueue_media_attachment_ids'] = self::scalar_input( $input, 'pressqueue_media_attachment_ids', '' );
+			if ( 'exclude' !== $policy && '' === trim( $form['pressqueue_media_attachment_ids'], ', ' ) ) {
+				throw new ValidationException( 'PressQueue post media selection is empty.' );
+			}
+		}
+
+		return PostControlMetadata::bundle_from_form( $form );
+	}
+
+	/**
+	 * Return a sanitized scalar form value.
+	 *
+	 * @param array<string,mixed> $input Input.
+	 * @param string              $key Key.
+	 * @param string              $fallback Fallback.
+	 * @return string
+	 */
+	private static function scalar_input( array $input, string $key, string $fallback ): string {
+		return isset( $input[ $key ] ) && is_scalar( $input[ $key ] ) ? sanitize_text_field( (string) $input[ $key ] ) : $fallback;
+	}
+
+	/**
+	 * Return a sanitized list of strings.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return array<int,string>
+	 */
+	private static function string_list( $value ): array {
+		if ( ! is_array( $value ) ) {
+			return array();
+		}
+
+		$output = array();
+		foreach ( $value as $item ) {
+			if ( is_string( $item ) && '' !== $item ) {
+				$output[] = sanitize_text_field( $item );
+			}
+		}
+
+		return $output;
 	}
 
 	/**
@@ -392,14 +872,92 @@ final class PostControlsController {
 		wp_enqueue_script(
 			'pressqueue-post-controls',
 			plugins_url( 'assets/editor/post-controls.js', PRESSQUEUE_FILE ),
-			array( 'wp-api-fetch', 'wp-components', 'wp-data', 'wp-editor', 'wp-element', 'wp-i18n', 'wp-plugins' ),
-			defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0',
+			array( 'wp-api-fetch', 'wp-block-editor', 'wp-components', 'wp-core-data', 'wp-data', 'wp-date', 'wp-editor', 'wp-element', 'wp-hooks', 'wp-i18n', 'wp-plugins' ),
+			Ui::asset_version( 'assets/editor/post-controls.js' ),
 			true
 		);
+
+		if ( function_exists( 'wp_add_inline_script' ) && function_exists( 'wp_json_encode' ) ) {
+			wp_add_inline_script( 'pressqueue-post-controls', 'window.pressqueuePostControls = ' . wp_json_encode( self::script_config() ) . ';', 'before' );
+		}
 
 		if ( function_exists( 'wp_set_script_translations' ) ) {
 			wp_set_script_translations( 'pressqueue-post-controls', 'pressqueue', defined( 'PRESSQUEUE_DIR' ) ? PRESSQUEUE_DIR . 'languages' : '' );
 		}
+
+		self::enqueue_style();
+	}
+
+	/**
+	 * Enqueue classic editor styles and behavior where the meta box can appear.
+	 *
+	 * @param string $hook_suffix Admin page hook.
+	 */
+	public static function enqueue_classic_assets( $hook_suffix = '' ): void {
+		if ( ! in_array( $hook_suffix, array( 'post.php', 'post-new.php' ), true ) || ! defined( 'PRESSQUEUE_FILE' ) || ! function_exists( 'wp_enqueue_script' ) ) {
+			return;
+		}
+
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( null === $screen || ! PostControlAuthorization::is_supported_post_type( (string) $screen->post_type ) ) {
+			return;
+		}
+
+		if ( method_exists( $screen, 'is_block_editor' ) && $screen->is_block_editor() ) {
+			return;
+		}
+
+		if ( function_exists( 'wp_enqueue_media' ) ) {
+			wp_enqueue_media();
+		}
+
+		wp_enqueue_script(
+			'pressqueue-post-controls-classic',
+			plugins_url( 'assets/editor/post-controls-classic.js', PRESSQUEUE_FILE ),
+			array( 'wp-i18n' ),
+			Ui::asset_version( 'assets/editor/post-controls-classic.js' ),
+			true
+		);
+
+		if ( function_exists( 'wp_set_script_translations' ) ) {
+			wp_set_script_translations( 'pressqueue-post-controls-classic', 'pressqueue', defined( 'PRESSQUEUE_DIR' ) ? PRESSQUEUE_DIR . 'languages' : '' );
+		}
+
+		self::enqueue_style();
+	}
+
+	/**
+	 * Enqueue the editor stylesheet.
+	 */
+	private static function enqueue_style(): void {
+		if ( ! function_exists( 'wp_enqueue_style' ) ) {
+			return;
+		}
+
+		wp_enqueue_style( 'pressqueue-post-controls', plugins_url( 'assets/editor/post-controls.css', PRESSQUEUE_FILE ), array(), Ui::asset_version( 'assets/editor/post-controls.css' ) );
+	}
+
+	/**
+	 * Return the configuration handed to the block editor script.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private static function script_config(): array {
+		$post    = function_exists( 'get_post' ) ? get_post() : null;
+		$post_id = $post instanceof \WP_Post ? (int) $post->ID : 0;
+		$media   = array();
+
+		foreach ( Labels::media_modes() as $mode => $label ) {
+			$media[ $mode ] = $label['label'];
+		}
+
+		return array(
+			'canAccess'   => $post_id > 0 ? PostControlAuthorization::current_user_can_access( $post_id ) : ( function_exists( 'current_user_can' ) && current_user_can( Capabilities::EDIT_POST_CONTROLS ) ),
+			'canViewLog'  => function_exists( 'current_user_can' ) && current_user_can( Capabilities::VIEW_DELIVERIES ),
+			'mediaLabels' => $media,
+			'schedules'   => self::schedule_options(),
+			'images'      => self::media_options( 'featured_image' ),
+		);
 	}
 
 	/**
@@ -414,6 +972,7 @@ final class PostControlsController {
 		return array(
 			'control_bundle_hash'    => PostControlMetadata::bundle_hash( $bundle ),
 			'controls'               => $bundle,
+			'editor'                 => PostSharingSummary::editor_context( $post_id ),
 			'effective_facts'        => array(
 				'channels'                    => self::channel_summaries(),
 				'inherited_policy'            => 'inherit',

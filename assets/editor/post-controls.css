@@ -1,0 +1,362 @@
+/* PressQueue "Social sharing" panel in the block editor and the classic meta box. */
+
+.pq-editor {
+	--pq-text: #1e1e1e;
+	--pq-muted: #646970;
+	--pq-line: #dcdcde;
+	--pq-subtle: #f6f7f7;
+	--pq-accent: var(--wp-admin-theme-color, #3858e9);
+	--pq-accent-soft: color-mix(in srgb, var(--pq-accent) 9%, #fff);
+	--pq-ok: #1a7f45;
+	--pq-ok-soft: #e4f4ea;
+	--pq-warn: #8a5200;
+	--pq-warn-soft: #fdf0d9;
+	--pq-bad: #b3261e;
+	--pq-bad-soft: #fbe7e5;
+	--pq-idle: #50575e;
+	--pq-idle-soft: #eef0f2;
+	display: grid;
+	gap: 12px;
+	color: var(--pq-text);
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.pq-editor p {
+	margin: 0;
+}
+
+.pq-editor .pq-ed-muted {
+	color: var(--pq-muted);
+}
+
+.pq-editor .pq-ed-small {
+	font-size: 12px;
+}
+
+.pq-editor .pq-ed-checking {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.pq-editor .pq-ed-checking .components-spinner {
+	margin: 0;
+}
+
+/* Where the post goes. */
+
+.pq-editor .pq-ed-goes {
+	display: grid;
+	gap: 8px;
+	padding: 10px 12px;
+	border-radius: 6px;
+	background: var(--pq-subtle);
+	transition: opacity 0.15s ease;
+}
+
+.pq-editor .pq-ed-goes.is-updating {
+	opacity: 0.7;
+}
+
+.pq-editor .pq-ed-goes--none {
+	background: var(--pq-idle-soft);
+}
+
+.pq-editor .pq-ed-channels {
+	display: grid;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pq-editor .pq-ed-channels li {
+	display: grid;
+	gap: 2px;
+	margin: 0;
+	min-width: 0;
+}
+
+.pq-editor .pq-ed-channel-detail {
+	padding-left: 28px;
+}
+
+.pq-editor .pq-channel-name {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.pq-editor .pq-truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pq-editor .pq-svc {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: #50575e;
+	color: #fff;
+	font-size: 9px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.pq-editor .pq-svc--linkedin { background: #0a66c2; }
+.pq-editor .pq-svc--twitter,
+.pq-editor .pq-svc--x { background: #111; }
+.pq-editor .pq-svc--bluesky { background: #1185fe; }
+.pq-editor .pq-svc--mastodon { background: #6364ff; }
+.pq-editor .pq-svc--threads { background: #222; }
+.pq-editor .pq-svc--facebook { background: #1877f2; }
+.pq-editor .pq-svc--instagram { background: #c13584; }
+.pq-editor .pq-svc--youtube { background: #c4302b; }
+.pq-editor .pq-svc--tiktok { background: #010101; }
+.pq-editor .pq-svc--pinterest { background: #e60023; }
+.pq-editor .pq-svc--googlebusiness { background: #4285f4; }
+
+/* Notes under the switch. */
+
+.pq-editor .pq-ed-hint,
+.pq-editor .pq-ed-note {
+	color: var(--pq-muted);
+	font-size: 12px;
+}
+
+.pq-editor .pq-ed-note {
+	padding: 6px 10px;
+	border-left: 3px solid var(--pq-accent);
+	border-radius: 0 4px 4px 0;
+	background: var(--pq-accent-soft);
+	color: var(--pq-text);
+}
+
+.pq-editor .pq-ed-note--paused {
+	border-left-color: var(--pq-warn);
+	background: var(--pq-warn-soft);
+	color: var(--pq-warn);
+}
+
+/* What happened after publishing. */
+
+.pq-editor .pq-ed-activity {
+	display: grid;
+	gap: 8px;
+	padding: 10px 12px;
+	border: 1px solid var(--pq-line);
+	border-radius: 6px;
+}
+
+.pq-editor .pq-ed-activity-row {
+	display: flex !important;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px 8px !important;
+}
+
+.pq-editor .pq-ed-activity-state {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.pq-editor .pq-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+.pq-editor .pq-pill::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.pq-editor .pq-pill--ok { background: var(--pq-ok-soft); color: var(--pq-ok); }
+.pq-editor .pq-pill--warn { background: var(--pq-warn-soft); color: var(--pq-warn); }
+.pq-editor .pq-pill--bad { background: var(--pq-bad-soft); color: var(--pq-bad); }
+.pq-editor .pq-pill--idle { background: var(--pq-idle-soft); color: var(--pq-idle); }
+.pq-editor .pq-pill--info { background: var(--pq-accent-soft); color: var(--pq-accent); }
+
+/* Customize for this post. */
+
+.pq-editor .pq-ed-more-toggle.components-button {
+	gap: 6px;
+	height: auto;
+	padding: 0;
+	text-decoration: none;
+}
+
+.pq-editor .pq-ed-more-toggle::after {
+	content: "";
+	width: 6px;
+	height: 6px;
+	margin-left: 2px;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: translateY(-2px) rotate(45deg);
+	transition: transform 0.15s ease;
+}
+
+.pq-editor .pq-ed-more.is-open .pq-ed-more-toggle::after {
+	transform: translateY(1px) rotate(-135deg);
+}
+
+.pq-editor .pq-ed-changed {
+	padding: 0 6px;
+	border-radius: 999px;
+	background: var(--pq-accent-soft);
+	color: var(--pq-text);
+	font-size: 11px;
+}
+
+.pq-editor .pq-ed-more-body {
+	display: grid;
+	gap: 16px;
+	margin-top: 12px;
+}
+
+.pq-editor .pq-ed-field {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.pq-editor .pq-ed-field legend,
+.pq-editor .pq-ed-field > label:not(.pq-ed-check) {
+	padding: 0;
+	margin-bottom: 2px;
+	font-size: 11px;
+	font-weight: 500;
+	text-transform: uppercase;
+}
+
+.pq-editor .pq-ed-check {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.pq-editor .pq-ed-check input {
+	margin: 0;
+}
+
+.pq-editor .pq-ed-help {
+	color: var(--pq-muted);
+	font-size: 12px;
+}
+
+.pq-editor .pq-ed-count.is-over,
+.pq-editor .pq-ed-warning {
+	color: var(--pq-bad);
+}
+
+.pq-editor .pq-ed-datetime {
+	display: grid;
+	gap: 8px;
+	padding-left: 10px;
+	border-left: 2px solid var(--pq-line);
+}
+
+.pq-editor .pq-ed-field-row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 8px;
+}
+
+.pq-editor .pq-ed-media {
+	display: grid;
+	gap: 8px;
+}
+
+.pq-editor .pq-ed-thumbs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pq-editor .pq-ed-thumbs li {
+	display: grid;
+	gap: 2px;
+	justify-items: center;
+	margin: 0;
+}
+
+.pq-editor .pq-ed-thumbs img,
+.pq-editor .pq-ed-thumb-missing {
+	display: grid;
+	place-items: center;
+	width: 56px;
+	height: 56px;
+	border-radius: 4px;
+	object-fit: cover;
+	background: var(--pq-subtle);
+	color: var(--pq-muted);
+	font-size: 11px;
+}
+
+/* Classic editor meta box. */
+
+.pq-editor--classic {
+	margin-top: 6px;
+}
+
+.pq-editor--classic .pq-ed-switch label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+}
+
+.pq-editor--classic .pq-ed-switch input {
+	margin: 0;
+}
+
+.pq-editor--classic details.pq-ed-more > summary {
+	cursor: pointer;
+	color: var(--pq-accent);
+}
+
+.pq-editor--classic details.pq-ed-more > summary:focus-visible {
+	outline: 2px solid var(--pq-accent);
+	outline-offset: 2px;
+}
+
+.pq-editor--classic .pq-ed-field-row label {
+	display: grid;
+	gap: 2px;
+}
+
+.pq-editor--classic .pq-ed-field-row input,
+.pq-editor--classic select,
+.pq-editor--classic textarea {
+	width: 100%;
+	max-width: 100%;
+}
+
+.pq-editor--classic [hidden] {
+	display: none !important;
+}
