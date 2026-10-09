@@ -17,8 +17,6 @@ use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\Record\DecisionRecord;
-use PressQueue\Storage\Record\RuleRecord;
-use PressQueue\Storage\Repository\ChannelRepository;
 use PressQueue\Storage\Repository\DecisionRepository;
 use PressQueue\Storage\Repository\DeliveryRepository;
 use PressQueue\Storage\Repository\RuleRepository;
@@ -54,6 +52,8 @@ final class AdminScreens {
 		add_action( 'admin_post_pressqueue_disable_rule', array( self::class, 'handle_disable_rule' ) );
 		add_action( 'admin_post_pressqueue_preview_rule_post', array( self::class, 'handle_rule_post_preview' ) );
 		add_action( 'admin_post_pressqueue_preview_rule_recent', array( self::class, 'handle_rule_recent_preview' ) );
+		add_action( 'admin_post_pressqueue_quick_start_rule', array( RulesController::class, 'handle_quick_start' ) );
+		add_action( 'admin_post_pressqueue_delete_rule', array( RulesController::class, 'handle_delete_rule' ) );
 		add_action( 'admin_post_pressqueue_preview_post', array( self::class, 'handle_post_preview' ) );
 		ConnectionController::register_hooks();
 		ChannelController::register_hooks();
@@ -210,54 +210,7 @@ final class AdminScreens {
 	 * Render rules.
 	 */
 	public static function render_rules_page(): void {
-		self::require_capability( Capabilities::MANAGE_RULES );
-
-		$rules    = ( new RuleRepository() )->find_all();
-		$channels = ( new ChannelRepository() )->find_all();
-
-		echo '<div class="wrap">';
-		echo '<h1>' . esc_html__( 'PressQueue Rules', 'pressqueue' ) . '</h1>';
-		self::render_notice();
-		self::render_preview_result();
-		TemplateController::render_section();
-
-		if ( array() === $channels ) {
-			echo '<div class="notice notice-info"><p>' . esc_html__( 'No local destinations exist yet. Add a connection and synchronize channels first.', 'pressqueue' ) . '</p></div>';
-		}
-
-		echo '<h2>' . esc_html__( 'Saved Rules', 'pressqueue' ) . '</h2>';
-		echo '<table class="widefat striped"><caption class="screen-reader-text">' . esc_html__( 'Saved PressQueue rules', 'pressqueue' ) . '</caption><thead><tr>';
-		foreach ( array( __( 'Name', 'pressqueue' ), __( 'Effect', 'pressqueue' ), __( 'Priority', 'pressqueue' ), __( 'Version', 'pressqueue' ), __( 'Enabled', 'pressqueue' ), __( 'Actions', 'pressqueue' ) ) as $heading ) {
-			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
-		}
-		echo '</tr></thead><tbody>';
-
-		if ( array() === $rules ) {
-			echo '<tr><td colspan="6">' . esc_html__( 'No rules have been created.', 'pressqueue' ) . '</td></tr>';
-		}
-
-		foreach ( $rules as $rule ) {
-			echo '<tr>';
-			echo '<td><code>' . esc_html( $rule->public_id ) . '</code><br />' . esc_html( $rule->name ) . '</td>';
-			echo '<td>' . esc_html( $rule->effect ) . '</td>';
-			echo '<td>' . esc_html( (string) $rule->priority ) . '</td>';
-			echo '<td>' . esc_html( (string) $rule->version ) . '</td>';
-			echo '<td>' . esc_html( $rule->enabled ? __( 'Enabled', 'pressqueue' ) : __( 'Disabled', 'pressqueue' ) ) . '</td>';
-			echo '<td>';
-			self::render_rule_preview_forms( $rule );
-			TemplateController::render_rule_adoption_form( $rule );
-			self::render_enable_form( $rule );
-			self::render_disable_form( $rule );
-			echo '</td>';
-			echo '</tr>';
-			echo '<tr><td colspan="6">';
-			self::render_rule_form( $rule, $channels );
-			echo '</td></tr>';
-		}
-
-		echo '</tbody></table>';
-		self::render_rule_form( null, $channels );
-		echo '</div>';
+		RulesController::render_page();
 	}
 
 	/**
@@ -325,122 +278,35 @@ final class AdminScreens {
 	 * Handle rule save.
 	 */
 	public static function handle_save_rule(): void {
-		AdminPostBoundary::check( 'pressqueue_save_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
-
-		try {
-			$repository = new RuleRepository();
-			$public_id  = self::post_text( 'rule_public_id' );
-			$current    = '' === $public_id ? null : $repository->find_by_public_id( $public_id );
-			$input      = self::rule_input_from_request( $current );
-
-			if ( '' === $public_id ) {
-				$repository->create( $input );
-			} else {
-				$repository->update( $public_id, self::post_int( 'lock_version', 1 ), $input );
-			}
-
-			self::redirect( self::SLUG_RULES, 'rule_saved' );
-		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'rule_error', SafeOperatorError::redirect_detail( $throwable ) );
-		}
+		RulesController::handle_save_rule();
 	}
 
 	/**
 	 * Handle rule enable confirmation.
 	 */
 	public static function handle_enable_rule(): void {
-		AdminPostBoundary::check( 'pressqueue_enable_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
-
-		try {
-			( new RuleRepository() )->enable_after_preview( self::post_text( 'rule_public_id' ), self::post_int( 'lock_version', 1 ) );
-			self::redirect( self::SLUG_RULES, 'rule_enabled' );
-		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'rule_error', SafeOperatorError::redirect_detail( $throwable ) );
-		}
+		RulesController::handle_enable_rule();
 	}
 
 	/**
 	 * Handle rule disable.
 	 */
 	public static function handle_disable_rule(): void {
-		AdminPostBoundary::check( 'pressqueue_disable_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
-
-		try {
-			$repository = new RuleRepository();
-			$repository->update( self::post_text( 'rule_public_id' ), self::post_int( 'lock_version', 1 ), array( 'enabled' => false ) );
-			self::redirect( self::SLUG_RULES, 'rule_disabled' );
-		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'rule_error', SafeOperatorError::redirect_detail( $throwable ) );
-		}
+		RulesController::handle_disable_rule();
 	}
 
 	/**
 	 * Handle one-rule post preview.
 	 */
 	public static function handle_rule_post_preview(): void {
-		AdminPostBoundary::check( 'pressqueue_preview_rule_post', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
-
-		try {
-			$rule   = self::requested_rule_from_request( true );
-			$result = self::preview_rule_for_post( $rule, self::post_int( 'post_id', 0 ), self::post_text( 'trigger', 'first_publish' ) );
-			( new RuleRepository() )->mark_version_previewed( $rule->public_id, self::post_int( 'lock_version', 0 ), self::post_int( 'rule_version', 0 ) );
-			self::store_preview_result( $result );
-			self::redirect( self::SLUG_RULES, 'preview_ready' );
-		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'preview_error', SafeOperatorError::redirect_detail( $throwable ) );
-		}
+		RulesController::handle_rule_post_preview();
 	}
 
 	/**
 	 * Handle one-rule recent post preview.
 	 */
 	public static function handle_rule_recent_preview(): void {
-		AdminPostBoundary::check( 'pressqueue_preview_rule_recent', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
-
-		try {
-			$rule       = self::requested_rule_from_request( true );
-			$count      = self::post_int( 'count', 20 );
-			$count      = max( 1, min( 50, $count ) );
-			$trigger    = self::post_text( 'trigger', 'first_publish' );
-			$post_types = self::post_types_for_rule( $rule );
-			$query      = new \WP_Query(
-				array(
-					'fields'                 => 'ids',
-					'ignore_sticky_posts'    => true,
-					'no_found_rows'          => true,
-					'orderby'                => array(
-						'modified' => 'DESC',
-						'ID'       => 'DESC',
-					),
-					'post_status'            => array( 'publish', 'future', 'draft', 'pending' ),
-					'post_type'              => $post_types,
-					'posts_per_page'         => $count,
-					// phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.SuppressFilters_suppress_filters -- Operator inventory spans languages; each post is separately capability-checked.
-					'suppress_filters'       => true,
-					'update_post_meta_cache' => false,
-					'update_post_term_cache' => false,
-				)
-			);
-			$results = array();
-
-			foreach ( $query->posts as $post_id ) {
-				if ( self::can_preview_post( (int) $post_id ) ) {
-					$results[] = self::preview_rule_for_post( $rule, (int) $post_id, $trigger )->to_array();
-				}
-			}
-
-			( new RuleRepository() )->mark_version_previewed( $rule->public_id, self::post_int( 'lock_version', 0 ), self::post_int( 'rule_version', 0 ) );
-			self::store_preview_array(
-				array(
-					'recent_results' => $results,
-					'rule_public_id' => $rule->public_id,
-					'trigger'        => $trigger,
-				)
-			);
-			self::redirect( self::SLUG_RULES, 'preview_ready' );
-		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_RULES, 'preview_error', SafeOperatorError::redirect_detail( $throwable ) );
-		}
+		RulesController::handle_rule_recent_preview();
 	}
 
 	/**
@@ -472,226 +338,13 @@ final class AdminScreens {
 		}
 	}
 
-	/**
-	 * Render rule preview forms.
-	 *
-	 * @param RuleRecord $rule Rule.
-	 */
-	private static function render_rule_preview_forms( RuleRecord $rule ): void {
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin:0 0 .5em;">';
-		wp_nonce_field( 'pressqueue_preview_rule_post' );
-		echo '<input type="hidden" name="action" value="pressqueue_preview_rule_post" />';
-		echo '<input type="hidden" name="rule_public_id" value="' . esc_attr( $rule->public_id ) . '" />';
-		echo '<input type="hidden" name="lock_version" value="' . esc_attr( (string) $rule->lock_version ) . '" />';
-		echo '<input type="hidden" name="rule_version" value="' . esc_attr( (string) $rule->version ) . '" />';
-		echo '<input type="number" name="post_id" min="1" placeholder="' . esc_attr__( 'Post ID', 'pressqueue' ) . '" />';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- trigger_select returns escaped markup.
-		echo self::trigger_select( 'trigger', 'first_publish' );
-		submit_button( __( 'Preview Rule', 'pressqueue' ), 'secondary small', 'submit', false );
-		echo '</form>';
 
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin:0;">';
-		wp_nonce_field( 'pressqueue_preview_rule_recent' );
-		echo '<input type="hidden" name="action" value="pressqueue_preview_rule_recent" />';
-		echo '<input type="hidden" name="rule_public_id" value="' . esc_attr( $rule->public_id ) . '" />';
-		echo '<input type="hidden" name="lock_version" value="' . esc_attr( (string) $rule->lock_version ) . '" />';
-		echo '<input type="hidden" name="rule_version" value="' . esc_attr( (string) $rule->version ) . '" />';
-		echo '<input type="number" name="count" min="1" max="50" value="20" />';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- trigger_select returns escaped markup.
-		echo self::trigger_select( 'trigger', 'first_publish' );
-		submit_button( __( 'Preview Recent', 'pressqueue' ), 'secondary small', 'submit', false );
-		echo '</form>';
-	}
 
-	/**
-	 * Render enable form.
-	 *
-	 * @param RuleRecord $rule Rule.
-	 */
-	private static function render_enable_form( RuleRecord $rule ): void {
-		if ( $rule->enabled ) {
-			return;
-		}
 
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin-top:.5em;">';
-		wp_nonce_field( 'pressqueue_enable_rule' );
-		echo '<input type="hidden" name="action" value="pressqueue_enable_rule" />';
-		echo '<input type="hidden" name="rule_public_id" value="' . esc_attr( $rule->public_id ) . '" />';
-		echo '<input type="hidden" name="lock_version" value="' . esc_attr( (string) $rule->lock_version ) . '" />';
-		$attributes = array();
 
-		if ( $rule->last_previewed_version !== $rule->version ) {
-			$attributes['disabled'] = 'disabled';
-		}
 
-		submit_button( __( 'Enable After Preview', 'pressqueue' ), 'primary small', 'submit', false, $attributes );
-		echo '</form>';
-	}
 
-	/**
-	 * Render disable form.
-	 *
-	 * @param RuleRecord $rule Rule.
-	 */
-	private static function render_disable_form( RuleRecord $rule ): void {
-		if ( ! $rule->enabled ) {
-			return;
-		}
 
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin-top:.5em;">';
-		wp_nonce_field( 'pressqueue_disable_rule' );
-		echo '<input type="hidden" name="action" value="pressqueue_disable_rule" />';
-		echo '<input type="hidden" name="rule_public_id" value="' . esc_attr( $rule->public_id ) . '" />';
-		echo '<input type="hidden" name="lock_version" value="' . esc_attr( (string) $rule->lock_version ) . '" />';
-		submit_button( __( 'Disable Rule', 'pressqueue' ), 'secondary small', 'submit', false );
-		echo '</form>';
-	}
-
-	/**
-	 * Render rule edit form.
-	 *
-	 * @param RuleRecord|null                                     $rule Rule for edits.
-	 * @param array<int,\PressQueue\Storage\Record\ChannelRecord> $channels Local channels.
-	 */
-	private static function render_rule_form( ?RuleRecord $rule, array $channels = array() ): void {
-		$is_edit = null !== $rule;
-
-		echo '<h2>' . esc_html( $is_edit ? __( 'Edit Rule', 'pressqueue' ) : __( 'Add Rule', 'pressqueue' ) ) . '</h2>';
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
-		wp_nonce_field( 'pressqueue_save_rule' );
-		echo '<input type="hidden" name="action" value="pressqueue_save_rule" />';
-		if ( $is_edit ) {
-			echo '<input type="hidden" name="rule_public_id" value="' . esc_attr( $rule->public_id ) . '" />';
-			echo '<input type="hidden" name="lock_version" value="' . esc_attr( (string) $rule->lock_version ) . '" />';
-		}
-		echo '<table class="form-table" role="presentation"><tbody>';
-		echo '<tr><th scope="row"><label for="' . esc_attr( self::field_id( 'rule-name', $rule ) ) . '">' . esc_html__( 'Name', 'pressqueue' ) . '</label></th><td><input id="' . esc_attr( self::field_id( 'rule-name', $rule ) ) . '" name="name" type="text" class="regular-text" value="' . esc_attr( null === $rule ? '' : $rule->name ) . '" required /></td></tr>';
-		echo '<tr><th scope="row"><label for="' . esc_attr( self::field_id( 'effect', $rule ) ) . '">' . esc_html__( 'Effect', 'pressqueue' ) . '</label></th><td><select id="' . esc_attr( self::field_id( 'effect', $rule ) ) . '" name="effect"><option value="include" ' . selected( null === $rule ? 'include' : $rule->effect, 'include', false ) . '>' . esc_html__( 'Include', 'pressqueue' ) . '</option><option value="exclude" ' . selected( null === $rule ? 'include' : $rule->effect, 'exclude', false ) . '>' . esc_html__( 'Exclude', 'pressqueue' ) . '</option></select></td></tr>';
-		echo '<tr><th scope="row"><label for="' . esc_attr( self::field_id( 'priority', $rule ) ) . '">' . esc_html__( 'Priority', 'pressqueue' ) . '</label></th><td><input id="' . esc_attr( self::field_id( 'priority', $rule ) ) . '" name="priority" type="number" value="' . esc_attr( null === $rule ? '100' : (string) $rule->priority ) . '" /></td></tr>';
-		echo '<tr><th scope="row">' . esc_html__( 'Triggers', 'pressqueue' ) . '</th><td>';
-		$selected_triggers = null === $rule ? array( 'first_publish' ) : ( $rule->triggers['triggers'] ?? array() );
-		foreach ( array( 'first_publish', 'update', 'scheduled_publication', 'bulk', 'repost' ) as $trigger ) {
-			echo '<label><input type="checkbox" name="triggers[]" value="' . esc_attr( $trigger ) . '" ' . checked( in_array( $trigger, $selected_triggers, true ), true, false ) . ' /> ' . esc_html( $trigger ) . '</label><br />';
-		}
-		echo '</td></tr>';
-		self::render_condition_tree_field( 'condition_tree_json', __( 'Condition Tree JSON', 'pressqueue' ), null === $rule ? self::default_condition_tree() : $rule->condition_tree, $rule );
-		self::render_rule_destinations( $rule, $channels );
-		self::render_json_textarea(
-			'template_set_json',
-			__( 'Template Set JSON', 'pressqueue' ),
-			null === $rule ? array(
-				'default_message' => '{{ title }}',
-				'schema_version'  => 1,
-			) : $rule->template_set,
-			$rule
-		);
-		self::render_json_textarea( 'custom_field_allowlist_json', __( 'Custom Field Allowlist JSON', 'pressqueue' ), null === $rule ? array() : $rule->custom_field_allowlist, $rule );
-		self::render_rule_mode_field(
-			'schedule_policy_mode',
-			__( 'Schedule', 'pressqueue' ),
-			null === $rule ? 'immediate' : (string) $rule->schedule_policy_document['mode'],
-			array(
-				'draft'      => __( 'Save an unscheduled Buffer draft', 'pressqueue' ),
-				'immediate'  => __( 'Publish immediately', 'pressqueue' ),
-				'queue_next' => __( 'Next Buffer queue slot', 'pressqueue' ),
-				'queue_end'  => __( 'End of Buffer queue', 'pressqueue' ),
-			),
-			$rule
-		);
-		self::render_rule_mode_field(
-			'media_policy_mode',
-			__( 'Images', 'pressqueue' ),
-			null === $rule ? 'none' : (string) $rule->media_policy['mode'],
-			array(
-				'none'                    => __( 'No image', 'pressqueue' ),
-				'featured_image'          => __( 'Require a featured image', 'pressqueue' ),
-				'featured_image_optional' => __( 'Use a featured image when available', 'pressqueue' ),
-				'post_media'              => __( 'Use images selected in the post controls', 'pressqueue' ),
-			),
-			$rule
-		);
-		if ( null !== $rule && null !== $rule->source_template_public_id ) {
-			echo '<tr><th scope="row">' . esc_html__( 'Template Source', 'pressqueue' ) . '</th><td><code>' . esc_html( $rule->source_template_public_id . ' v' . (string) $rule->source_template_version ) . '</code></td></tr>';
-		}
-		echo '</tbody></table>';
-		submit_button( $is_edit ? __( 'Save Rule', 'pressqueue' ) : __( 'Save Disabled Rule', 'pressqueue' ) );
-		echo '</form>';
-	}
-
-	/**
-	 * Render channel choices without requiring users to copy identifiers into JSON.
-	 *
-	 * @param RuleRecord|null                                     $rule Rule for edits.
-	 * @param array<int,\PressQueue\Storage\Record\ChannelRecord> $channels Local channels.
-	 */
-	private static function render_rule_destinations( ?RuleRecord $rule, array $channels ): void {
-		$selected = null === $rule ? array() : array_column( $rule->destination_set['destinations'], 'channel_public_id' );
-		$labels   = array();
-		foreach ( $channels as $channel ) {
-			$labels[ $channel->public_id ] = (string) ( $channel->display['display_label'] ?? $channel->display['name'] ?? $channel->public_id )
-				. ' (' . $channel->service . ', ' . ( $channel->enabled ? __( 'enabled', 'pressqueue' ) : __( 'disabled', 'pressqueue' ) ) . ')';
-		}
-		foreach ( $selected as $public_id ) {
-			if ( ! isset( $labels[ $public_id ] ) ) {
-				$labels[ $public_id ] = __( 'Missing channel', 'pressqueue' ) . ' (' . $public_id . ')';
-			}
-		}
-
-		echo '<tr><th scope="row">' . esc_html__( 'Destinations', 'pressqueue' ) . '</th><td><fieldset>';
-		echo '<legend class="screen-reader-text">' . esc_html__( 'Destinations', 'pressqueue' ) . '</legend>';
-		echo '<input type="hidden" name="destination_controls_present" value="1" />';
-		foreach ( $labels as $public_id => $label ) {
-			echo '<label><input type="checkbox" name="destination_channel_ids[]" value="' . esc_attr( $public_id ) . '" ' . checked( in_array( $public_id, $selected, true ), true, false ) . ' /> ' . esc_html( $label ) . '</label><br />';
-		}
-		echo '<p class="description">' . esc_html__( 'Select channels for an inclusion rule. Exclusion rules apply to all destinations. Selecting a channel does not enable it.', 'pressqueue' ) . '</p>';
-		echo '</fieldset></td></tr>';
-	}
-
-	/**
-	 * Render a schedule or image choice.
-	 *
-	 * @param string               $name Form field name.
-	 * @param string               $label Field label.
-	 * @param string               $value Selected mode.
-	 * @param array<string,string> $choices Mode labels.
-	 * @param RuleRecord|null      $rule Rule for field IDs.
-	 */
-	private static function render_rule_mode_field( string $name, string $label, string $value, array $choices, ?RuleRecord $rule ): void {
-		$id = self::field_id( $name, $rule );
-		echo '<tr><th scope="row"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label></th><td><select id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '">';
-		foreach ( $choices as $mode => $mode_label ) {
-			echo '<option value="' . esc_attr( $mode ) . '" ' . selected( $value, $mode, false ) . '>' . esc_html( $mode_label ) . '</option>';
-		}
-		echo '</select></td></tr>';
-	}
-
-	/**
-	 * Render a JSON textarea.
-	 *
-	 * @param string                  $name Field name.
-	 * @param string                  $label Label.
-	 * @param array<int|string,mixed> $example Example value.
-	 * @param RuleRecord|null         $rule Rule.
-	 */
-	private static function render_json_textarea( string $name, string $label, array $example, ?RuleRecord $rule ): void {
-		$id = self::field_id( $name, $rule );
-
-		echo '<tr><th scope="row"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label></th><td>';
-		echo '<textarea id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '" class="large-text code" rows="8">' . esc_textarea( self::pretty_json( $example ) ) . '</textarea>';
-		echo '</td></tr>';
-	}
-
-	/**
-	 * Render the visual condition builder and canonical raw JSON fallback.
-	 *
-	 * @param string                  $name Field name.
-	 * @param string                  $label Label.
-	 * @param array<int|string,mixed> $example Example value.
-	 * @param RuleRecord|null         $rule Rule.
-	 */
-	private static function render_condition_tree_field( string $name, string $label, array $example, ?RuleRecord $rule ): void {
-		ConditionBuilderController::render_field( self::field_id( $name, $rule ), $name, $label, self::pretty_json( $example ) );
-	}
 
 	/**
 	 * Render a decision row.
@@ -788,112 +441,9 @@ final class AdminScreens {
 		echo '</p></div>';
 	}
 
-	/**
-	 * Build rule input from request.
-	 *
-	 * @param RuleRecord|null $current Existing rule.
-	 * @return array<string,mixed>
-	 */
-	private static function rule_input_from_request( ?RuleRecord $current = null ): array {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked by caller.
-		$triggers     = isset( $_POST['triggers'] ) && is_array( $_POST['triggers'] ) ? array_map( 'sanitize_key', wp_unslash( $_POST['triggers'] ) ) : array();
-		$template_set = self::post_json_object( 'template_set_json' );
-		$input        = array(
-			'condition_tree'         => self::post_json_object( 'condition_tree_json' ),
-			'custom_field_allowlist' => self::post_json_list( 'custom_field_allowlist_json' ),
-			'destination_set'        => self::destination_input_from_request(),
-			'effect'                 => self::post_text( 'effect', 'include' ),
-			'media_policy'           => self::mode_input_from_request( 'media_policy' ),
-			'name'                   => self::post_text( 'name' ),
-			'priority'               => self::post_int( 'priority', 100 ),
-			'schedule_policy'        => self::mode_input_from_request( 'schedule_policy' ),
-			'template_set'           => $template_set,
-			'triggers'               => $triggers,
-		);
 
-		if ( null !== $current && null !== $current->source_template_public_id && CanonicalJson::encode_object( $template_set ) === CanonicalJson::encode_object( $current->template_set ) ) {
-			$input['source_template_public_id'] = $current->source_template_public_id;
-			$input['source_template_version']   = $current->source_template_version;
-		}
 
-		return $input;
-	}
 
-	/**
-	 * Read checked channels or a legacy JSON form submission.
-	 *
-	 * @return array<string,mixed>
-	 */
-	private static function destination_input_from_request(): array {
-		if ( '1' !== self::post_text( 'destination_controls_present' ) ) {
-			return self::post_json_object( 'destination_set_json' );
-		}
-
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Caller checks the nonce; values are type-checked and sanitized below.
-		$ids = isset( $_POST['destination_channel_ids'] ) ? wp_unslash( $_POST['destination_channel_ids'] ) : array();
-		if ( ! is_array( $ids ) || ! array_is_list( $ids ) ) {
-			throw new ValidationException( 'Destination choices must be a list.' );
-		}
-		if ( 'exclude' === self::post_text( 'effect' ) ) {
-			return array(
-				'schema_version' => 1,
-				'scope'          => 'all',
-			);
-		}
-		$destinations = array();
-		foreach ( $ids as $id ) {
-			if ( ! is_string( $id ) ) {
-				throw new ValidationException( 'Destination entries need a channel public ID.' );
-			}
-			$destinations[] = array( 'channel_public_id' => sanitize_text_field( $id ) );
-		}
-
-		return array(
-			'schema_version' => 1,
-			'destinations'   => $destinations,
-		);
-	}
-
-	/**
-	 * Read a mode selection or a legacy JSON form submission.
-	 *
-	 * @param string $name Policy name.
-	 * @return array<string,mixed>
-	 */
-	private static function mode_input_from_request( string $name ): array {
-		$mode = self::post_text( $name . '_mode' );
-		if ( '' === $mode ) {
-			return self::post_json_object( $name . '_json' );
-		}
-
-		return array(
-			'schema_version' => 1,
-			'mode'           => $mode,
-		);
-	}
-
-	/**
-	 * Preview one rule for one post.
-	 *
-	 * @param RuleRecord $rule Rule.
-	 * @param int        $post_id Post ID.
-	 * @param string     $trigger Trigger.
-	 * @return PlanningResult
-	 */
-	private static function preview_rule_for_post( RuleRecord $rule, int $post_id, string $trigger ): PlanningResult {
-		if ( ! self::can_preview_post( $post_id ) ) {
-			throw new ValidationException( 'You are not allowed to preview this post.' );
-		}
-
-		$normalizer = new EventNormalizer();
-		$event      = $normalizer->from_post_id( $post_id, 'preview', 'admin_rule_preview', $trigger, $normalizer->metadata_allowlist_for_rules( array( $rule ) ) );
-
-		if ( null === $event ) {
-			throw new ValidationException( 'Post cannot be previewed for this trigger.' );
-		}
-
-		return ( new Planner() )->preview( $event, array( $rule ) );
-	}
 
 	/**
 	 * Check post preview authorization.
@@ -911,25 +461,6 @@ final class AdminScreens {
 		return current_user_can( 'edit_post', $post_id );
 	}
 
-	/**
-	 * Load requested rule.
-	 *
-	 * @param bool $require_exact_version Whether posted version fields must match storage.
-	 * @return RuleRecord
-	 */
-	private static function requested_rule_from_request( bool $require_exact_version ): RuleRecord {
-		$rule = ( new RuleRepository() )->find_by_public_id( self::post_text( 'rule_public_id' ) );
-
-		if ( null === $rule ) {
-			throw new ValidationException( 'Rule does not exist.' );
-		}
-
-		if ( $require_exact_version && ( self::post_int( 'lock_version', 0 ) !== $rule->lock_version || self::post_int( 'rule_version', 0 ) !== $rule->version ) ) {
-			throw new ValidationException( 'Rule version changed before preview.' );
-		}
-
-		return $rule;
-	}
 
 	/**
 	 * Render decision pagination.
@@ -977,67 +508,8 @@ final class AdminScreens {
 		echo '</p>';
 	}
 
-	/**
-	 * Return a stable field ID.
-	 *
-	 * @param string          $name Field name.
-	 * @param RuleRecord|null $rule Rule.
-	 * @return string
-	 */
-	private static function field_id( string $name, ?RuleRecord $rule ): string {
-		return 'pressqueue-' . $name . '-' . ( null === $rule ? 'new' : strtolower( $rule->public_id ) );
-	}
 
-	/**
-	 * Infer recent-post preview post types from post_type conditions.
-	 *
-	 * @param RuleRecord $rule Rule.
-	 * @return array<int,string>
-	 */
-	private static function post_types_for_rule( RuleRecord $rule ): array {
-		$post_types = self::collect_post_type_conditions( $rule->condition_tree );
 
-		if ( array() === $post_types ) {
-			return array( 'post' );
-		}
-
-		sort( $post_types, SORT_STRING );
-
-		return array_values( array_unique( $post_types ) );
-	}
-
-	/**
-	 * Collect post type conditions from a tree.
-	 *
-	 * @param mixed $node Node.
-	 * @return array<int,string>
-	 */
-	private static function collect_post_type_conditions( $node ): array {
-		if ( ! is_array( $node ) ) {
-			return array();
-		}
-
-		if ( ( $node['type'] ?? null ) === 'condition' && ( $node['condition'] ?? null ) === 'post_type' ) {
-			$value = $node['value'] ?? null;
-
-			if ( is_string( $value ) ) {
-				return array( $value );
-			}
-
-			if ( is_array( $value ) ) {
-				return array_values( array_filter( $value, 'is_string' ) );
-			}
-		}
-
-		$post_types = array();
-		if ( isset( $node['children'] ) && is_array( $node['children'] ) ) {
-			foreach ( $node['children'] as $child ) {
-				$post_types = array_merge( $post_types, self::collect_post_type_conditions( $child ) );
-			}
-		}
-
-		return $post_types;
-	}
 
 	/**
 	 * Return trigger select markup.
@@ -1172,54 +644,8 @@ final class AdminScreens {
 		return max( $minimum, min( $maximum, $value ) );
 	}
 
-	/**
-	 * Decode POST JSON object.
-	 *
-	 * @param string $key Key.
-	 * @return array<string,mixed>
-	 */
-	private static function post_json_object( string $key ): array {
-		$value = self::decode_post_json( $key );
 
-		if ( ! is_array( $value ) || ( array() !== $value && array_is_list( $value ) ) ) {
-			throw new ValidationException( 'JSON field must contain an object.' );
-		}
 
-		return $value;
-	}
-
-	/**
-	 * Decode POST JSON list.
-	 *
-	 * @param string $key Key.
-	 * @return array<int,mixed>
-	 */
-	private static function post_json_list( string $key ): array {
-		$value = self::decode_post_json( $key );
-
-		if ( ! is_array( $value ) || ! array_is_list( $value ) ) {
-			throw new ValidationException( 'JSON field must contain a list.' );
-		}
-
-		return $value;
-	}
-
-	/**
-	 * Decode POST JSON.
-	 *
-	 * @param string $key Key.
-	 * @return mixed
-	 */
-	private static function decode_post_json( string $key ) {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON is decoded and validated structurally after unslashing.
-		$raw = isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
-
-		if ( ! is_string( $raw ) ) {
-			throw new ValidationException( 'JSON field is invalid.' );
-		}
-
-		return json_decode( $raw, true, 512, JSON_THROW_ON_ERROR );
-	}
 
 	/**
 	 * Return pretty JSON.
@@ -1231,26 +657,5 @@ final class AdminScreens {
 		$json = wp_json_encode( $value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
 
 		return is_string( $json ) ? $json : CanonicalJson::encode( $value );
-	}
-
-	/**
-	 * Return default condition tree example.
-	 *
-	 * @return array<string,mixed>
-	 */
-	private static function default_condition_tree(): array {
-		return array(
-			'children'       => array(
-				array(
-					'condition' => 'post_type',
-					'operator'  => 'equals',
-					'type'      => 'condition',
-					'value'     => 'post',
-				),
-			),
-			'mode'           => 'ALL',
-			'schema_version' => 1,
-			'type'           => 'group',
-		);
 	}
 }

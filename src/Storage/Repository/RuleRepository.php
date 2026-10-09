@@ -404,6 +404,51 @@ final class RuleRepository extends AbstractRepository {
 	}
 
 	/**
+	 * Permanently delete a disabled rule.
+	 *
+	 * Decisions, deliveries and batch items copy the rule public ID and version instead of
+	 * referencing this row, and delivery preflight holds a delivery whose rule is missing the
+	 * same way it holds one whose rule is disabled. Rules with deliveries that are still waiting,
+	 * sending or need reconciliation are kept so an operator can finish them first.
+	 *
+	 * @param string $public_id Rule public ID.
+	 * @param int    $expected_lock_version Expected lock version.
+	 */
+	public function delete_disabled( string $public_id, int $expected_lock_version ): void {
+		$current = $this->find_by_public_id( $public_id );
+
+		if ( null === $current ) {
+			throw new StorageException( 'Rule does not exist.' );
+		}
+
+		if ( $current->lock_version !== $expected_lock_version ) {
+			throw new StaleRecordException( 'Rule lock version is stale.' );
+		}
+
+		if ( $current->enabled ) {
+			throw new ValidationException( 'Rule must be disabled before it can be deleted.' );
+		}
+
+		$open = (int) $this->database->get_var(
+			'SELECT COUNT(*) FROM `' . $this->deliveries_table() . "` WHERE rule_public_id = %s AND state IN ('proposed', 'held', 'queued', 'leased', 'retrying', 'ambiguous')",
+			array( $current->public_id )
+		);
+
+		if ( $open > 0 ) {
+			throw new ValidationException( 'Rule has deliveries waiting to be sent.' );
+		}
+
+		$deleted = $this->database->query(
+			'DELETE FROM `' . $this->rules_table() . '` WHERE public_id = %s AND lock_version = %d AND enabled = 0',
+			array( $current->public_id, $expected_lock_version )
+		);
+
+		if ( 1 !== $deleted ) {
+			throw new StaleRecordException( 'Rule lock version is stale.' );
+		}
+	}
+
+	/**
 	 * Explicitly copy a reusable template snapshot into a rule.
 	 *
 	 * @param string $rule_public_id Rule public ID.

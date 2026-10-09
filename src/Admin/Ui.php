@@ -292,7 +292,7 @@ final class Ui {
 	 * @param string $action_html Escaped action markup.
 	 */
 	public static function empty_state( string $title, string $text, string $action_html = '' ): void {
-		echo '<div class="pq-empty"><h3>' . esc_html( $title ) . '</h3><p>' . esc_html( $text ) . '</p>';
+		echo '<div class="pq-empty"><h2>' . esc_html( $title ) . '</h2><p>' . esc_html( $text ) . '</p>';
 		if ( '' !== $action_html ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Callers pass escaped markup.
 			echo '<div class="pq-row">' . $action_html . '</div>';

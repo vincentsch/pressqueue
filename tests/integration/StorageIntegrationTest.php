@@ -162,10 +162,8 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		);
 
 		try {
-			$method = new \ReflectionMethod( \PressQueue\Admin\AdminScreens::class, 'rule_input_from_request' );
-			$method->setAccessible( true );
 			$rules = new RuleRepository();
-			$rule  = $rules->create( $method->invoke( null ) );
+			$rule  = $rules->create( \PressQueue\Admin\RuleEditor::input_from_request() );
 
 			self::assertFalse( $rule->enabled );
 			self::assertSame( 'draft', $rule->schedule_policy );
@@ -174,7 +172,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 
 			$_POST['effect'] = 'exclude';
 			unset( $_POST['destination_channel_ids'] );
-			$exclusion = $rules->create( $method->invoke( null ) );
+			$exclusion = $rules->create( \PressQueue\Admin\RuleEditor::input_from_request() );
 			self::assertSame( 'all', $exclusion->destination_set['scope'] );
 			self::assertSame( 'exclude', $exclusion->effect );
 			self::assertFalse( $exclusion->enabled );

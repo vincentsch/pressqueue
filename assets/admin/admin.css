@@ -35,6 +35,10 @@
 	box-sizing: border-box;
 }
 
+.pq-admin [hidden] {
+	display: none !important;
+}
+
 /* ---------- Page header ---------- */
 
 .pq-admin .pq-head {
