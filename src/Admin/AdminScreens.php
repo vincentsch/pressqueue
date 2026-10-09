@@ -46,6 +46,7 @@ final class AdminScreens {
 
 		add_action( 'admin_menu', array( self::class, 'register_menu' ) );
 		add_filter( 'submenu_file', array( self::class, 'highlight_hidden_pages' ), 10, 2 );
+		add_filter( 'parent_file', array( self::class, 'open_parent_for_hidden_pages' ) );
 		Ui::register_hooks();
 		SettingsController::register_hooks();
 		add_action( 'admin_post_pressqueue_save_rule', array( self::class, 'handle_save_rule' ) );
@@ -89,10 +90,22 @@ final class AdminScreens {
 		add_submenu_page( self::SLUG_ROOT, __( 'Share Old Posts', 'pressqueue' ), __( 'Share old posts', 'pressqueue' ), Capabilities::OPERATE_BATCHES, BatchController::SLUG, array( BatchController::class, 'render_page' ) );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Settings', 'pressqueue' ), __( 'Settings', 'pressqueue' ), Capabilities::MANAGE_SETTINGS, self::SLUG_SETTINGS, array( SettingsController::class, 'render_page' ) );
 
+		// Hidden pages stay registered under PressQueue so routing and access checks work.
+		// open_parent_for_hidden_pages() drops them from the visible menu at render time.
 		foreach ( self::hidden_pages() as $slug => $page ) {
-			add_submenu_page( self::SLUG_ROOT, $page[0], $page[0], $page[1], $slug, $page[2] );
-			remove_submenu_page( self::SLUG_ROOT, $slug );
+			$hook = add_submenu_page( self::SLUG_ROOT, $page[0], $page[0], $page[1], $slug, $page[2] );
+			if ( self::SLUG_PREVIEW === $slug && is_string( $hook ) ) {
+				add_action( 'load-' . $hook, array( self::class, 'redirect_legacy_preview' ) );
+			}
 		}
+	}
+
+	/**
+	 * Send the retired preview page to the overview's "Check a post" card.
+	 */
+	public static function redirect_legacy_preview(): void {
+		wp_safe_redirect( Ui::url( Ui::PAGE_OVERVIEW ) . '#pq-check' );
+		exit;
 	}
 
 	/**
@@ -105,7 +118,7 @@ final class AdminScreens {
 			DeliveryDetailController::SLUG => array( __( 'Share details', 'pressqueue' ), Capabilities::VIEW_DELIVERIES, array( DeliveryDetailController::class, 'render_page' ) ),
 			Ui::PAGE_PRIVACY               => array( __( 'Data and privacy', 'pressqueue' ), Capabilities::MANAGE_SETTINGS, array( PrivacyController::class, 'render_page' ) ),
 			self::SLUG_PREVIEW             => array( __( 'Check a post', 'pressqueue' ), Capabilities::VIEW_DECISIONS, array( self::class, 'render_preview_page' ) ),
-			self::SLUG_DECISIONS           => array( __( 'Decisions', 'pressqueue' ), Capabilities::VIEW_DECISIONS, array( self::class, 'render_decisions_page' ) ),
+			self::SLUG_DECISIONS           => array( __( 'Why posts were shared or skipped', 'pressqueue' ), Capabilities::VIEW_DECISIONS, array( DecisionsController::class, 'render_page' ) ),
 		);
 	}
 
@@ -128,6 +141,34 @@ final class AdminScreens {
 		);
 
 		return $map[ $page ] ?? $submenu_file;
+	}
+
+	/**
+	 * Keep the PressQueue menu open on hidden pages.
+	 *
+	 * @param string $parent_file Parent menu file.
+	 * @return string
+	 */
+	public static function open_parent_for_hidden_pages( $parent_file ) {
+		global $submenu;
+
+		$hidden = self::hidden_pages();
+		if ( isset( $submenu[ self::SLUG_ROOT ] ) && is_array( $submenu[ self::SLUG_ROOT ] ) ) {
+			// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Hides detail pages from the rendered menu only.
+			$submenu[ self::SLUG_ROOT ] = array_values(
+				array_filter(
+					$submenu[ self::SLUG_ROOT ],
+					static function ( $item ) use ( $hidden ): bool {
+						return ! ( is_array( $item ) && isset( $item[2] ) && array_key_exists( (string) $item[2], $hidden ) );
+					}
+				)
+			);
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Menu highlighting is read-only.
+		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+
+		return array_key_exists( $page, $hidden ) ? self::SLUG_ROOT : $parent_file;
 	}
 
 	/**

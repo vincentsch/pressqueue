@@ -297,6 +297,19 @@ final class AdminMutationBoundaryTest extends TestCase {
 		DeliveryActionController::handle_cancel_delivery();
 	}
 
+	public function test_cancel_held_handler_requires_confirmation(): void {
+		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::OPERATE_DELIVERIES ] = true;
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = array( '_wpnonce' => 'valid-nonce' );
+		$_REQUEST                  = $_POST;
+		$GLOBALS['pressqueue_test_valid_nonces']['pressqueue_cancel_held_deliveries'] = 'valid-nonce';
+
+		$this->expectException( RuntimeException::class );
+		$this->expectExceptionMessage( 'confirmation is required' );
+
+		DeliveryActionController::handle_cancel_held_deliveries();
+	}
+
 	public function test_reconcile_handler_requires_confirmation(): void {
 		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::OPERATE_DELIVERIES ] = true;
 		$_SERVER['REQUEST_METHOD'] = 'POST';
@@ -401,6 +414,16 @@ final class AdminMutationBoundaryTest extends TestCase {
 					'delivery_public_id'   => '01H00000000000000000000000',
 					'outcome'              => 'confirmed_not_accepted',
 				),
+			),
+			'resume held' => array(
+				array( DeliveryActionController::class, 'handle_resume_held_deliveries' ),
+				'pressqueue_resume_held_deliveries',
+				array(),
+			),
+			'cancel held' => array(
+				array( DeliveryActionController::class, 'handle_cancel_held_deliveries' ),
+				'pressqueue_cancel_held_deliveries',
+				array( 'confirm_local_effect' => '1' ),
 			),
 		);
 	}

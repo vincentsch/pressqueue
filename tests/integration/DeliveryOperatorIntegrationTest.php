@@ -10,7 +10,10 @@ declare(strict_types=1);
 namespace PressQueue\Tests\Integration;
 
 use PressQueue\Admin\AdminScreens;
+use PressQueue\Admin\DecisionsController;
+use PressQueue\Admin\DeliveryActionController;
 use PressQueue\Admin\DeliveryDetailController;
+use PressQueue\Admin\DeliveryListController;
 use PressQueue\Delivery\DeliveryQueryRepository;
 use PressQueue\Delivery\DeliveryWorker;
 use PressQueue\Delivery\OperatorActionAssessmentService;
@@ -31,6 +34,7 @@ use PressQueue\Storage\HashKeys;
 use PressQueue\Storage\Record\ChannelRecord;
 use PressQueue\Storage\Record\ConnectionRecord;
 use PressQueue\Storage\Record\DeliveryRecord;
+use PressQueue\Storage\Record\RuleRecord;
 use PressQueue\Storage\Repository\ChannelRepository;
 use PressQueue\Storage\Repository\ConnectionRepository;
 use PressQueue\Storage\Repository\DecisionRepository;
@@ -47,7 +51,10 @@ use PressQueue\Tests\Support\PressQueueIntegrationTestCase as WP_UnitTestCase;
 
 /**
  * @covers \PressQueue\Admin\AdminScreens
+ * @covers \PressQueue\Admin\DecisionsController
+ * @covers \PressQueue\Admin\DeliveryActionController
  * @covers \PressQueue\Admin\DeliveryDetailController
+ * @covers \PressQueue\Admin\DeliveryExplainer
  * @covers \PressQueue\Admin\DeliveryListController
  * @covers \PressQueue\Delivery\DeliveryDisplaySnapshot
  * @covers \PressQueue\Delivery\DeliveryQueryRepository
@@ -76,6 +83,8 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 	}
 
 	protected function tearDown(): void {
+		DeliveryActionController::set_services( null, null );
+		DeliveryActionController::set_assessment_service( null );
 		$_GET  = array();
 		$_POST = array();
 		wp_set_current_user( 0 );
@@ -557,7 +566,9 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		AdminScreens::render_default_page();
 		$html = (string) ob_get_clean();
 
-		self::assertStringContainsString( 'PressQueue Delivery Log', $html );
+		self::assertStringContainsString( '<h1>Activity</h1>', $html );
+		self::assertStringContainsString( 'Filter shares by status', $html );
+		self::assertStringNotContainsString( 'Why posts were shared or skipped', $html );
 		self::assertStringNotContainsString( 'PressQueue Connections', $html );
 		self::assertStringNotContainsString( 'PressQueue Decisions', $html );
 	}
@@ -591,6 +602,268 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		$this->updateDelivery( $older->public_id, array( 'state' => 'accepted', 'state_changed_at' => gmdate( 'Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS ) ) );
 		$this->updateDelivery( $recent->public_id, array( 'state' => 'accepted', 'state_changed_at' => gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS ) ) );
 		self::assertNull( ( new \PressQueue\Batch\DuplicateHistoryService() )->prior_accepted_delivery( 42, $destination['channel']->public_id, array( 'minimum_days_since_prior_acceptance' => 7 ) ) );
+	}
+
+	public function test_activity_list_explains_problems_and_offers_one_action_per_row(): void {
+		$this->activityAdmin();
+		$invalid   = $this->liveDelivery( $this->titledPost( 61, 'Spring menu' ) );
+		$not_found = $this->liveDelivery( $this->titledPost( 62, 'Hiring a weekend baker' ) );
+		$ambiguous = $this->liveDelivery( $this->titledPost( 63, 'Rye starter guide' ) );
+		$held      = $this->liveDelivery( $this->titledPost( 64, 'Holiday hours' ) );
+		$retrying  = $this->liveDelivery( $this->titledPost( 65, 'Sourdough at 4 a.m.' ) );
+
+		$this->updateDelivery( $invalid->public_id, array( 'error_class' => 'invalid_credential', 'provider_result' => 'permanent_failure', 'retry_safety' => 'not_retryable', 'state' => 'failed' ) );
+		$this->updateDelivery( $not_found->public_id, array( 'error_class' => 'not_found', 'provider_result' => 'permanent_failure', 'retry_safety' => 'manual_allowed', 'state' => 'failed' ) );
+		$this->updateDelivery( $ambiguous->public_id, array( 'error_class' => 'malformed_response', 'provider_result' => 'ambiguous', 'retry_safety' => 'reconcile_first', 'state' => 'ambiguous' ) );
+		$this->updateDelivery( $held->public_id, array( 'state' => 'held' ) );
+		$this->updateDelivery( $retrying->public_id, array( 'error_class' => 'rate_limited', 'next_attempt_at' => gmdate( 'Y-m-d H:i:s', time() + 3600 ), 'provider_result' => 'rate_limited', 'retry_safety' => 'automatic_allowed', 'state' => 'retrying' ) );
+
+		$html = $this->renderActivity( array() );
+
+		self::assertStringContainsString( 'Buffer said the API key is no longer valid.', $html );
+		self::assertStringContainsString( 'Buffer could not find this channel.', $html );
+		self::assertStringContainsString( 'Buffer may have received this, but the reply was cut off.', $html );
+		self::assertStringContainsString( 'Buffer limits requests per day. Next try at', $html );
+		self::assertStringContainsString( 'Held because PressQueue was paused when the post was published.', $html );
+		self::assertStringContainsString( 'Spring menu', $html );
+		self::assertStringContainsString( 'Needs attention <b>3</b>', $html );
+		self::assertSame( 3, substr_count( $html, '<tr class="pq-attention">' ) );
+		self::assertSame( 1, substr_count( $html, 'value="pressqueue_retry_delivery"' ) );
+		self::assertSame( 1, substr_count( $html, 'value="pressqueue_resume_delivery"' ) );
+		self::assertStringContainsString( 'delivery_public_id=' . $ambiguous->public_id . '#resolve', $html );
+		self::assertStringContainsString( 'Resume all on hold', $html );
+		self::assertStringNotContainsString( $invalid->delivery_key, $html );
+		self::assertStringNotContainsString( $invalid->payload_hash, $html );
+		self::assertStringNotContainsString( 'Lease', $html );
+
+		$attention = $this->renderActivity( array( 'group' => 'attention' ) );
+		self::assertStringContainsString( $ambiguous->public_id, $attention );
+		self::assertStringNotContainsString( $held->public_id, $attention );
+		self::assertStringNotContainsString( $retrying->public_id, $attention );
+
+		$overview_link = $this->renderActivity( array( 'state' => 'held' ) );
+		self::assertStringContainsString( 'group=held" aria-current="true"', $overview_link );
+		self::assertStringContainsString( $held->public_id, $overview_link );
+		self::assertStringNotContainsString( $ambiguous->public_id, $overview_link );
+
+		( new SettingsRepository() )->set_dry_run_enabled( true );
+		$test_mode = $this->renderActivity( array( 'group' => 'held' ) );
+		self::assertStringNotContainsString( 'value="pressqueue_resume_delivery"', $test_mode );
+		self::assertStringNotContainsString( 'Resume all on hold', $test_mode );
+		self::assertStringContainsString( 'PressQueue is in test mode, so these shares cannot be sent.', $test_mode );
+	}
+
+	public function test_activity_hides_titles_and_actions_from_viewers_without_rights(): void {
+		$delivery = $this->liveDelivery( $this->titledPost( 66, 'Private draft title' ) );
+		$this->updateDelivery( $delivery->public_id, array( 'error_class' => 'not_found', 'provider_result' => 'permanent_failure', 'retry_safety' => 'manual_allowed', 'state' => 'failed' ) );
+		$this->commandUser( Capabilities::VIEW_DELIVERIES );
+
+		$html = $this->renderActivity( array() );
+
+		self::assertStringContainsString( 'Post #66', $html );
+		self::assertStringNotContainsString( 'Private draft title', $html );
+		self::assertStringNotContainsString( 'value="pressqueue_retry_delivery"', $html );
+
+		$search = $this->renderActivity( array( 'search' => 'Private draft' ) );
+		self::assertStringNotContainsString( $delivery->public_id, $search );
+		self::assertStringContainsString( 'No shares match these filters', $search );
+	}
+
+	public function test_activity_search_channel_and_query_filters(): void {
+		$this->activityAdmin();
+		$focaccia = $this->liveDelivery( $this->titledPost( 71, 'Pumpkin focaccia' ) );
+		$oven     = $this->liveDelivery( $this->titledPost( 72, 'The new oven' ) );
+
+		$search = $this->renderActivity( array( 'search' => 'focaccia' ) );
+		self::assertStringContainsString( $focaccia->public_id, $search );
+		self::assertStringNotContainsString( $oven->public_id, $search );
+
+		$channel = $this->renderActivity( array( 'channel' => $oven->channel_public_id ) );
+		self::assertStringContainsString( $oven->public_id, $channel );
+		self::assertStringNotContainsString( $focaccia->public_id, $channel );
+
+		$this->updateDelivery( $oven->public_id, array( 'state' => 'held' ) );
+		$query = new DeliveryQueryRepository();
+		self::assertSame( array( $oven->public_id ), array_map( static fn ( DeliveryRecord $row ): string => $row->public_id, $query->query( array( 'states' => array( 'held', 'failed' ) ) )['rows'] ) );
+		self::assertSame( array( $focaccia->public_id ), array_map( static fn ( DeliveryRecord $row ): string => $row->public_id, $query->query( array( 'post_ids' => array( 71 ) ) )['rows'] ) );
+		self::assertSame( 0, $query->query( array( 'post_ids' => array() ) )['total'] );
+		self::assertSame( array( 'held' => 1, 'proposed' => 1 ), $this->sortedCounts( $query->count_by_state() ) );
+		self::assertSame( array( 'proposed' => 1 ), $query->count_by_state( array( 'post_ids' => array( 71 ) ) ) );
+
+		try {
+			$query->query( array( 'states' => array( 'held', 'unknown' ) ) );
+			self::fail( 'Unknown states must be refused.' );
+		} catch ( ValidationException $exception ) {
+			self::assertStringContainsString( 'unsupported', $exception->getMessage() );
+		}
+
+		$this->expectException( ValidationException::class );
+		$query->query( array( 'post_ids' => array( '7 OR 1=1' ) ) );
+	}
+
+	public function test_share_details_tell_what_happened_and_keep_message_redaction(): void {
+		$user_id  = $this->activityAdmin();
+		$delivery = $this->liveDelivery( $this->titledPost( 81, 'Autumn bread classes' ) );
+		$this->updateDelivery( $delivery->public_id, array( 'state' => 'held' ) );
+		$service = new OperatorActionService( Database::from_globals(), $this->fakeScheduler(), static fn (): bool => true );
+		$service->resume( $delivery->public_id, $user_id );
+		$service->cancel( $delivery->public_id, $user_id );
+
+		$html = $this->renderDetail( $delivery->public_id );
+
+		self::assertStringContainsString( '<h1>Autumn bread classes</h1>', $html );
+		self::assertStringContainsString( 'What happened', $html );
+		self::assertStringContainsString( 'Planned when the post was published.', $html );
+		self::assertStringContainsString( 'Held because PressQueue was paused when the post was published.', $html );
+		self::assertStringContainsString( 'Resumed by Mara Lindqvist.', $html );
+		self::assertStringContainsString( 'Cancelled by Mara Lindqvist.', $html );
+		self::assertStringContainsString( 'Hello from integration', $html );
+		self::assertStringContainsString( 'Technical details', $html );
+		self::assertStringNotContainsString( 'value="pressqueue_cancel_delivery"', $html );
+
+		$this->commandUser( Capabilities::VIEW_DELIVERIES );
+		$viewer = $this->renderDetail( $delivery->public_id );
+		self::assertStringContainsString( 'Message and media details are hidden because you cannot edit the source post.', $viewer );
+		self::assertStringNotContainsString( 'Hello from integration', $viewer );
+		self::assertStringNotContainsString( 'Autumn bread classes', $viewer );
+		self::assertStringContainsString( 'post_facts_redacted', $viewer );
+
+		$this->activityAdmin();
+		$accepted = $this->liveDelivery( 82 );
+		$this->updateDelivery(
+			$accepted->public_id,
+			array(
+				'payload_preview_json' => CanonicalJson::encode_object(
+					array(
+						'redacted'       => 'retention',
+						'schema_version' => 1,
+					)
+				),
+				'state'                => 'accepted',
+			)
+		);
+		self::assertStringContainsString( 'The message was removed by your data retention settings.', $this->renderDetail( $accepted->public_id ) );
+	}
+
+	public function test_ambiguous_share_offers_three_reconciliation_choices(): void {
+		$this->activityAdmin();
+		$delivery = $this->ambiguousDelivery( 42 );
+
+		$html = $this->renderDetail( $delivery->public_id );
+
+		self::assertStringContainsString( 'id="resolve"', $html );
+		self::assertStringContainsString( 'If PressQueue sends it again and Buffer already has it, the post appears twice.', $html );
+		self::assertStringContainsString( 'I found it in Buffer', $html );
+		self::assertStringContainsString( 'It is not in Buffer', $html );
+		self::assertStringContainsString( 'Cancel it', $html );
+		self::assertSame( 3, substr_count( $html, 'Record local evidence only' ) );
+		foreach ( array( 'confirmed_remote_id', 'confirmed_not_accepted', 'cancelled' ) as $outcome ) {
+			self::assertStringContainsString( 'name="outcome" value="' . $outcome . '"', $html );
+		}
+
+		$this->updateDelivery(
+			$delivery->public_id,
+			array(
+				'error_class'       => 'draft_not_confirmed',
+				'error_detail_json' => CanonicalJson::encode_object(
+					array(
+						'classification' => 'draft_not_confirmed',
+						'remote_id'      => 'returned-remote-1',
+					)
+				),
+			)
+		);
+		$draft = $this->renderDetail( $delivery->public_id );
+		self::assertStringContainsString( 'Sharing was paused to be safe.', $draft );
+		self::assertStringContainsString( 'value="returned-remote-1"', $draft );
+		self::assertStringNotContainsString( 'name="outcome" value="confirmed_not_accepted"', $draft );
+	}
+
+	public function test_bulk_resume_respects_mode_and_zero_write_assessment(): void {
+		$first  = $this->liveDelivery( 91 );
+		$second = $this->liveDelivery( 92 );
+		$this->updateDelivery( $first->public_id, array( 'state' => 'held' ) );
+		$this->updateDelivery( $second->public_id, array( 'state' => 'held' ) );
+		DeliveryActionController::set_services( new OperatorActionService( Database::from_globals(), $this->fakeScheduler(), static fn (): bool => true ), null );
+		DeliveryActionController::set_assessment_service( new OperatorActionAssessmentService( Database::from_globals(), static fn (): bool => true ) );
+
+		( new SettingsRepository() )->set_dry_run_enabled( true );
+		$blocked = DeliveryActionController::resume_held_batch( 7 );
+		self::assertSame( 'held_blocked', $blocked['pressqueue_message'] );
+		self::assertSame( 'dry_run_enabled', $blocked['pq_reason'] );
+		self::assertSame( 'held', $this->storedState( $first->public_id ) );
+		self::assertNotContains( 'refused_transition', array_column( ( new DeliveryEventRepository() )->find_by_delivery_id( $first->id ), 'event_type' ) );
+
+		( new SettingsRepository() )->set_dry_run_enabled( false );
+		wp_update_post( array( 'ID' => 92, 'post_status' => 'draft' ) );
+		$result = DeliveryActionController::resume_held_batch( 7 );
+
+		self::assertSame( 'held_resumed', $result['pressqueue_message'] );
+		self::assertSame( 1, $result['pq_done'] );
+		self::assertSame( 1, $result['pq_skipped'] );
+		self::assertSame( 'post_not_public', $result['pq_reason'] );
+		self::assertSame( 0, $result['pq_left'] );
+		self::assertSame( 'queued', $this->storedState( $first->public_id ) );
+		self::assertSame( 'held', $this->storedState( $second->public_id ) );
+		self::assertNotContains( 'refused_transition', array_column( ( new DeliveryEventRepository() )->find_by_delivery_id( $second->id ), 'event_type' ) );
+
+		$cancelled = DeliveryActionController::cancel_held_batch( 7 );
+		self::assertSame( 'held_cancelled', $cancelled['pressqueue_message'] );
+		self::assertSame( 1, $cancelled['pq_done'] );
+		self::assertSame( 'cancelled', $this->storedState( $second->public_id ) );
+		self::assertSame( 'queued', $this->storedState( $first->public_id ) );
+	}
+
+	public function test_decisions_tab_groups_events_and_hides_reasons_from_non_editors(): void {
+		$destination = $this->enabledDestination();
+		$rules       = new RuleRepository();
+		$include     = $rules->create( $this->ruleInput( $destination['channel']->public_id ) );
+		$this->titledPost( 101, 'Rye starter guide' );
+		$this->titledPost( 102, 'Journal entry' );
+		$this->titledPost( 103, 'Market stall news' );
+		$this->titledPost( 104, 'Previewed only' );
+
+		$this->recordDecision( 101, 'skipped', null, null, array( array( 'code' => 'no_matching_rules', 'label' => 'Enabled rules exist but none matched this event.' ) ) );
+		$this->recordDecision(
+			102,
+			'excluded',
+			$include,
+			null,
+			array(
+				array(
+					'code'             => 'taxonomy_category_matched',
+					'condition_result' => 'matched',
+					'field'            => 'taxonomy:category',
+					'label'            => 'Taxonomy condition evaluated.',
+				),
+			)
+		);
+		$this->recordDecision( 103, 'included', $include, $destination['channel']->public_id, array( array( 'code' => 'included_destination', 'label' => 'Destination is included by the winning rule.' ) ) );
+		$this->recordDecision( 103, 'skipped', null, null, array( array( 'code' => 'superseded_by_rule', 'label' => 'Superseded.' ) ), 'runtime', 'global-103' );
+		$this->recordDecision( 104, 'skipped', null, null, array( array( 'code' => 'no_matching_rules' ) ), 'preview' );
+
+		$this->activityAdmin();
+		$html = $this->renderDecisions( array() );
+
+		self::assertStringContainsString( 'Not shared: No sharing rule matches this post.', $html );
+		self::assertStringContainsString( 'Never share: in a category you never share.', $html );
+		self::assertStringContainsString( 'Shared to Mastodon.', $html );
+		self::assertStringContainsString( 'All <b>3</b>', $html );
+		self::assertSame( 1, substr_count( $html, 'Market stall news' ) );
+		self::assertStringNotContainsString( 'Previewed only', $html );
+		self::assertStringContainsString( 'Publish posts matched.', $html );
+
+		$not_shared = $this->renderDecisions( array( 'outcome' => 'not_shared' ) );
+		self::assertStringContainsString( 'Rye starter guide', $not_shared );
+		self::assertStringContainsString( 'Journal entry', $not_shared );
+		self::assertStringNotContainsString( 'Market stall news', $not_shared );
+
+		$this->commandUser( Capabilities::VIEW_DECISIONS );
+		$viewer = $this->renderDecisions( array() );
+		self::assertStringNotContainsString( 'No sharing rule matches this post.', $viewer );
+		self::assertStringNotContainsString( 'in a category you never share', $viewer );
+		self::assertStringNotContainsString( 'Rye starter guide', $viewer );
+		self::assertStringContainsString( 'Details are hidden because you cannot edit this post.', $viewer );
 	}
 
 	/**
@@ -967,6 +1240,160 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 				);
 			}
 		};
+	}
+
+	/**
+	 * Create an administrator with every PressQueue capability.
+	 *
+	 * @return int
+	 */
+	private function activityAdmin(): int {
+		$user_id = (int) self::factory()->user->create(
+			array(
+				'display_name' => 'Mara Lindqvist',
+				'role'         => 'administrator',
+			)
+		);
+		$user    = get_userdata( $user_id );
+		self::assertInstanceOf( \WP_User::class, $user );
+		foreach ( Capabilities::names() as $capability ) {
+			$user->add_cap( $capability );
+		}
+		wp_set_current_user( 0 );
+		wp_set_current_user( $user_id );
+
+		return $user_id;
+	}
+
+	/**
+	 * Create a published post with a known ID and title.
+	 *
+	 * @param int    $post_id Post ID.
+	 * @param string $title Title.
+	 * @return int
+	 */
+	private function titledPost( int $post_id, string $title ): int {
+		wp_insert_post(
+			array(
+				'import_id'   => $post_id,
+				'post_status' => 'publish',
+				'post_title'  => $title,
+				'post_type'   => 'post',
+			)
+		);
+
+		return $post_id;
+	}
+
+	/**
+	 * Render the Activity page.
+	 *
+	 * @param array<string,string> $get Query args.
+	 * @return string
+	 */
+	private function renderActivity( array $get ): string {
+		$_GET = array_merge( array( 'page' => DeliveryListController::SLUG ), $get );
+		ob_start();
+		DeliveryListController::render_page();
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Render the decisions tab.
+	 *
+	 * @param array<string,string> $get Query args.
+	 * @return string
+	 */
+	private function renderDecisions( array $get ): string {
+		$_GET = array_merge(
+			array(
+				'page' => DeliveryListController::SLUG,
+				'tab'  => 'decisions',
+			),
+			$get
+		);
+		ob_start();
+		DecisionsController::render_tab();
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Render share details.
+	 *
+	 * @param string $delivery_public_id Delivery public ID.
+	 * @return string
+	 */
+	private function renderDetail( string $delivery_public_id ): string {
+		$_GET = array(
+			'delivery_public_id' => $delivery_public_id,
+			'page'               => DeliveryDetailController::SLUG,
+		);
+		ob_start();
+		DeliveryDetailController::render_page();
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Return the stored state of a delivery.
+	 *
+	 * @param string $delivery_public_id Delivery public ID.
+	 * @return string
+	 */
+	private function storedState( string $delivery_public_id ): string {
+		$stored = ( new DeliveryRepository() )->find_by_public_id( $delivery_public_id );
+		self::assertNotNull( $stored );
+
+		return $stored->state;
+	}
+
+	/**
+	 * Sort state counts for stable comparison.
+	 *
+	 * @param array<string,int> $counts Counts.
+	 * @return array<string,int>
+	 */
+	private function sortedCounts( array $counts ): array {
+		ksort( $counts );
+
+		return $counts;
+	}
+
+	/**
+	 * Record one decision for the decisions tab.
+	 *
+	 * @param int                            $post_id Post ID.
+	 * @param string                         $result Result.
+	 * @param RuleRecord|null                $rule Rule.
+	 * @param string|null                    $channel_public_id Channel public ID for channel scope.
+	 * @param array<int,array<string,mixed>> $reasons Reasons.
+	 * @param string                         $mode Event mode.
+	 * @param string                         $salt Decision key salt.
+	 */
+	private function recordDecision( int $post_id, string $result, ?RuleRecord $rule, ?string $channel_public_id, array $reasons, string $mode = 'runtime', string $salt = '' ): void {
+		( new DecisionRepository() )->create(
+			array(
+				'author_id'            => 1,
+				'decision_key'         => hash( 'sha256', 'decision-' . (string) $post_id . '-' . $result . '-' . $salt . '-' . $mode ),
+				'event_key'            => hash( 'sha256', 'activity-event-' . (string) $post_id . '-' . $mode ),
+				'event_mode'           => $mode,
+				'post_id'              => $post_id,
+				'post_status'          => 'publish',
+				'post_type'            => 'post',
+				'reasons'              => $reasons,
+				'result'               => $result,
+				'revision_fingerprint' => hash( 'sha256', 'revision-' . (string) $post_id ),
+				'rule_id'              => null === $rule ? null : $rule->id,
+				'rule_public_id'       => null === $rule ? null : $rule->public_id,
+				'rule_version'         => null === $rule ? null : $rule->version,
+				'scope_public_id'      => $channel_public_id,
+				'scope_type'           => null === $channel_public_id ? 'global' : 'channel',
+				'snapshot'             => array( 'post' => array( 'id' => $post_id ) ),
+				'trigger'              => 'first_publish',
+			)
+		);
 	}
 
 	private function resetStorage(): void {

@@ -27,6 +27,11 @@ final class DeliveryQueryRepository {
 	public const DEFAULT_PAGE_SIZE = 50;
 	public const MAX_PAGE_SIZE     = 100;
 
+	/**
+	 * Largest number of post IDs accepted by the post_ids filter.
+	 */
+	public const MAX_POST_ID_FILTER = 500;
+
 	private const DELIVERY_INDEX_HINT = 'USE INDEX (state_changed_id, connection_public_id, channel_public_id, remote_id, delivery_key, intent_occurrence_key, public_id)';
 
 	/**
@@ -91,6 +96,32 @@ final class DeliveryQueryRepository {
 	}
 
 	/**
+	 * Count delivery records per state for the given filters.
+	 *
+	 * Accepts the same filters as query(). Callers that build state chips usually
+	 * leave out the state filters so every chip shows its own total.
+	 *
+	 * @param array<string,mixed> $filters Read-only filters.
+	 * @return array<string,int> Totals keyed by delivery state.
+	 */
+	public function count_by_state( array $filters = array() ): array {
+		$prepared = $this->prepare_filters( $filters );
+		$table    = $this->database->table( Schema::DELIVERIES );
+		$where    = array() === $prepared['clauses'] ? '' : ' WHERE ' . implode( ' AND ', $prepared['clauses'] );
+		$rows     = $this->database->get_results(
+			'SELECT state, COUNT(*) AS total FROM `' . $table . '`' . $where . ' GROUP BY state',
+			$prepared['args']
+		);
+
+		$counts = array();
+		foreach ( $rows as $row ) {
+			$counts[ (string) $row->state ] = (int) $row->total;
+		}
+
+		return $counts;
+	}
+
+	/**
 	 * Normalize and validate list filters.
 	 *
 	 * @param array<string,mixed> $filters Filters.
@@ -107,6 +138,43 @@ final class DeliveryQueryRepository {
 			$clauses[]           = 'state = %s';
 			$args[]              = $state;
 			$normalized['state'] = $state;
+		}
+
+		$states = $this->optional_list( $filters, 'states' );
+		if ( null !== $states ) {
+			$states = array_values( array_unique( array_map( 'strval', $states ) ) );
+			foreach ( $states as $candidate ) {
+				StorageEnums::assert_delivery_state( $candidate );
+			}
+
+			if ( array() === $states ) {
+				$clauses[] = '1 = 0';
+			} else {
+				$clauses[] = 'state IN (' . implode( ', ', array_fill( 0, count( $states ), '%s' ) ) . ')';
+				$args      = array_merge( $args, $states );
+			}
+			$normalized['states'] = $states;
+		}
+
+		$post_ids = $this->optional_list( $filters, 'post_ids' );
+		if ( null !== $post_ids ) {
+			$ids = array();
+			foreach ( $post_ids as $candidate ) {
+				if ( ! is_int( $candidate ) && ( ! is_string( $candidate ) || 1 !== preg_match( '/^\d+$/', $candidate ) ) ) {
+					throw new ValidationException( 'ID filters must contain only digits.' );
+				}
+				StorageValidator::assert_unsigned_id( 'Post ID', (int) $candidate );
+				$ids[] = (int) $candidate;
+			}
+			$ids = array_slice( array_values( array_unique( $ids ) ), 0, self::MAX_POST_ID_FILTER );
+
+			if ( array() === $ids ) {
+				$clauses[] = '1 = 0';
+			} else {
+				$clauses[] = 'decision_id IN (SELECT id FROM `' . $this->database->table( Schema::DECISIONS ) . '` WHERE post_id IN (' . implode( ', ', array_fill( 0, count( $ids ), '%d' ) ) . '))';
+				$args      = array_merge( $args, $ids );
+			}
+			$normalized['post_ids'] = $ids;
 		}
 
 		$destination_public_id = $this->optional_string( $filters, 'destination_public_id' );
@@ -216,6 +284,25 @@ final class DeliveryQueryRepository {
 		$value = trim( (string) $filters[ $key ] );
 
 		return '' === $value ? null : $value;
+	}
+
+	/**
+	 * Return an optional list filter.
+	 *
+	 * @param array<string,mixed> $filters Filters.
+	 * @param string              $key Filter key.
+	 * @return array<int,mixed>|null
+	 */
+	private function optional_list( array $filters, string $key ): ?array {
+		if ( ! array_key_exists( $key, $filters ) || null === $filters[ $key ] ) {
+			return null;
+		}
+
+		if ( ! is_array( $filters[ $key ] ) ) {
+			throw new ValidationException( 'List filters must be arrays.' );
+		}
+
+		return array_values( $filters[ $key ] );
 	}
 
 	/**

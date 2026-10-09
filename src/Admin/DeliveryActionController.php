@@ -9,17 +9,30 @@ declare(strict_types=1);
 
 namespace PressQueue\Admin;
 
+use PressQueue\Delivery\DeliveryQueryRepository;
+use PressQueue\Delivery\OperatorActionAssessmentService;
 use PressQueue\Delivery\OperatorActionService;
 use PressQueue\Delivery\ReconciliationService;
 use PressQueue\Security\Capabilities;
 use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\PublicIds;
+use PressQueue\Storage\SettingsRepository;
 use PressQueue\Storage\ValidationException;
 
 /**
  * Handles state-changing delivery operator actions.
  */
 final class DeliveryActionController {
+	/**
+	 * Most held shares changed by one bulk request.
+	 */
+	public const BULK_LIMIT = 25;
+
+	/**
+	 * Most held shares checked by one bulk resume request.
+	 */
+	private const BULK_SCAN_LIMIT = 100;
+
 	/**
 	 * Test override for operator actions.
 	 *
@@ -35,6 +48,13 @@ final class DeliveryActionController {
 	private static ?ReconciliationService $reconciliation_service = null;
 
 	/**
+	 * Test override for zero-write assessments.
+	 *
+	 * @var OperatorActionAssessmentService|null
+	 */
+	private static ?OperatorActionAssessmentService $assessment_service = null;
+
+	/**
 	 * Register hooks.
 	 */
 	public static function register_hooks(): void {
@@ -46,6 +66,9 @@ final class DeliveryActionController {
 		add_action( 'admin_post_pressqueue_resume_delivery', array( self::class, 'handle_resume_delivery' ) );
 		add_action( 'admin_post_pressqueue_retry_delivery', array( self::class, 'handle_retry_delivery' ) );
 		add_action( 'admin_post_pressqueue_reconcile_delivery', array( self::class, 'handle_reconcile_delivery' ) );
+		add_action( 'admin_post_pressqueue_resume_held_deliveries', array( self::class, 'handle_resume_held_deliveries' ) );
+		add_action( 'admin_post_pressqueue_cancel_held_deliveries', array( self::class, 'handle_cancel_held_deliveries' ) );
+		add_action( 'admin_enqueue_scripts', array( DeliveryListController::class, 'enqueue_assets' ) );
 	}
 
 	/**
@@ -57,6 +80,15 @@ final class DeliveryActionController {
 	public static function set_services( ?OperatorActionService $operator_service, ?ReconciliationService $reconciliation_service ): void {
 		self::$operator_service       = $operator_service;
 		self::$reconciliation_service = $reconciliation_service;
+	}
+
+	/**
+	 * Set the assessment override for tests.
+	 *
+	 * @param OperatorActionAssessmentService|null $assessment_service Assessment service.
+	 */
+	public static function set_assessment_service( ?OperatorActionAssessmentService $assessment_service ): void {
+		self::$assessment_service = $assessment_service;
 	}
 
 	/**
@@ -133,10 +165,178 @@ final class DeliveryActionController {
 				self::post_optional_raw_text( 'note' ),
 				self::actor_user_id()
 			);
-			self::redirect_detail( $delivery_public_id, 'delivery_reconciled' );
+			$messages = array(
+				'cancelled'              => 'delivery_reconciled_cancelled',
+				'confirmed_not_accepted' => 'delivery_reconciled_not_found',
+				'confirmed_remote_id'    => 'delivery_reconciled_found',
+			);
+			self::redirect_detail( $delivery_public_id, $messages[ $outcome ] );
 		} catch ( \Throwable $throwable ) {
 			self::redirect_detail( $delivery_public_id, 'delivery_error', self::safe_error_detail( $throwable ) );
 		}
+	}
+
+	/**
+	 * Handle "Resume all on hold".
+	 */
+	public static function handle_resume_held_deliveries(): void {
+		self::mutation_boundary( 'pressqueue_resume_held_deliveries' );
+
+		self::redirect_activity( self::resume_held_batch( self::actor_user_id() ) );
+	}
+
+	/**
+	 * Handle "Cancel all on hold".
+	 */
+	public static function handle_cancel_held_deliveries(): void {
+		self::mutation_boundary( 'pressqueue_cancel_held_deliveries' );
+		self::require_confirmation();
+
+		self::redirect_activity( self::cancel_held_batch( self::actor_user_id() ) );
+	}
+
+	/**
+	 * Resume up to BULK_LIMIT held shares through the operator service.
+	 *
+	 * Each share is assessed without writing first, so shares that would only be
+	 * held again are skipped instead of collecting refusal events. Callers must
+	 * check the nonce and capability first.
+	 *
+	 * @param int|null $actor_user_id Actor user ID.
+	 * @return array<string,scalar> Redirect arguments for the Activity notice.
+	 */
+	public static function resume_held_batch( ?int $actor_user_id ): array {
+		try {
+			$mode = ( new SettingsRepository() )->sharing_mode();
+			if ( 'live' !== $mode ) {
+				return array(
+					'pq_reason'          => 'paused' === $mode ? 'kill_switch_enabled' : 'dry_run_enabled',
+					'pressqueue_message' => 'held_blocked',
+				);
+			}
+
+			$done    = 0;
+			$skipped = 0;
+			$reasons = array();
+
+			foreach ( self::held_deliveries( self::BULK_SCAN_LIMIT ) as $delivery_public_id ) {
+				if ( $done >= self::BULK_LIMIT ) {
+					break;
+				}
+
+				$assessment = self::assessment_service()->assess_resume( $delivery_public_id );
+				if ( ! $assessment->would_mutate ) {
+					++$skipped;
+					$reason             = DeliveryExplainer::normalize_block_code( (string) ( $assessment->blocked_reasons[0] ?? 'unknown' ) );
+					$reasons[ $reason ] = ( $reasons[ $reason ] ?? 0 ) + 1;
+					continue;
+				}
+
+				try {
+					self::operator_service()->resume( $delivery_public_id, $actor_user_id );
+					++$done;
+				} catch ( \Throwable $throwable ) {
+					++$skipped;
+					$reason             = self::refusal_code( $throwable );
+					$reasons[ $reason ] = ( $reasons[ $reason ] ?? 0 ) + 1;
+				}
+			}
+
+			return self::bulk_result( 'held_resumed', $done, $skipped, $reasons );
+		} catch ( \Throwable $throwable ) {
+			return array(
+				'pressqueue_detail'  => self::safe_error_detail( $throwable ),
+				'pressqueue_message' => 'delivery_error',
+			);
+		}
+	}
+
+	/**
+	 * Cancel up to BULK_LIMIT held shares through the operator service.
+	 *
+	 * Callers must check the nonce, capability and confirmation first.
+	 *
+	 * @param int|null $actor_user_id Actor user ID.
+	 * @return array<string,scalar> Redirect arguments for the Activity notice.
+	 */
+	public static function cancel_held_batch( ?int $actor_user_id ): array {
+		try {
+			$done    = 0;
+			$skipped = 0;
+			$reasons = array();
+
+			foreach ( self::held_deliveries( self::BULK_LIMIT ) as $delivery_public_id ) {
+				try {
+					self::operator_service()->cancel( $delivery_public_id, $actor_user_id );
+					++$done;
+				} catch ( \Throwable $throwable ) {
+					++$skipped;
+					$reason             = self::refusal_code( $throwable );
+					$reasons[ $reason ] = ( $reasons[ $reason ] ?? 0 ) + 1;
+				}
+			}
+
+			return self::bulk_result( 'held_cancelled', $done, $skipped, $reasons );
+		} catch ( \Throwable $throwable ) {
+			return array(
+				'pressqueue_detail'  => self::safe_error_detail( $throwable ),
+				'pressqueue_message' => 'delivery_error',
+			);
+		}
+	}
+
+	/**
+	 * Build the redirect arguments for a bulk result.
+	 *
+	 * @param string            $message Message key.
+	 * @param int               $done Shares changed.
+	 * @param int               $skipped Shares left unchanged.
+	 * @param array<string,int> $reasons Skip reasons with counts.
+	 * @return array<string,scalar>
+	 */
+	private static function bulk_result( string $message, int $done, int $skipped, array $reasons ): array {
+		arsort( $reasons );
+
+		return array(
+			'pq_done'            => $done,
+			'pq_left'            => max( 0, ( new ActivitySummary() )->count_in_states( array( 'held' ) ) - $skipped ),
+			'pq_reason'          => (string) ( array_key_first( $reasons ) ?? '' ),
+			'pq_skipped'         => $skipped,
+			'pressqueue_message' => $message,
+		);
+	}
+
+	/**
+	 * Return public IDs of held shares, most recently held first.
+	 *
+	 * @param int $limit Maximum IDs.
+	 * @return array<int,string>
+	 */
+	private static function held_deliveries( int $limit ): array {
+		$result = ( new DeliveryQueryRepository() )->query( array( 'state' => 'held' ), 1, $limit );
+		$ids    = array();
+
+		foreach ( $result['rows'] as $delivery ) {
+			$ids[] = $delivery->public_id;
+		}
+
+		return $ids;
+	}
+
+	/**
+	 * Return a whitelisted refusal code from a failed operator action.
+	 *
+	 * @param \Throwable $throwable Failure.
+	 * @return string
+	 */
+	private static function refusal_code( \Throwable $throwable ): string {
+		$message = SafeOperatorError::message( $throwable );
+
+		if ( 1 === preg_match( '/^Delivery (?:transition|reconciliation) refused: ([a-z_]{1,64})\.$/', $message, $matches ) ) {
+			return DeliveryExplainer::normalize_block_code( $matches[1] );
+		}
+
+		return 'unknown';
 	}
 
 	/**
@@ -254,9 +454,14 @@ final class DeliveryActionController {
 			'pressqueue_message' => $message,
 		);
 
-		if ( '' === $delivery_public_id ) {
+		if ( '' === $delivery_public_id || 'activity' === self::post_action_text( 'pq_return' ) ) {
 			$args['page'] = DeliveryListController::SLUG;
 			unset( $args['delivery_public_id'] );
+
+			$group = self::post_action_text( 'pq_group' );
+			if ( 'all' !== $group && isset( DeliveryListController::groups()[ $group ] ) ) {
+				$args['group'] = $group;
+			}
 		}
 
 		if ( null !== $detail && '' !== $detail ) {
@@ -265,6 +470,30 @@ final class DeliveryActionController {
 
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 		exit;
+	}
+
+	/**
+	 * Redirect to the Activity page.
+	 *
+	 * @param array<string,scalar> $args Query args.
+	 */
+	private static function redirect_activity( array $args ): void {
+		$args['page'] = DeliveryListController::SLUG;
+		if ( ! isset( $args['group'] ) && 'held_blocked' !== ( $args['pressqueue_message'] ?? '' ) ) {
+			$args['group'] = 'held';
+		}
+
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Return the assessment service.
+	 *
+	 * @return OperatorActionAssessmentService
+	 */
+	private static function assessment_service(): OperatorActionAssessmentService {
+		return self::$assessment_service ?? new OperatorActionAssessmentService();
 	}
 
 	/**
