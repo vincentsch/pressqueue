@@ -69,7 +69,7 @@ final class PreviewPresenter {
 			$blocked[] = array(
 				'service'      => null === $channel ? '' : $channel->service,
 				'channel_name' => null === $channel ? $channel_id : ActivitySummary::channel_display_name( $channel ),
-				'reason'       => self::first_reason( isset( $decision['reasons'] ) && is_array( $decision['reasons'] ) ? $decision['reasons'] : array() ),
+				'reason'       => self::decision_reason( $decision, $summary ),
 				'result'       => (string) ( $decision['result'] ?? '' ),
 			);
 		}
@@ -79,7 +79,7 @@ final class PreviewPresenter {
 			$reason = __( 'No sharing rule matched.', 'pressqueue' );
 			foreach ( $decisions as $decision ) {
 				if ( is_array( $decision ) && in_array( $decision['result'] ?? '', array( 'excluded', 'policy_error', 'skipped' ), true ) ) {
-					$reason = self::first_reason( isset( $decision['reasons'] ) && is_array( $decision['reasons'] ) ? $decision['reasons'] : array() );
+					$reason = self::decision_reason( $decision, $summary );
 					if ( 'skipped' !== $decision['result'] ) {
 						break;
 					}
@@ -190,6 +190,33 @@ final class PreviewPresenter {
 		}
 
 		return ucfirst( Labels::schedule_phrase( $slot ) );
+	}
+
+	/**
+	 * Explain one planning decision, naming the "never share" rule when one matched.
+	 *
+	 * @param array<string,mixed> $decision Decision summary.
+	 * @param ActivitySummary     $summary Lookup helper.
+	 * @return string
+	 */
+	private static function decision_reason( array $decision, ActivitySummary $summary ): string {
+		$reasons = isset( $decision['reasons'] ) && is_array( $decision['reasons'] ) ? $decision['reasons'] : array();
+
+		if ( 'excluded' === ( $decision['result'] ?? '' ) ) {
+			foreach ( $reasons as $reason ) {
+				if ( is_array( $reason ) && 'explicit_post_exclusion' === ( $reason['code'] ?? null ) ) {
+					return Labels::reason( 'explicit_post_exclusion' );
+				}
+			}
+
+			$rule = is_string( $decision['rule_public_id'] ?? null ) ? $summary->rule_name( $decision['rule_public_id'] ) : '';
+			if ( '' !== $rule ) {
+				/* translators: %s: rule name. */
+				return sprintf( __( 'Matches the "never share" rule "%s".', 'pressqueue' ), $rule );
+			}
+		}
+
+		return self::first_reason( $reasons );
 	}
 
 	/**

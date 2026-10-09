@@ -181,7 +181,7 @@ final class ActivitySummary {
 				'created_at'   => $event['created_at'],
 				'shares'       => $shares,
 				'rule'         => $rule_name,
-				'not_shared'   => array() === $shares ? self::primary_reason( $event['decisions'] ) : '',
+				'not_shared'   => array() === $shares ? $this->not_shared_reason( $event['decisions'] ) : '',
 				'blocked_kind' => array() === $shares ? self::blocked_kind( $event['decisions'] ) : '',
 			);
 		}
@@ -237,6 +237,34 @@ final class ActivitySummary {
 		}
 
 		return $this->rule_names[ $public_id ] ?? '';
+	}
+
+	/**
+	 * Explain an event that did not share, naming the "never share" rule when one matched.
+	 *
+	 * @param array<int,DecisionRecord> $decisions Decisions for one event.
+	 * @return string
+	 */
+	public function not_shared_reason( array $decisions ): string {
+		foreach ( $decisions as $decision ) {
+			if ( 'excluded' !== $decision->result ) {
+				continue;
+			}
+
+			foreach ( $decision->reasons as $reason ) {
+				if ( is_array( $reason ) && 'explicit_post_exclusion' === ( $reason['code'] ?? null ) ) {
+					return Labels::reason( 'explicit_post_exclusion' );
+				}
+			}
+
+			$name = null === $decision->rule_public_id ? '' : $this->rule_name( $decision->rule_public_id );
+			if ( '' !== $name ) {
+				/* translators: %s: rule name. */
+				return sprintf( __( 'Matches the "never share" rule "%s".', 'pressqueue' ), $name );
+			}
+		}
+
+		return self::primary_reason( $decisions );
 	}
 
 	/**
