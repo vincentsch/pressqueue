@@ -57,6 +57,9 @@ final class OverviewController {
 
 		echo '<div class="pq-cols">';
 		echo '<div class="pq-stack">';
+		if ( current_user_can( Capabilities::VIEW_DELIVERIES ) || current_user_can( Capabilities::MANAGE_SETTINGS ) ) {
+			SchedulerHealth::render_card();
+		}
 		if ( $done < count( $steps ) ) {
 			self::render_setup( $steps, $done );
 		}
