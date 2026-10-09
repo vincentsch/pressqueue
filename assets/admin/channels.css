@@ -1,0 +1,407 @@
+/*
+ * PressQueue Channels screen.
+ *
+ * Builds on admin.css. Every rule is scoped to .pq-admin.
+ */
+
+.pq-admin .pq-flush {
+	margin: 0;
+}
+
+.pq-admin .pq-gap-top {
+	margin-top: 10px;
+}
+
+.pq-admin .pq-external {
+	flex: none;
+	width: 12px;
+	height: 12px;
+}
+
+.pq-admin a.pq-link {
+	white-space: nowrap;
+}
+
+.pq-admin a.pq-link .pq-external {
+	margin-left: 3px;
+	vertical-align: -1px;
+}
+
+/* ---------- Connect card ---------- */
+
+.pq-admin .pq-connect .pq-card-head {
+	padding-bottom: 4px;
+}
+
+.pq-admin .pq-connect-title {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.pq-admin .pq-connect-steps {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pq-admin .pq-connect-step {
+	display: grid;
+	align-content: start;
+	gap: 10px;
+	padding: 18px 22px 22px;
+}
+
+.pq-admin .pq-connect-step + .pq-connect-step {
+	border-left: 1px solid var(--pq-line-soft);
+}
+
+.pq-admin .pq-step-label {
+	color: var(--pq-muted);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.pq-admin .pq-step-heading {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.pq-admin .pq-step-heading label {
+	cursor: pointer;
+}
+
+.pq-admin .pq-connect-form {
+	display: grid;
+	gap: 10px;
+	margin: 0;
+}
+
+.pq-admin .pq-connect-form .pq-help {
+	margin: 0;
+}
+
+.pq-admin .pq-keyrow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.pq-admin .pq-keyrow input.pq-field {
+	flex: 1 1 220px;
+	width: auto;
+	min-width: 0;
+}
+
+.pq-admin .pq-keyrow .button {
+	min-height: 36px;
+}
+
+/* ---------- Account card ---------- */
+
+.pq-admin .pq-account-group {
+	display: grid;
+	gap: 12px;
+}
+
+.pq-admin .pq-account-group + .pq-account-group {
+	margin-top: 12px;
+}
+
+.pq-admin .pq-account-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px 14px;
+	padding: 18px 22px;
+}
+
+.pq-admin .pq-avatar {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 40px;
+	height: 40px;
+	border-radius: 8px;
+	background: #e8dcc6;
+	color: #4a3920;
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.pq-admin .pq-account-info {
+	flex: 1 1 260px;
+	min-width: 0;
+}
+
+.pq-admin h2.pq-account-name {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	margin: 0;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.pq-admin .pq-account-meta {
+	margin: 3px 0 0;
+	color: var(--pq-muted);
+}
+
+.pq-admin .pq-account-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 14px;
+}
+
+.pq-admin .pq-account-body {
+	padding: 0 22px 18px;
+}
+
+.pq-admin .pq-account-body .pq-key-form {
+	margin-top: 14px;
+	max-width: 560px;
+}
+
+.pq-admin .pq-account-body .pq-org-form {
+	margin-top: 14px;
+}
+
+/* ---------- More menu ---------- */
+
+.pq-admin details.pq-menu {
+	position: relative;
+}
+
+.pq-admin details.pq-menu > summary {
+	padding: 6px 2px;
+}
+
+.pq-admin details.pq-menu > .pq-menu-body {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 20;
+	width: min(400px, calc(100vw - 64px));
+	margin-top: 0;
+	padding: 0 16px;
+	border: 1px solid var(--pq-line);
+	border-radius: var(--pq-radius);
+	background: #fff;
+	box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+}
+
+.pq-admin .pq-menu-section {
+	padding: 14px 0;
+}
+
+.pq-admin .pq-menu-section + .pq-menu-section {
+	border-top: 1px solid var(--pq-line-soft);
+}
+
+.pq-admin .pq-menu-title {
+	display: block;
+	margin: 0 0 6px;
+	padding: 0;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.pq-admin .pq-key-form,
+.pq-admin .pq-org-form {
+	margin: 0;
+}
+
+.pq-admin .pq-org-form fieldset {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.pq-admin .pq-org-form .pq-checks {
+	gap: 8px;
+}
+
+/* ---------- Organization chooser ---------- */
+
+.pq-admin .pq-chooser fieldset {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.pq-admin .pq-choice.pq-choice--taken {
+	cursor: not-allowed;
+	opacity: 0.7;
+}
+
+.pq-admin .pq-chooser .pq-actions-bar .button-link {
+	text-decoration: none;
+}
+
+/* ---------- Channel list ---------- */
+
+.pq-admin .pq-channels .pq-card-head {
+	padding-bottom: 14px;
+}
+
+.pq-admin ul.pq-channel-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pq-admin li.pq-channel {
+	display: grid;
+	grid-template-columns: 36px minmax(0, 1fr) auto minmax(36px, auto);
+	align-items: center;
+	gap: 6px 14px;
+	margin: 0;
+	padding: 14px 22px;
+	border-top: 1px solid var(--pq-line-soft);
+}
+
+.pq-admin .pq-channel-main {
+	min-width: 0;
+}
+
+.pq-admin .pq-channel-title {
+	overflow: hidden;
+	font-size: 14px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pq-admin .pq-channel-meta {
+	margin-top: 2px;
+	color: var(--pq-muted);
+	font-size: 12px;
+}
+
+.pq-admin .pq-channel-status {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 4px 8px;
+	text-align: right;
+}
+
+.pq-admin .pq-channel-switch {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.pq-admin li.pq-channel--off .pq-svc,
+.pq-admin li.pq-channel--unavailable .pq-svc {
+	opacity: 0.5;
+}
+
+.pq-admin li.pq-channel--off .pq-channel-title,
+.pq-admin li.pq-channel--unavailable .pq-channel-title {
+	color: #50575e;
+}
+
+/* ---------- Disclosures at the bottom ---------- */
+
+.pq-admin details.pq-add-account,
+.pq-admin details.pq-tech {
+	margin-top: 4px;
+}
+
+.pq-admin details.pq-tech {
+	margin-top: 28px;
+}
+
+.pq-admin details.pq-tech > summary,
+.pq-admin details.pq-add-account > summary {
+	padding: 4px 0;
+}
+
+.pq-admin details.pq-tech td {
+	overflow-wrap: anywhere;
+}
+
+/* ---------- Notices ---------- */
+
+.pq-admin .pq-notice .pq-notice-details {
+	margin: 0 0 10px;
+}
+
+.pq-admin .pq-notice .pq-notice-details .pq-more-body {
+	margin-top: 6px;
+}
+
+.pq-admin .pq-notice .pq-notice-details p {
+	margin: 0;
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 960px) {
+	.pq-admin .pq-connect-steps {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.pq-admin .pq-connect-step + .pq-connect-step {
+		border-top: 1px solid var(--pq-line-soft);
+		border-left: 0;
+	}
+}
+
+@media (max-width: 782px) {
+	.pq-admin .pq-connect-step,
+	.pq-admin .pq-account-head,
+	.pq-admin li.pq-channel {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+
+	.pq-admin .pq-account-body {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+
+	.pq-admin .pq-account-actions {
+		width: 100%;
+	}
+
+	.pq-admin details.pq-menu {
+		position: static;
+		flex-basis: 100%;
+	}
+
+	.pq-admin details.pq-menu > .pq-menu-body {
+		position: static;
+		width: auto;
+		margin-top: 8px;
+		box-shadow: none;
+	}
+
+	.pq-admin li.pq-channel {
+		grid-template-columns: 36px minmax(0, 1fr) auto;
+	}
+
+	.pq-admin .pq-channel-status {
+		grid-column: 2 / 3;
+		grid-row: 2;
+		justify-content: flex-start;
+		text-align: left;
+	}
+
+	.pq-admin .pq-channel-switch {
+		grid-column: 3;
+		grid-row: 1;
+	}
+
+	.pq-admin .pq-channel-title {
+		white-space: normal;
+	}
+}

@@ -183,6 +183,104 @@ final class AdminMutationBoundaryTest extends TestCase {
 		$handler();
 	}
 
+	/**
+	 * @dataProvider connectionHandlerBoundaryProvider
+	 *
+	 * @param callable             $handler Handler.
+	 * @param string               $nonce_action Nonce action.
+	 * @param array<string,string> $post POST fields.
+	 */
+	public function test_connection_handlers_require_capability_before_reading_input( callable $handler, string $nonce_action, array $post ): void {
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = array_merge( array( '_wpnonce' => 'valid-nonce' ), $post );
+		$_REQUEST                  = $_POST;
+		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ] = 'valid-nonce';
+
+		try {
+			$handler();
+			self::fail( 'The handler ran without the connection capability.' );
+		} catch ( RuntimeException $exception ) {
+			self::assertStringContainsString( 'manage PressQueue', $exception->getMessage() );
+		}
+
+		self::assertSame( array(), $GLOBALS['pressqueue_test_http_requests'] );
+		self::assertSame( array(), $GLOBALS['pressqueue_test_redirects'] ?? array() );
+	}
+
+	/**
+	 * @dataProvider connectionHandlerBoundaryProvider
+	 *
+	 * @param callable             $handler Handler.
+	 * @param string               $nonce_action Nonce action.
+	 * @param array<string,string> $post POST fields.
+	 */
+	public function test_connection_handlers_require_post_requests( callable $handler, string $nonce_action, array $post ): void {
+		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::MANAGE_CONNECTIONS ] = true;
+		$_SERVER['REQUEST_METHOD'] = 'GET';
+		$_POST                     = array_merge( array( '_wpnonce' => 'valid-nonce' ), $post );
+		$_REQUEST                  = $_POST;
+		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ] = 'valid-nonce';
+
+		$this->expectException( RuntimeException::class );
+		$this->expectExceptionMessage( 'PressQueue changes require POST.' );
+
+		$handler();
+	}
+
+	/**
+	 * @dataProvider connectionHandlerBoundaryProvider
+	 *
+	 * @param callable             $handler Handler.
+	 * @param string               $nonce_action Nonce action.
+	 * @param array<string,string> $post POST fields.
+	 */
+	public function test_connection_handlers_require_valid_nonces( callable $handler, string $nonce_action, array $post ): void {
+		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::MANAGE_CONNECTIONS ] = true;
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = array_merge( array( '_wpnonce' => 'stale-nonce' ), $post );
+		$_REQUEST                  = $_POST;
+		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ] = 'valid-nonce';
+
+		$this->expectException( RuntimeException::class );
+		$this->expectExceptionMessage( 'Nonce check failed.' );
+
+		$handler();
+	}
+
+	public function test_provider_failures_map_to_plain_error_codes_without_raw_messages(): void {
+		$cases = array(
+			'invalid_credential' => 'key_rejected',
+			'forbidden'          => 'key_forbidden',
+			'network_failure'    => 'network',
+			'rate_limited'       => 'rate_limited',
+			'malformed_response' => 'provider_failure',
+		);
+
+		foreach ( $cases as $classification => $code ) {
+			$result = ConnectionController::error_result( new \PressQueue\Provider\ProviderException( $classification, 'Raw provider text with secret-ish detail.' ) );
+
+			self::assertSame( $code, $result['error'] );
+			self::assertSame( $classification, $result['reason'] );
+			self::assertStringNotContainsString( 'secret-ish', implode( ' ', $result ) );
+		}
+
+		$unknown = ConnectionController::error_result( new \PressQueue\Provider\ProviderException( 'something_new', 'x' ) );
+		self::assertSame( 'unexpected_provider_failure', $unknown['reason'] );
+
+		$storage = ConnectionController::error_result( new \PressQueue\Security\CredentialEnvelopeException( 'The PHP Sodium extension is required for provider credentials.' ) );
+		self::assertSame( 'storage_sodium', $storage['error'] );
+
+		$salts = ConnectionController::error_result( new \PressQueue\Security\CredentialEnvelopeException( 'WordPress secret key material is not configured.' ) );
+		self::assertSame( 'storage_salts', $salts['error'] );
+
+		$unreadable = ConnectionController::error_result( new \PressQueue\Security\CredentialEnvelopeException( 'Credential envelope could not be decrypted.' ) );
+		self::assertSame( 'key_unreadable', $unreadable['error'] );
+
+		$generic = ConnectionController::error_result( new RuntimeException( 'Database password is hunter2' ) );
+		self::assertSame( 'failed', $generic['error'] );
+		self::assertStringNotContainsString( 'hunter2', $generic['detail'] );
+	}
+
 	public function test_cancel_handler_requires_confirmation(): void {
 		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::OPERATE_DELIVERIES ] = true;
 		$_SERVER['REQUEST_METHOD'] = 'POST';
@@ -240,8 +338,35 @@ final class AdminMutationBoundaryTest extends TestCase {
 	public static function mutationBoundaryProvider(): array {
 		return array(
 			'connection'      => array( ConnectionController::class, 'pressqueue_test_connection', Capabilities::MANAGE_CONNECTIONS, 'manage PressQueue' ),
+			'connect buffer'  => array( ConnectionController::class, 'pressqueue_connect_buffer', Capabilities::MANAGE_CONNECTIONS, 'manage PressQueue' ),
+			'finish setup'    => array( ConnectionController::class, 'pressqueue_finish_connection', Capabilities::MANAGE_CONNECTIONS, 'manage PressQueue' ),
 			'channel'         => array( ChannelController::class, 'pressqueue_enable_channel', Capabilities::MANAGE_CONNECTIONS, 'manage PressQueue' ),
 			'delivery cancel' => array( DeliveryActionController::class, 'pressqueue_cancel_delivery', Capabilities::OPERATE_DELIVERIES, 'operate PressQueue deliveries' ),
+		);
+	}
+
+	/**
+	 * @return array<string,array{0:callable,1:string,2:array<string,string>}>
+	 */
+	public static function connectionHandlerBoundaryProvider(): array {
+		$connection = array( 'connection_public_id' => '01H00000000000000000000000' );
+		$channel    = array(
+			'channel_public_id' => '01H00000000000000000000000',
+			'updated_at'        => '2026-10-09 10:00:00',
+		);
+
+		return array(
+			'connect buffer'    => array( array( ConnectionController::class, 'handle_connect_buffer' ), 'pressqueue_connect_buffer', array( 'api_key' => 'pqfake_unit_key' ) ),
+			'finish connection' => array( array( ConnectionController::class, 'handle_finish_connection' ), 'pressqueue_finish_connection', array_merge( $connection, array( 'remote_organization_id' => 'org' ) ) ),
+			'create connection' => array( array( ConnectionController::class, 'handle_create_connection' ), 'pressqueue_create_connection', array( 'api_key' => 'pqfake_unit_key' ) ),
+			'test connection'   => array( array( ConnectionController::class, 'handle_test_connection' ), 'pressqueue_test_connection', $connection ),
+			'sync connection'   => array( array( ConnectionController::class, 'handle_sync_connection' ), 'pressqueue_sync_connection', $connection ),
+			'rotate connection' => array( array( ConnectionController::class, 'handle_rotate_connection' ), 'pressqueue_rotate_connection', array_merge( $connection, array( 'api_key' => 'pqfake_unit_key' ) ) ),
+			'enable connection' => array( array( ConnectionController::class, 'handle_enable_connection' ), 'pressqueue_enable_connection', $connection ),
+			'disable connection' => array( array( ConnectionController::class, 'handle_disable_connection' ), 'pressqueue_disable_connection', $connection ),
+			'disconnect'        => array( array( ConnectionController::class, 'handle_disconnect_connection' ), 'pressqueue_disconnect_connection', $connection ),
+			'enable channel'    => array( array( ChannelController::class, 'handle_enable_channel' ), 'pressqueue_enable_channel', $channel ),
+			'disable channel'   => array( array( ChannelController::class, 'handle_disable_channel' ), 'pressqueue_disable_channel', $channel ),
 		);
 	}
 

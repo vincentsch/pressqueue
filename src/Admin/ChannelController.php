@@ -10,10 +10,9 @@ declare(strict_types=1);
 namespace PressQueue\Admin;
 
 use PressQueue\Security\Capabilities;
-use PressQueue\Security\SafeOperatorError;
+use PressQueue\Storage\PublicIds;
 use PressQueue\Storage\Record\ChannelRecord;
 use PressQueue\Storage\Repository\ChannelRepository;
-use PressQueue\Storage\ValidationException;
 
 /**
  * Handles explicit channel enablement.
@@ -32,21 +31,29 @@ final class ChannelController {
 	}
 
 	/**
-	 * Render one channel action.
+	 * Render the on/off switch for one channel.
 	 *
 	 * @param ChannelRecord $channel Channel.
+	 * @param string        $label Accessible label, for example "Post to Larkfield Bakery on LinkedIn".
+	 * @param string        $confirm Optional question asked before switching the channel off.
 	 */
-	public static function render_channel_action( ChannelRecord $channel ): void {
-		$action = $channel->enabled ? 'pressqueue_disable_channel' : 'pressqueue_enable_channel';
-		$label  = $channel->enabled ? __( 'Disable Channel', 'pressqueue' ) : __( 'Enable Channel', 'pressqueue' );
+	public static function render_channel_action( ChannelRecord $channel, string $label = '', string $confirm = '' ): void {
+		if ( '' === $label ) {
+			/* translators: 1: channel name, 2: social network name. */
+			$label = sprintf( __( 'Post to %1$s on %2$s', 'pressqueue' ), ActivitySummary::channel_display_name( $channel ), Labels::service( $channel->service ) );
+		}
 
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin:0;">';
-		wp_nonce_field( $action );
-		echo '<input type="hidden" name="action" value="' . esc_attr( $action ) . '" />';
-		echo '<input type="hidden" name="channel_public_id" value="' . esc_attr( $channel->public_id ) . '" />';
-		echo '<input type="hidden" name="updated_at" value="' . esc_attr( $channel->updated_at->format( 'Y-m-d H:i:s' ) ) . '" />';
-		submit_button( $label, 'secondary small', 'submit', false );
-		echo '</form>';
+		Ui::toggle_form(
+			'pressqueue_enable_channel',
+			'pressqueue_disable_channel',
+			array(
+				'channel_public_id' => $channel->public_id,
+				'updated_at'        => $channel->updated_at->format( 'Y-m-d H:i:s' ),
+			),
+			$channel->enabled,
+			$label,
+			$channel->enabled && '' !== $confirm ? array( 'confirm' => $confirm ) : array()
+		);
 	}
 
 	/**
@@ -72,12 +79,20 @@ final class ChannelController {
 	private static function handle_set_enabled( bool $enabled, string $nonce_action ): void {
 		self::mutation_boundary( $nonce_action );
 
+		$public_id = self::post_text( 'channel_public_id' );
+		$result    = PublicIds::is_valid( $public_id ) ? array( 'channel' => $public_id ) : array();
+
 		try {
-			( new ChannelRepository() )->set_enabled_if_current( self::post_text( 'channel_public_id' ), $enabled, self::post_text( 'updated_at' ) );
-			self::redirect( $enabled ? 'channel_enabled' : 'channel_disabled' );
+			$channel = ( new ChannelRepository() )->set_enabled_if_current( $public_id, $enabled, self::post_text( 'updated_at' ) );
+			$result  = array(
+				'message' => $enabled ? 'channel_enabled' : 'channel_disabled',
+				'channel' => $channel->public_id,
+			);
 		} catch ( \Throwable $throwable ) {
-			self::redirect( 'connection_error', self::safe_error_detail( $throwable ) );
+			$result = array_merge( $result, ConnectionController::error_result( $throwable ) );
 		}
+
+		ConnectionController::redirect_to_page( $result );
 	}
 
 	/**
@@ -98,35 +113,5 @@ final class ChannelController {
 	private static function post_text( string $key ): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked by caller.
 		return isset( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : '';
-	}
-
-	/**
-	 * Redirect to connections.
-	 *
-	 * @param string      $message Message key.
-	 * @param string|null $detail Optional detail.
-	 */
-	private static function redirect( string $message, ?string $detail = null ): void {
-		$args = array(
-			'page'               => ConnectionController::SLUG,
-			'pressqueue_message' => $message,
-		);
-
-		if ( null !== $detail && '' !== $detail ) {
-			$args['pressqueue_detail'] = $detail;
-		}
-
-		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
-		exit;
-	}
-
-	/**
-	 * Return a redacted exception detail.
-	 *
-	 * @param \Throwable $throwable Throwable.
-	 * @return string
-	 */
-	private static function safe_error_detail( \Throwable $throwable ): string {
-		return SafeOperatorError::redirect_detail( $throwable );
 	}
 }
