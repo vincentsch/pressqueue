@@ -191,6 +191,38 @@ final class SchedulingTemplatesMediaContractsTest extends TestCase {
 		$resolver->resolve( $rule, $ambiguous );
 	}
 
+	public function test_explicit_time_accepts_fixed_offset_time_zones(): void {
+		$resolver = new ScheduleResolver( new DateTimeImmutable( '2026-08-25 12:00:00', new DateTimeZone( 'UTC' ) ) );
+		$rule     = $this->rule(
+			array(
+				'schedule_policy'          => 'queue_end',
+				'schedule_policy_document' => array(
+					'mode'           => 'queue_end',
+					'schema_version' => 1,
+				),
+			)
+		);
+		$bundle   = PostControlMetadata::normalize_bundle(
+			array(
+				'channels'       => array( 'mode' => 'inherit' ),
+				'media'          => array( 'mode' => 'inherit' ),
+				'message'        => array( 'mode' => 'inherit' ),
+				'policy'         => 'inherit',
+				'schedule'       => array(
+					'local_date' => '2026-09-15',
+					'local_time' => '09:30',
+					'mode'       => 'explicit_time',
+					'timezone'   => '+02:00',
+				),
+				'schema_version' => 2,
+			)
+		);
+
+		$explicit = $resolver->resolve( $rule, $bundle );
+
+		self::assertSame( '2026-09-15 07:30:00', $explicit->scheduled_for_storage() );
+	}
+
 	public function test_media_resolver_builds_featured_image_snapshot_and_reuses_matching_cache(): void {
 		$GLOBALS['pressqueue_test_current_user_caps']['edit_post'] = true;
 		$GLOBALS['pressqueue_test_posts'][42]                      = new WP_Post( array( 'ID' => 42 ) );

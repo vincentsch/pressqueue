@@ -153,7 +153,9 @@ final class ScheduleResolver {
 			throw new ValidationException( 'Explicit schedule local time is invalid.' );
 		}
 
+		// Fixed-offset zones such as "+02:00" have no transitions; getTransitions() returns false for them.
 		$transitions = $timezone->getTransitions( $local_timestamp - 86400, $local_timestamp + 86400 );
+		$transitions = is_array( $transitions ) ? $transitions : array();
 		$offsets     = array();
 
 		foreach ( $transitions as $transition ) {
