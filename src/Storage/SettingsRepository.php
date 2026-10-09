@@ -17,6 +17,13 @@ final class SettingsRepository {
 	public const DRY_RUN_OPTION     = 'pressqueue_dry_run_enabled';
 
 	/**
+	 * Whether new posts are shared automatically or only after an editor opts in.
+	 */
+	public const NEW_POST_SHARING_OPTION = 'pressqueue_new_post_sharing';
+	public const NEW_POST_SHARING_VALUES = array( 'automatic', 'opt_in' );
+	public const SHARING_MODES           = array( 'test', 'live', 'paused' );
+
+	/**
 	 * Default activation callback.
 	 */
 	public static function ensure_defaults_for_current_site(): void {
@@ -89,6 +96,73 @@ final class SettingsRepository {
 	 */
 	public function set_dry_run_enabled( bool $enabled ): void {
 		$this->write_boolean( self::DRY_RUN_OPTION, $enabled );
+	}
+
+	/**
+	 * Return the combined sharing mode shown to people.
+	 *
+	 * Paused wins over everything because the kill switch holds all live work.
+	 *
+	 * @return string One of test, live, paused.
+	 */
+	public function sharing_mode(): string {
+		if ( $this->is_kill_switch_enabled() ) {
+			return 'paused';
+		}
+
+		return $this->is_dry_run_enabled() ? 'test' : 'live';
+	}
+
+	/**
+	 * Store a combined sharing mode.
+	 *
+	 * @param string $mode One of test, live, paused.
+	 */
+	public function set_sharing_mode( string $mode ): void {
+		if ( ! in_array( $mode, self::SHARING_MODES, true ) ) {
+			throw new ValidationException( 'Sharing mode is unsupported.' );
+		}
+
+		if ( 'paused' === $mode ) {
+			$this->set_kill_switch_enabled( true );
+			return;
+		}
+
+		$this->set_dry_run_enabled( 'test' === $mode );
+		$this->set_kill_switch_enabled( false );
+	}
+
+	/**
+	 * Return how new posts are treated.
+	 *
+	 * @return string automatic or opt_in.
+	 */
+	public function new_post_sharing(): string {
+		if ( ! function_exists( 'get_option' ) ) {
+			return 'automatic';
+		}
+
+		$value = get_option( self::NEW_POST_SHARING_OPTION, 'automatic' );
+
+		return is_string( $value ) && in_array( $value, self::NEW_POST_SHARING_VALUES, true ) ? $value : 'automatic';
+	}
+
+	/**
+	 * Store how new posts are treated.
+	 *
+	 * @param string $value automatic or opt_in.
+	 */
+	public function set_new_post_sharing( string $value ): void {
+		if ( ! in_array( $value, self::NEW_POST_SHARING_VALUES, true ) ) {
+			throw new ValidationException( 'New post sharing value is unsupported.' );
+		}
+
+		if ( false === get_option( self::NEW_POST_SHARING_OPTION, false ) ) {
+			add_option( self::NEW_POST_SHARING_OPTION, $value, '', true );
+			return;
+		}
+
+		update_option( self::NEW_POST_SHARING_OPTION, $value, true );
 	}
 
 	/**

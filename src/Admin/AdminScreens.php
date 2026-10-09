@@ -45,7 +45,9 @@ final class AdminScreens {
 		}
 
 		add_action( 'admin_menu', array( self::class, 'register_menu' ) );
-		add_action( 'admin_post_pressqueue_save_settings', array( self::class, 'handle_save_settings' ) );
+		add_filter( 'submenu_file', array( self::class, 'highlight_hidden_pages' ), 10, 2 );
+		Ui::register_hooks();
+		SettingsController::register_hooks();
 		add_action( 'admin_post_pressqueue_save_rule', array( self::class, 'handle_save_rule' ) );
 		add_action( 'admin_post_pressqueue_enable_rule', array( self::class, 'handle_enable_rule' ) );
 		add_action( 'admin_post_pressqueue_disable_rule', array( self::class, 'handle_disable_rule' ) );
@@ -65,6 +67,9 @@ final class AdminScreens {
 
 	/**
 	 * Register menu pages.
+	 *
+	 * Visible items follow what people do most: see what happened, adjust rules,
+	 * manage channels. Detail and legacy pages stay routable but hidden.
 	 */
 	public static function register_menu(): void {
 		add_menu_page(
@@ -73,31 +78,76 @@ final class AdminScreens {
 			Capabilities::ACCESS_ADMIN,
 			self::SLUG_ROOT,
 			array( self::class, 'render_default_page' ),
-			'dashicons-share'
+			self::menu_icon(),
+			26
 		);
 
-		ConnectionController::register_menu( self::SLUG_ROOT );
-		DeliveryListController::register_menu( self::SLUG_ROOT );
-		DeliveryDetailController::register_menu( self::SLUG_ROOT );
-		BatchController::register_menu( self::SLUG_ROOT );
-		PrivacyController::register_menu( self::SLUG_ROOT );
+		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Overview', 'pressqueue' ), __( 'Overview', 'pressqueue' ), Capabilities::ACCESS_ADMIN, self::SLUG_ROOT, array( self::class, 'render_default_page' ) );
+		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Activity', 'pressqueue' ), __( 'Activity', 'pressqueue' ), Capabilities::VIEW_DELIVERIES, DeliveryListController::SLUG, array( DeliveryListController::class, 'render_page' ) );
 		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Rules', 'pressqueue' ), __( 'Rules', 'pressqueue' ), Capabilities::MANAGE_RULES, self::SLUG_RULES, array( self::class, 'render_rules_page' ) );
-		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Preview', 'pressqueue' ), __( 'Preview', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_PREVIEW, array( self::class, 'render_preview_page' ) );
-		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Decisions', 'pressqueue' ), __( 'Decisions', 'pressqueue' ), Capabilities::VIEW_DECISIONS, self::SLUG_DECISIONS, array( self::class, 'render_decisions_page' ) );
-		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Settings', 'pressqueue' ), __( 'Settings', 'pressqueue' ), Capabilities::MANAGE_SETTINGS, self::SLUG_SETTINGS, array( self::class, 'render_settings_page' ) );
+		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Channels', 'pressqueue' ), __( 'Channels', 'pressqueue' ), Capabilities::MANAGE_CONNECTIONS, ConnectionController::SLUG, array( ConnectionController::class, 'render_connections_page' ) );
+		add_submenu_page( self::SLUG_ROOT, __( 'Share Old Posts', 'pressqueue' ), __( 'Share old posts', 'pressqueue' ), Capabilities::OPERATE_BATCHES, BatchController::SLUG, array( BatchController::class, 'render_page' ) );
+		add_submenu_page( self::SLUG_ROOT, __( 'PressQueue Settings', 'pressqueue' ), __( 'Settings', 'pressqueue' ), Capabilities::MANAGE_SETTINGS, self::SLUG_SETTINGS, array( SettingsController::class, 'render_page' ) );
+
+		foreach ( self::hidden_pages() as $slug => $page ) {
+			add_submenu_page( self::SLUG_ROOT, $page[0], $page[0], $page[1], $slug, $page[2] );
+			remove_submenu_page( self::SLUG_ROOT, $slug );
+		}
+	}
+
+	/**
+	 * Return hidden but routable pages.
+	 *
+	 * @return array<string,array{0:string,1:string,2:callable}>
+	 */
+	private static function hidden_pages(): array {
+		return array(
+			DeliveryDetailController::SLUG => array( __( 'Share details', 'pressqueue' ), Capabilities::VIEW_DELIVERIES, array( DeliveryDetailController::class, 'render_page' ) ),
+			Ui::PAGE_PRIVACY               => array( __( 'Data and privacy', 'pressqueue' ), Capabilities::MANAGE_SETTINGS, array( PrivacyController::class, 'render_page' ) ),
+			self::SLUG_PREVIEW             => array( __( 'Check a post', 'pressqueue' ), Capabilities::VIEW_DECISIONS, array( self::class, 'render_preview_page' ) ),
+			self::SLUG_DECISIONS           => array( __( 'Decisions', 'pressqueue' ), Capabilities::VIEW_DECISIONS, array( self::class, 'render_decisions_page' ) ),
+		);
+	}
+
+	/**
+	 * Keep the parent menu item highlighted on hidden pages.
+	 *
+	 * @param string|null $submenu_file Current submenu file.
+	 * @param string      $parent_file Parent file.
+	 * @return string|null
+	 */
+	public static function highlight_hidden_pages( $submenu_file, $parent_file = '' ) {
+		unset( $parent_file );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Menu highlighting is read-only.
+		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$map  = array(
+			DeliveryDetailController::SLUG => DeliveryListController::SLUG,
+			self::SLUG_DECISIONS           => DeliveryListController::SLUG,
+			Ui::PAGE_PRIVACY               => self::SLUG_SETTINGS,
+			self::SLUG_PREVIEW             => self::SLUG_ROOT,
+		);
+
+		return $map[ $page ] ?? $submenu_file;
+	}
+
+	/**
+	 * Return the menu icon as an SVG data URI that WordPress tints to match the admin scheme.
+	 *
+	 * @return string
+	 */
+	private static function menu_icon(): string {
+		$svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path fill="black" d="M4 3h7.5a4.5 4.5 0 0 1 0 9H8v5H4V3Zm4 3.5v2h3.5a1 1 0 0 0 0-2H8Z"/><circle fill="black" cx="15.5" cy="15.5" r="2.5"/></svg>';
+
+		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Data URI for the admin menu icon.
+		return 'data:image/svg+xml;base64,' . base64_encode( $svg );
 	}
 
 	/**
 	 * Render the best landing page for the current user's capabilities.
 	 */
 	public static function render_default_page(): void {
-		if ( current_user_can( Capabilities::MANAGE_RULES ) ) {
-			self::render_rules_page();
-			return;
-		}
-
-		if ( current_user_can( Capabilities::MANAGE_CONNECTIONS ) ) {
-			ConnectionController::render_connections_page();
+		if ( current_user_can( Capabilities::MANAGE_RULES ) || current_user_can( Capabilities::MANAGE_CONNECTIONS ) || current_user_can( Capabilities::MANAGE_SETTINGS ) ) {
+			OverviewController::render_page();
 			return;
 		}
 
@@ -112,30 +162,7 @@ final class AdminScreens {
 		}
 
 		self::require_capability( Capabilities::ACCESS_ADMIN );
-	}
-
-	/**
-	 * Render settings.
-	 */
-	public static function render_settings_page(): void {
-		self::require_capability( Capabilities::MANAGE_SETTINGS );
-
-		$repository = new SettingsRepository();
-		$settings   = $repository->read();
-
-		echo '<div class="wrap">';
-		echo '<h1>' . esc_html__( 'PressQueue Settings', 'pressqueue' ) . '</h1>';
-		self::render_notice();
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
-		wp_nonce_field( 'pressqueue_save_settings' );
-		echo '<input type="hidden" name="action" value="pressqueue_save_settings" />';
-		echo '<table class="form-table" role="presentation"><tbody>';
-		echo '<tr><th scope="row">' . esc_html__( 'Dry run', 'pressqueue' ) . '</th><td><label><input type="checkbox" name="dry_run_enabled" value="1" ' . checked( $settings->dry_run_enabled, true, false ) . ' /> ' . esc_html__( 'Create local dry-run delivery rows only.', 'pressqueue' ) . '</label></td></tr>';
-		echo '<tr><th scope="row">' . esc_html__( 'Kill switch', 'pressqueue' ) . '</th><td><label><input type="checkbox" name="kill_switch_enabled" value="1" ' . checked( $settings->kill_switch_enabled, true, false ) . ' /> ' . esc_html__( 'Hold live-mode delivery rows locally.', 'pressqueue' ) . '</label></td></tr>';
-		echo '</tbody></table>';
-		submit_button( __( 'Save Settings', 'pressqueue' ) );
-		echo '</form>';
-		echo '</div>';
+		OverviewController::render_page();
 	}
 
 	/**
@@ -251,21 +278,6 @@ final class AdminScreens {
 		echo '</tbody></table>';
 		self::render_pagination( $page, $limit, $total );
 		echo '</div>';
-	}
-
-	/**
-	 * Handle settings save.
-	 */
-	public static function handle_save_settings(): void {
-		AdminPostBoundary::check( 'pressqueue_save_settings', Capabilities::MANAGE_SETTINGS, __( 'You are not allowed to manage PressQueue settings.', 'pressqueue' ) );
-
-		$repository = new SettingsRepository();
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked above.
-		$repository->set_dry_run_enabled( isset( $_POST['dry_run_enabled'] ) );
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked above.
-		$repository->set_kill_switch_enabled( isset( $_POST['kill_switch_enabled'] ) );
-
-		self::redirect( self::SLUG_SETTINGS, 'settings_saved' );
 	}
 
 	/**
