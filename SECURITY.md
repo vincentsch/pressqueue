@@ -8,5 +8,5 @@ Include the affected version, the steps needed to reproduce the issue, and its
 impact. Remove API keys, WordPress salts, account details, and private content
 from your report. Do not test against someone else's WordPress or social account.
 
-PressQueue is currently in private development. Public version support will be
-listed here when the first release is published.
+Security fixes go into the latest release. PressQueue is young, so please
+update to the newest version before reporting.

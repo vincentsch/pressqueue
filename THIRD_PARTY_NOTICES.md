@@ -14,3 +14,10 @@ The installable ZIP includes:
 
 The ZIP includes each notice. Development tools listed in `require-dev` are
 excluded from the installable package.
+
+## License of the installable package
+
+PressQueue's own code is MIT licensed. Because the installable ZIP bundles
+Action Scheduler, the ZIP as a whole is distributed under the terms of
+GPL-3.0-or-later. The source repository itself does not include Action
+Scheduler and is MIT licensed.

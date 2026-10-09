@@ -4,9 +4,6 @@ PressQueue is a WordPress plugin for conditional social publishing. Buffer is
 the first provider. Provider adapters handle remote requests; the shared code
 owns rules, exclusions, credentials, queue state, and retries.
 
-The repository is currently private. These instructions prepare it for public
-contributions once its owner approves release.
-
 ## Local development
 
 Use PHP 8.1 or newer and Composer 2. The test tools need `bcmath`, `curl`, `dom`,

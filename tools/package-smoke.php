@@ -1,6 +1,6 @@
 <?php
 /**
- * Build and inspect a private package smoke artifact.
+ * Build and inspect a package smoke artifact.
  *
  * @package PressQueue\Tools
  */

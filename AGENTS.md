@@ -1,59 +1,51 @@
-# PressQueue Agent Guide
+# PressQueue agent guide
 
-## Scope
+Instructions for AI coding agents and human contributors working in this
+repository. Read [CONTRIBUTING.md](CONTRIBUTING.md) as well.
 
-PressQueue is a clean-room open-source WordPress plugin for conditional social
-publishing. Buffer is the first provider, but the core must not assume that
-Buffer is the only possible provider.
+## What this is
 
-## Current state
+PressQueue is an open-source WordPress plugin that shares posts to social
+networks through Buffer, based on rules the site owner sets. Buffer is the
+first provider. Shared code must not assume that Buffer is the only one;
+provider-specific behavior stays behind the adapter interfaces in
+`src/Provider/`.
 
-The repository contains a private development build being prepared for release.
-Keep it private until Vincent approves publication. Do not install it on a live
-WordPress site, connect a real account, or send social posts without current
-approval for that action. Site-specific settings and operating receipts belong
-outside this repository.
+## Layout
 
-## Planning
+- `src/Planning/` decides which posts qualify and renders messages.
+- `src/Delivery/` and `src/Scheduler/` queue and send deliveries in the background.
+- `src/Storage/` owns the database tables, records and validation.
+- `src/Admin/` renders the WordPress admin screens. `Ui`, `Labels` and
+  `assets/admin/admin.css` hold the shared building blocks.
+- `assets/editor/` is the block editor sharing panel.
+- `src/WpCli/` holds the `wp pressqueue` commands.
+- `tests/unit/`, `tests/integration/` and `tests/editor/` hold the tests.
 
-Product and implementation planning lives in `.vroni/wip/`.
+## Safety rules
 
-- `notes/vision.md`
-- `notes/user-stories.md`
-- `notes/architecture.md`
-- `notes/agents.md`
-- `notes/delivery-governance.md`
-- `notes/provider-and-delivery-contracts.md`
-- `notes/state-machines.md`
-- `notes/security-and-privacy.md`
-- `notes/qa.md`
-- `notes/tools.md`
-- `notes/releases.md`
-- `notes/operations.md`
-- `notes/tickets.md`
-- `notes/strategy.md`
-- `projects/`
-- `tickets/inbox/`
+- Never log, commit, echo or expose provider credentials.
+- Sending to a social network is an external side effect. Tests use HTTP
+  fakes; never send a real post from a test or a script without the site
+  owner's explicit approval.
+- New rules, connections and channels start disabled.
+- Exclusions and policy errors must stop delivery. When in doubt, do not send.
+- Every outbound delivery needs a stable idempotency key, and an uncertain
+  provider response must not be retried automatically.
+- Keep stored data formats, option names, meta keys and REST routes backward
+  compatible; existing sites upgrade in place.
+- Do not copy third-party plugin code, branding, copy or assets.
 
-Project and ticket files are implementation handoffs. Keep them concrete,
-decided, testable, and free of research-only tasks.
+## Writing
 
-## Safety
+Use plain, everyday words in the admin and in documentation. Name things the
+way a site owner would (post, channel, rule, Buffer queue), not by internal
+names. Never use an em dash.
 
-- Never log, commit, echo, or expose provider credentials.
-- Social delivery is an external side effect and requires explicit approval.
-- Default all new rules and destinations to disabled.
-- Exclusion and policy failures must stop delivery.
-- Every outbound delivery needs a stable idempotency key.
-- Do not copy third-party plugin code, branding, copy, or protected assets.
-- Keep the viral content system and Vincent's personal-site production
-  workflow outside this repository.
-- Never use an em dash in generated copy or documentation.
+## Checks
 
-## Repository
+Run `composer run test:unit`, `node --test tests/editor/*.test.cjs`,
+`composer run lint:phpcs` and `composer run analyse` before you finish.
+Integration tests need a throwaway database; see the README.
 
-- Public-code owner: `vincentsch`
-- Repository: `vincentsch/pressqueue`
-- The origin remains private until Vincent approves a public release.
-- `.vroni/` is excluded from the public-code repository and kept in a separate
-  private backup.
+Maintainers may keep private planning notes in `.vroni/`, which Git ignores.
