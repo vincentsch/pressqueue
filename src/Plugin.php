@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace PressQueue;
 
 use PressQueue\Admin\AdminScreens;
+use PressQueue\Admin\AttentionNotice;
+use PressQueue\Admin\PostListColumn;
 use PressQueue\Batch\BatchQueueService;
 use PressQueue\Planning\EventCollector;
 use PressQueue\Privacy\PersonalDataEraser;
@@ -98,6 +100,8 @@ final class Plugin {
 
 		EventCollector::register_hooks();
 		AdminScreens::register_hooks();
+		PostListColumn::register_hooks();
+		AttentionNotice::register_hooks();
 		PersonalDataExporter::register_hooks();
 		PersonalDataEraser::register_hooks();
 		add_filter( 'wpmu_drop_tables', array( UninstallPolicy::class, 'site_deletion_tables' ), 10, 2 );

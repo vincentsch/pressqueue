@@ -1,0 +1,59 @@
+/* PressQueue "Social sharing" column in post lists. */
+
+.wp-list-table .column-pressqueue_sharing {
+	width: 9em;
+}
+
+.pq-col-shares {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	text-decoration: none;
+}
+
+.pq-col-share {
+	position: relative;
+	display: inline-flex;
+}
+
+.pq-col-svc {
+	display: inline-grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: #50575e;
+	color: #fff;
+	font-size: 9px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.pq-col-svc--linkedin { background: #0a66c2; }
+.pq-col-svc--twitter { background: #111; }
+.pq-col-svc--bluesky { background: #1185fe; }
+.pq-col-svc--mastodon { background: #6364ff; }
+.pq-col-svc--threads { background: #222; }
+.pq-col-svc--facebook { background: #1877f2; }
+
+.pq-col-share::after {
+	content: "";
+	position: absolute;
+	right: -2px;
+	bottom: -2px;
+	width: 8px;
+	height: 8px;
+	border: 2px solid #fff;
+	border-radius: 50%;
+	background: #8c8f94;
+}
+
+.pq-col-share--ok::after { background: #1a7f45; }
+.pq-col-share--info::after { background: #3858e9; }
+.pq-col-share--warn::after { background: #c27a00; }
+.pq-col-share--bad::after { background: #b3261e; }
+
+.pq-col-off,
+.pq-col-none {
+	color: #646970;
+}

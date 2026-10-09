@@ -43,6 +43,58 @@ final class SettingsRepositoryTest extends TestCase {
 		self::assertFalse( $GLOBALS['pressqueue_test_option_autoloads'][ SettingsRepository::DRY_RUN_OPTION ] );
 	}
 
+	public function test_sharing_mode_maps_to_dry_run_and_kill_switch(): void {
+		$repository = new SettingsRepository();
+		$repository->ensure_defaults();
+
+		self::assertSame( 'test', $repository->sharing_mode() );
+
+		$repository->set_sharing_mode( 'live' );
+		self::assertSame( 'live', $repository->sharing_mode() );
+		self::assertFalse( $repository->is_dry_run_enabled() );
+		self::assertFalse( $repository->is_kill_switch_enabled() );
+
+		$repository->set_sharing_mode( 'paused' );
+		self::assertSame( 'paused', $repository->sharing_mode() );
+		self::assertTrue( $repository->is_kill_switch_enabled() );
+		self::assertSame( 'held', $repository->read()->delivery_state );
+
+		$repository->set_sharing_mode( 'test' );
+		self::assertSame( 'test', $repository->sharing_mode() );
+		self::assertTrue( $repository->is_dry_run_enabled() );
+		self::assertFalse( $repository->is_kill_switch_enabled() );
+	}
+
+	public function test_paused_wins_even_when_dry_run_is_on(): void {
+		$repository = new SettingsRepository();
+		$repository->ensure_defaults();
+		$repository->set_kill_switch_enabled( true );
+
+		self::assertSame( 'paused', $repository->sharing_mode() );
+	}
+
+	public function test_unknown_sharing_mode_is_rejected(): void {
+		$repository = new SettingsRepository();
+
+		$this->expectException( \PressQueue\Storage\ValidationException::class );
+		$repository->set_sharing_mode( 'loud' );
+	}
+
+	public function test_new_post_sharing_defaults_to_automatic_and_accepts_opt_in(): void {
+		$repository = new SettingsRepository();
+
+		self::assertSame( 'automatic', $repository->new_post_sharing() );
+
+		$repository->set_new_post_sharing( 'opt_in' );
+		self::assertSame( 'opt_in', $repository->new_post_sharing() );
+
+		$GLOBALS['pressqueue_test_options'][ SettingsRepository::NEW_POST_SHARING_OPTION ] = 'garbage';
+		self::assertSame( 'automatic', $repository->new_post_sharing() );
+
+		$this->expectException( \PressQueue\Storage\ValidationException::class );
+		$repository->set_new_post_sharing( 'sometimes' );
+	}
+
 	public function test_policy_state_order_prefers_dry_run_before_kill_switch(): void {
 		$repository = new SettingsRepository();
 
