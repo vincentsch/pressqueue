@@ -54,6 +54,12 @@ final class OperatorActionAssessmentService {
 	 * @var SettingsRepository
 	 */
 	private SettingsRepository $settings;
+	/**
+	 * Current editorial policy.
+	 *
+	 * @var DeliveryPolicyGate
+	 */
+	private DeliveryPolicyGate $policy_gate;
 
 	/**
 	 * Credential envelope service.
@@ -81,6 +87,7 @@ final class OperatorActionAssessmentService {
 		$this->connections         = new ConnectionRepository( $database );
 		$this->channels            = new ChannelRepository( $database );
 		$this->settings            = new SettingsRepository();
+		$this->policy_gate         = new DeliveryPolicyGate( $database );
 		$this->credential_envelope = new CredentialEnvelope();
 		$this->credential_checker  = $credential_checker;
 	}
@@ -184,6 +191,9 @@ final class OperatorActionAssessmentService {
 				return OperatorActionAssessment::would_mutate( $delivery->public_id, $delivery->state, 'accepted' );
 
 			case 'confirmed_not_accepted':
+				if ( 'draft_not_confirmed' === $delivery->error_class ) {
+					return OperatorActionAssessment::blocked( array( 'remote_post_already_returned' ), $delivery->public_id, $delivery->state );
+				}
 				return OperatorActionAssessment::would_mutate( $delivery->public_id, $delivery->state, 'ambiguous' );
 
 			case 'cancelled':
@@ -203,6 +213,21 @@ final class OperatorActionAssessmentService {
 	 */
 	private function queue_gate_blocks( DeliveryRecord $delivery, string $action ): array {
 		$blocks = array();
+		if ( \PressQueue\Runtime\RuntimeDisabledLatch::is_closed() ) {
+			$blocks[] = 'runtime_disabled';
+		}
+		if ( $this->settings->is_dry_run_enabled() ) {
+			$blocks[] = 'dry_run_enabled';
+		}
+		try {
+			$policy_reason = $this->policy_gate->hold_reason( $delivery );
+		} catch ( \Throwable $exception ) {
+			unset( $exception );
+			$policy_reason = 'policy_check_failed';
+		}
+		if ( null !== $policy_reason ) {
+			$blocks[] = $policy_reason;
+		}
 
 		if ( $this->settings->is_kill_switch_enabled() ) {
 			$blocks[] = $action . '_kill_switch_enabled';

@@ -50,6 +50,11 @@ final class PrivacySecurityContractsTest extends TestCase {
 		pressqueue_test_reset_wordpress_stubs();
 	}
 
+	public function test_malformed_kill_switch_is_enabled(): void {
+		update_option( \PressQueue\Storage\SettingsRepository::KILL_SWITCH_OPTION, 'invalid', false );
+		self::assertTrue( ( new \PressQueue\Storage\SettingsRepository() )->is_kill_switch_enabled() );
+	}
+
 	public function test_runtime_latch_is_strict_and_missing_values_are_closed(): void {
 		self::assertTrue( RuntimeDisabledLatch::is_closed() );
 
@@ -91,10 +96,10 @@ final class PrivacySecurityContractsTest extends TestCase {
 	}
 
 	public function test_retention_state_failures_store_classification_without_raw_message(): void {
-		$settings = PrivacySettings::defaults();
+		$settings                      = PrivacySettings::defaults();
 		$settings['retention_enabled'] = true;
-		$store = new RetentionStateStore();
-		$run   = $store->acquire( $settings );
+		$store                         = new RetentionStateStore();
+		$run                           = $store->acquire( $settings );
 
 		self::assertIsArray( $run );
 
@@ -110,14 +115,14 @@ final class PrivacySecurityContractsTest extends TestCase {
 	}
 
 	public function test_retention_progress_requires_current_lease(): void {
-		$settings = PrivacySettings::defaults();
+		$settings                      = PrivacySettings::defaults();
 		$settings['retention_enabled'] = true;
-		$store = new RetentionStateStore();
-		$run   = $store->acquire( $settings );
+		$store                         = new RetentionStateStore();
+		$run                           = $store->acquire( $settings );
 
 		self::assertIsArray( $run );
 
-		$state = $store->read();
+		$state                           = $store->read();
 		$state['active_run']['lease_id'] = str_repeat( 'a', 32 );
 		update_option( RetentionStateStore::OPTION, $state, false );
 
@@ -255,6 +260,22 @@ final class PrivacySecurityContractsTest extends TestCase {
 		self::assertSame( 'operator_error', SafeOperatorError::classification( new RuntimeException( 'boom' ) ) );
 		self::assertSame( 'REST request body must be a JSON object.', SafeOperatorError::message( new ValidationException( 'REST request body must be a JSON object.' ) ) );
 		self::assertStringNotContainsString( 'token', SafeOperatorError::message( new ValidationException( 'token leaked in validation' ) ) );
+		self::assertSame( '', SafeOperatorError::notice_detail( 'Re-enter your key at an attacker site.' ) );
+		self::assertSame( '', SafeOperatorError::notice_detail( 'Failure classification: attacker.' ) );
+		self::assertSame( 'Rule version is stale.', SafeOperatorError::notice_detail( 'Rule version is stale.' ) );
+	}
+
+	public function test_capability_upgrades_preserve_revocations_and_only_add_new_capabilities(): void {
+		Capabilities::grant_to_administrators();
+		$role = get_role( 'administrator' );
+		$role->remove_cap( Capabilities::MANAGE_CONNECTIONS );
+		Capabilities::grant_to_administrators();
+		self::assertFalse( $role->has_cap( Capabilities::MANAGE_CONNECTIONS ) );
+		update_option( Capabilities::VERSION_OPTION, 4, false );
+		$role->remove_cap( Capabilities::EXPORT_DATA );
+		Capabilities::grant_to_administrators();
+		self::assertFalse( $role->has_cap( Capabilities::MANAGE_CONNECTIONS ) );
+		self::assertTrue( $role->has_cap( Capabilities::EXPORT_DATA ) );
 	}
 
 	public function test_scheduler_repairs_daily_retention_action(): void {
@@ -290,7 +311,7 @@ final class PrivacySecurityContractsTest extends TestCase {
 	}
 
 	public function test_uninstall_deletes_owned_data_when_enabled(): void {
-		$GLOBALS['wpdb']                       = new \wpdb();
+		$GLOBALS['wpdb']                      = new \wpdb();
 		$settings                             = PrivacySettings::defaults();
 		$settings['delete_data_on_uninstall'] = true;
 		update_option( PrivacySettings::OPTION, $settings, false );
@@ -303,7 +324,10 @@ final class PrivacySecurityContractsTest extends TestCase {
 		self::assertStringContainsString( 'DELETE FROM `wp_postmeta`', $queries );
 		self::assertStringContainsString( '_pressqueue_controls', $queries );
 		self::assertStringContainsString( '_pressqueue_policy', $queries );
-		self::assertStringNotContainsString( '_pressqueue_last_runtime_trigger_fingerprint', $queries );
+		self::assertStringContainsString( '_pressqueue_first_publish_seen_at', $queries );
+		self::assertStringContainsString( '_pressqueue_last_runtime_fingerprint', $queries );
+		self::assertStringContainsString( '_pressqueue_last_runtime_trigger_fingerprint', $queries );
+		self::assertStringContainsString( '_pressqueue_last_delivery_revision_fingerprint', $queries );
 		self::assertStringContainsString( 'DELETE FROM `wp_options`', $queries );
 		self::assertStringContainsString( 'DROP TABLE IF EXISTS `wp_pressqueue_deliveries`', $queries );
 		self::assertFalse( get_role( 'administrator' )->has_cap( Capabilities::EXPORT_DATA ) );
@@ -329,22 +353,22 @@ final class PrivacyExportWpdb extends \wpdb {
 		if ( false !== strpos( (string) $query, 'FROM `wp_pressqueue_connections`' ) ) {
 			return array(
 				array(
-					'account_json'            => '{"token":"secret","name":"Example"}',
-					'connection_status'       => 'verified',
-					'created_at'              => '2026-08-20 09:00:00',
-					'credential_rotated_at'   => null,
-					'credential_verified_at'  => '2026-08-20 09:30:00',
-					'enabled'                 => '1',
-					'label'                   => 'Primary',
-					'last_error_json'         => '{"message":"provider secret"}',
-					'last_sync_completed_at'  => null,
-					'last_sync_started_at'    => null,
-					'provider'                => 'buffer',
-					'public_id'               => '01K8Z8D0PKH2N8J7S3K5A9C6DE',
-					'remote_account_id'       => 'acct_1',
-					'remote_organization_id'  => '',
-					'updated_at'              => '2026-08-20 09:30:00',
-					'verified_identity_hash'  => str_repeat( 'a', 64 ),
+					'account_json'           => '{"token":"secret","name":"Example"}',
+					'connection_status'      => 'verified',
+					'created_at'             => '2026-08-20 09:00:00',
+					'credential_rotated_at'  => null,
+					'credential_verified_at' => '2026-08-20 09:30:00',
+					'enabled'                => '1',
+					'label'                  => 'Primary',
+					'last_error_json'        => '{"message":"provider secret"}',
+					'last_sync_completed_at' => null,
+					'last_sync_started_at'   => null,
+					'provider'               => 'buffer',
+					'public_id'              => '01K8Z8D0PKH2N8J7S3K5A9C6DE',
+					'remote_account_id'      => 'acct_1',
+					'remote_organization_id' => '',
+					'updated_at'             => '2026-08-20 09:30:00',
+					'verified_identity_hash' => str_repeat( 'a', 64 ),
 				),
 			);
 		}
@@ -514,16 +538,16 @@ final class PersonalDataExportWpdb extends \wpdb {
 		$rows = array();
 		for ( $index = 1; $index <= 120; ++$index ) {
 			$rows[] = array(
-				'created_at'      => '2026-08-20 09:00:00',
-				'event_mode'      => 'dry_run',
-				'post_id'         => (string) $index,
-				'post_status'     => 'publish',
-				'post_type'       => 'post',
-				'public_id'       => sprintf( 'decision-%03d', $index ),
-				'reasons_json'    => '[]',
-				'result'          => 'included',
-				'snapshot_hash'   => str_repeat( 'a', 64 ),
-				'trigger'         => 'manual',
+				'created_at'    => '2026-08-20 09:00:00',
+				'event_mode'    => 'dry_run',
+				'post_id'       => (string) $index,
+				'post_status'   => 'publish',
+				'post_type'     => 'post',
+				'public_id'     => sprintf( 'decision-%03d', $index ),
+				'reasons_json'  => '[]',
+				'result'        => 'included',
+				'snapshot_hash' => str_repeat( 'a', 64 ),
+				'trigger'       => 'manual',
 			);
 		}
 
@@ -539,17 +563,17 @@ final class PersonalDataExportWpdb extends \wpdb {
 		$rows = array();
 		for ( $index = 1; $index <= 10; ++$index ) {
 			$rows[] = array(
-				'created_at'             => '2026-08-20 10:00:00',
-				'decision_public_id'     => sprintf( 'decision-%03d', $index ),
-				'delivery_mode'          => 'dry_run',
-				'payload_hash'           => str_repeat( 'b', 64 ),
-				'provider'               => 'buffer',
-				'public_id'              => sprintf( 'delivery-%03d', $index ),
-				'reconciliation_status'  => 'none',
-				'remote_id'              => null,
-				'schedule_slot'          => 'immediate',
-				'state'                  => 'dry_run',
-				'updated_at'             => '2026-08-20 10:00:00',
+				'created_at'            => '2026-08-20 10:00:00',
+				'decision_public_id'    => sprintf( 'decision-%03d', $index ),
+				'delivery_mode'         => 'dry_run',
+				'payload_hash'          => str_repeat( 'b', 64 ),
+				'provider'              => 'buffer',
+				'public_id'             => sprintf( 'delivery-%03d', $index ),
+				'reconciliation_status' => 'none',
+				'remote_id'             => null,
+				'schedule_slot'         => 'immediate',
+				'state'                 => 'dry_run',
+				'updated_at'            => '2026-08-20 10:00:00',
 			);
 		}
 

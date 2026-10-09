@@ -21,7 +21,7 @@ final class EventCollector {
 	/**
 	 * Captured post intents.
 	 *
-	 * @var array<int,array{sources:array<string,bool>,triggers:array<string,bool>}>
+	 * @var array<string,array{post_id:int,blog_id:int,sources:array<string,bool>,triggers:array<string,bool>}>
 	 */
 	private static array $captured = array();
 
@@ -40,6 +40,7 @@ final class EventCollector {
 		add_action( 'xmlrpc_call_success_wp_editPost', array( self::class, 'capture_xmlrpc_publish' ), 10, 2 );
 		add_action( 'publish_future_post', array( self::class, 'capture_scheduled_callback' ), 10, 1 );
 		add_action( 'shutdown', array( self::class, 'finalize' ), 0, 0 );
+		add_action( 'pressqueue_planning_retry', array( self::class, 'retry_planning' ), 10, 4 );
 	}
 
 	/**
@@ -55,6 +56,10 @@ final class EventCollector {
 		}
 
 		if ( 'publish' !== $new_status ) {
+			return;
+		}
+		if ( defined( 'WP_IMPORTING' ) && WP_IMPORTING ) {
+			update_post_meta( (int) $post->ID, EventNormalizer::META_FIRST_PUBLISH_SEEN_AT, gmdate( 'Y-m-d H:i:s' ) );
 			return;
 		}
 
@@ -150,44 +155,128 @@ final class EventCollector {
 			return;
 		}
 
-		$status = new SchemaStatus();
-		if ( ! $status->is_ready_for_planning() ) {
-			return;
-		}
-
-		$rules      = new RuleRepository();
-		$normalizer = new EventNormalizer();
-		$planner    = new Planner();
-
-		foreach ( $captured as $post_id => $intent ) {
-			$trigger = self::select_trigger( (int) $post_id, $intent['triggers'] );
-
-			if ( null === $trigger ) {
-				continue;
+		foreach ( $captured as $intent ) {
+			$post_id  = $intent['post_id'];
+			$switched = function_exists( 'get_current_blog_id' ) && get_current_blog_id() !== $intent['blog_id'];
+			if ( $switched ) {
+				switch_to_blog( $intent['blog_id'] );
 			}
-
 			try {
-				$rules_for_trigger = $rules->find_enabled_for_trigger( $trigger );
-				$allowlist         = $normalizer->metadata_allowlist_for_rules( $rules_for_trigger );
-				$source            = self::source_label( $intent['sources'] );
-				$event             = $normalizer->from_post_id( (int) $post_id, 'runtime', $source, $trigger, $allowlist );
-
-				if ( null === $event ) {
-					continue;
+				$trigger = self::select_trigger( $post_id, $intent['triggers'] );
+				if ( null !== $trigger ) {
+					self::process_intent( $post_id, self::source_label( $intent['sources'] ), $trigger, 0 );
 				}
-
-				if ( 'update' === $trigger && self::update_matches_recorded_facts( $event ) ) {
-					self::record_runtime_metadata( $event );
-					continue;
+			} finally {
+				if ( $switched ) {
+					restore_current_blog();
 				}
-
-				$planner->plan_runtime( $event );
-				self::record_runtime_metadata( $event );
-			} catch ( \Throwable $exception ) {
-				unset( $exception );
-				continue;
 			}
 		}
+	}
+
+	/**
+	 * Retry a failed local planning pass against current policy.
+	 *
+	 * @param int    $post_id Post ID.
+	 * @param string $source Original hook source.
+	 * @param string $trigger Event trigger.
+	 * @param int    $attempt Retry count.
+	 */
+	public static function retry_planning( int $post_id, string $source, string $trigger, int $attempt ): void {
+		self::process_intent( $post_id, $source, $trigger, $attempt );
+	}
+
+	/**
+	 * Plan one captured intent or leave a redacted failure notice and retry.
+	 *
+	 * @param int    $post_id Post ID.
+	 * @param string $source Hook source.
+	 * @param string $trigger Event trigger.
+	 * @param int    $attempt Retry count.
+	 */
+	private static function process_intent( int $post_id, string $source, string $trigger, int $attempt ): void {
+		try {
+			if ( RuntimeDisabledLatch::is_closed() || ! ( new SchemaStatus() )->is_ready_for_planning() ) {
+				throw new \PressQueue\Storage\StorageUnavailableException( 'Planning is temporarily unavailable.' );
+			}
+			$rules      = ( new RuleRepository() )->find_enabled_for_trigger( $trigger );
+			$normalizer = new EventNormalizer();
+			$event      = $normalizer->from_post_id( $post_id, 'runtime', $source, $trigger, $normalizer->metadata_allowlist_for_rules( $rules ) );
+			if ( null === $event ) {
+				$failure = get_option( 'pressqueue_last_planning_failure', array() );
+				if ( is_array( $failure ) && ( $failure['post_id'] ?? null ) === $post_id ) {
+					delete_option( 'pressqueue_last_planning_failure' );
+				}
+				return;
+			}
+			if ( $event->is_backdated_automatic_publication() ) {
+				self::record_event_notice( $event, 'skipped', 'backdated_publication', 'Automatic first publication is skipped for posts dated more than one day ago. Use a reviewed manual batch.' );
+				self::record_runtime_metadata( $event );
+				return;
+			}
+			if ( 'update' !== $trigger || ! self::update_matches_recorded_facts( $event ) ) {
+				( new Planner() )->plan_runtime( $event );
+			}
+			self::record_runtime_metadata( $event );
+			$failure = get_option( 'pressqueue_last_planning_failure', array() );
+			if ( is_array( $failure ) && ( $failure['post_id'] ?? null ) === $post_id ) {
+				delete_option( 'pressqueue_last_planning_failure' );
+			}
+		} catch ( \Throwable $exception ) {
+			unset( $exception );
+			if ( $attempt >= 5 && isset( $event ) ) {
+				try {
+					self::record_event_notice( $event, 'policy_error', 'planning_retry_exhausted', 'Post planning failed after five retries. Preview the post before creating a manual batch.' );
+				} catch ( \Throwable $storage_error ) {
+					unset( $storage_error );
+				}
+			}
+			update_option(
+				'pressqueue_last_planning_failure',
+				array(
+					'post_id'     => $post_id,
+					'retry_count' => $attempt,
+					'at_utc'      => gmdate( 'Y-m-d H:i:s' ),
+				),
+				false
+			);
+			try {
+				if ( $attempt < 5 && function_exists( 'as_schedule_single_action' ) && ( new \PressQueue\Scheduler\ActionSchedulerQueue() )->is_ready() ) {
+					as_schedule_single_action( time() + min( 3600, 60 * ( 2 ** $attempt ) ), 'pressqueue_planning_retry', array( $post_id, $source, $trigger, $attempt + 1 ), \PressQueue\Scheduler\ActionSchedulerQueue::GROUP, false );
+				}
+			} catch ( \Throwable $scheduler_error ) {
+				unset( $scheduler_error );
+			}
+		}
+	}
+
+	/**
+	 * Keep a durable explanation for a skipped or failed publishing hook.
+	 *
+	 * @param NormalizedEvent $event Event facts.
+	 * @param string          $result Decision result.
+	 * @param string          $code Reason code.
+	 * @param string          $message Plain explanation.
+	 */
+	private static function record_event_notice( NormalizedEvent $event, string $result, string $code, string $message ): void {
+		( new \PressQueue\Storage\Repository\DecisionRepository() )->create(
+			array_merge(
+				$event->event_fields(),
+				array(
+					'author_id'       => $event->author_id,
+					'event_key'       => $event->event_key,
+					'result'          => $result,
+					'scope_type'      => 'global',
+					'scope_public_id' => null,
+					'reasons'         => array( ReasonFactory::make( $code, $message, 'error', 'post', 'planning', null, null ) ),
+					'snapshot'        => array(
+						'schema_version' => 1,
+						'post_id'        => $event->post_id,
+						'classification' => $code,
+					),
+				)
+			)
+		);
 	}
 
 	/**
@@ -198,6 +287,10 @@ final class EventCollector {
 	 * @param string $source Source.
 	 */
 	private static function capture( int $post_id, string $trigger, string $source ): void {
+		if ( defined( 'WP_IMPORTING' ) && WP_IMPORTING ) {
+			update_post_meta( $post_id, EventNormalizer::META_FIRST_PUBLISH_SEEN_AT, gmdate( 'Y-m-d H:i:s' ) );
+			return;
+		}
 		if ( RuntimeDisabledLatch::is_closed() ) {
 			return;
 		}
@@ -206,8 +299,12 @@ final class EventCollector {
 			return;
 		}
 
-		self::$captured[ $post_id ]['triggers'][ $trigger ] = true;
-		self::$captured[ $post_id ]['sources'][ $source ]   = true;
+		$blog_id                           = function_exists( 'get_current_blog_id' ) ? get_current_blog_id() : 1;
+		$key                               = $blog_id . ':' . $post_id;
+		self::$captured[ $key ]['post_id'] = $post_id;
+		self::$captured[ $key ]['blog_id'] = $blog_id;
+		self::$captured[ $key ]['triggers'][ $trigger ] = true;
+		self::$captured[ $key ]['sources'][ $source ]   = true;
 	}
 
 	/**
@@ -219,7 +316,7 @@ final class EventCollector {
 	 */
 	private static function select_trigger( int $post_id, array $triggers ): ?string {
 		if ( ! empty( $triggers['scheduled_publication'] ) ) {
-			return 'scheduled_publication';
+			return self::first_publish_seen( $post_id ) ? 'update' : 'scheduled_publication';
 		}
 
 		if ( ! empty( $triggers['first_publish'] ) && ! self::first_publish_seen( $post_id ) ) {
@@ -252,7 +349,7 @@ final class EventCollector {
 	 * @return bool
 	 */
 	private static function update_matches_recorded_facts( NormalizedEvent $event ): bool {
-		if ( $event->previous_trigger_fingerprint === $event->trigger_fingerprint ) {
+		if ( $event->previous_trigger_fingerprint === $event->trigger_fingerprint || $event->previous_trigger_fingerprint === $event->legacy_trigger_fingerprint ) {
 			return true;
 		}
 

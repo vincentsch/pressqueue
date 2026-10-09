@@ -88,6 +88,18 @@ final class SchedulingTemplatesMediaContractsTest extends TestCase {
 				)
 			)
 		);
+		self::assertSame(
+			array(
+				'mode'           => 'featured_image_optional',
+				'schema_version' => 1,
+			),
+			RuleDocuments::media_policy(
+				array(
+					'mode'           => 'featured_image_optional',
+					'schema_version' => 1,
+				)
+			)
+		);
 	}
 
 	public function test_reusable_template_creation_allows_meta_tags_until_rule_validation(): void {
@@ -237,6 +249,25 @@ final class SchedulingTemplatesMediaContractsTest extends TestCase {
 		self::assertSame( 99, $snapshot->document()['items'][0]['attachment_id'] );
 		self::assertSame( DeliveryCapability::hash( $capability ), $snapshot->document()['items'][0]['capability_hash'] );
 
+		$GLOBALS['pressqueue_test_current_user_caps']['edit_post'] = false;
+		$runtime_event       = $this->event();
+		$runtime_event->mode = 'runtime';
+		$runtime_snapshot    = ( new MediaResolver( $probe ) )->resolve(
+			$this->rule(
+				array(
+					'media_policy' => array(
+						'schema_version' => 1,
+						'mode'           => 'featured_image',
+					),
+				)
+			),
+			$runtime_event,
+			$capability,
+			true
+		);
+		self::assertSame( $snapshot->identity_hash(), $runtime_snapshot->identity_hash() );
+		$GLOBALS['pressqueue_test_current_user_caps']['edit_post'] = true;
+
 		$cache           = array(
 			99 => array(
 				'attachment_modified_at' => '2026-08-25 10:00:00',
@@ -264,6 +295,28 @@ final class SchedulingTemplatesMediaContractsTest extends TestCase {
 		);
 
 		self::assertSame( $snapshot->document()['items'][0]['probe_result_hash'], $cached_snapshot->document()['items'][0]['probe_result_hash'] );
+	}
+
+	public function test_optional_featured_image_policy_falls_back_to_text_only_when_missing(): void {
+		$GLOBALS['pressqueue_test_current_user_caps']['edit_post'] = true;
+		$GLOBALS['pressqueue_test_posts'][42]                      = new WP_Post( array( 'ID' => 42 ) );
+
+		$snapshot = ( new MediaResolver() )->resolve(
+			$this->rule(
+				array(
+					'media_policy' => array(
+						'mode'           => 'featured_image_optional',
+						'schema_version' => 1,
+					),
+				)
+			),
+			$this->event(),
+			$this->capability(),
+			false
+		);
+
+		self::assertSame( MediaSnapshot::none()->document(), $snapshot->document() );
+		self::assertNull( $snapshot->identity_hash() );
 	}
 
 	public function test_safe_media_probe_follows_cname_uses_pinned_address_and_allows_five_mb_image_facts(): void {
@@ -416,6 +469,7 @@ final class SchedulingTemplatesMediaContractsTest extends TestCase {
 				'64:ff9b::0808:0808',
 				'2001:20::1',
 				'3fff::1',
+				'fec0::1',
 			) as $address
 		) {
 			try {

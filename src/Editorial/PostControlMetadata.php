@@ -26,8 +26,8 @@ final class PostControlMetadata {
 	private const POLICY_VALUES     = array( 'inherit', 'include', 'exclude' );
 	private const CHANNEL_MODES     = array( 'inherit', 'override' );
 	private const MESSAGE_MODES     = array( 'inherit', 'override' );
-	private const SCHEDULE_MODES    = array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time' );
-	private const MEDIA_MODES       = array( 'inherit', 'none', 'featured_image', 'post_media' );
+	private const SCHEDULE_MODES    = array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' );
+	private const MEDIA_MODES       = array( 'inherit', 'none', 'featured_image', 'featured_image_optional', 'post_media' );
 	private const MESSAGE_MAX_CHARS = 2000;
 	private const MESSAGE_MAX_BYTES = 16384;
 
@@ -158,8 +158,9 @@ final class PostControlMetadata {
 		if ( function_exists( 'get_post_meta' ) ) {
 			$legacy = get_post_meta( $post_id, self::LEGACY_META_KEY, true );
 
-			if ( is_string( $legacy ) && in_array( $legacy, self::POLICY_VALUES, true ) ) {
-				$bundle['policy'] = $legacy;
+			// Unprotected legacy metadata may stop delivery, never authorize it.
+			if ( 'exclude' === $legacy ) {
+				$bundle['policy'] = 'exclude';
 			}
 		}
 
@@ -187,7 +188,10 @@ final class PostControlMetadata {
 			throw new ValidationException( 'Post metadata storage is unavailable.' );
 		}
 
-		update_post_meta( $post_id, self::META_KEY, self::encoded( $normalized ) );
+		update_post_meta( $post_id, self::META_KEY, wp_slash( self::encoded( $normalized ) ) );
+		if ( ! hash_equals( self::bundle_hash( $normalized ), self::bundle_hash( self::read_for_post( $post_id ) ) ) ) {
+			throw new ValidationException( 'PressQueue post controls could not be stored.' );
+		}
 
 		return $normalized;
 	}

@@ -21,7 +21,7 @@ use PressQueue\Storage\Schema;
 use PressQueue\Storage\SchemaMigrator;
 use PressQueue\Storage\SettingsRepository;
 use PressQueue\Tests\Fixtures\Provider\FixtureDiscoveryProvider;
-use WP_UnitTestCase;
+use PressQueue\Tests\Support\PressQueueIntegrationTestCase as WP_UnitTestCase;
 
 /**
  * @covers \PressQueue\Provider\ProviderConnectionService

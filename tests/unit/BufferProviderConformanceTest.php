@@ -13,6 +13,7 @@ use PressQueue\Provider\Buffer\BufferDeliveryProvider;
 use PressQueue\Provider\Buffer\BufferGraphqlClient;
 use PressQueue\Provider\Buffer\BufferDiscoveryProvider;
 use PressQueue\Provider\ProviderDescriptor;
+use PressQueue\Provider\ProviderException;
 use PressQueue\Tests\Support\ProviderConformanceTestCase;
 
 /**
@@ -125,10 +126,7 @@ final class BufferProviderConformanceTest extends ProviderConformanceTestCase {
 
 		switch ( $this->credential_from_args( $args ) ) {
 			case 'retryable':
-				return array(
-					'body'     => '{}',
-					'response' => array( 'code' => 500 ),
-				);
+				throw new ProviderException( 'connection_refused_before_request', 'Fixture connection was refused before submission.' );
 
 			case 'rate_limited':
 				return array(

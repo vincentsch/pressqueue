@@ -83,14 +83,32 @@ final class Capabilities {
 			return;
 		}
 
+		$stored_version = function_exists( 'get_option' ) ? (int) get_option( self::VERSION_OPTION, 0 ) : 0;
+		if ( $stored_version >= self::TARGET_VERSION ) {
+			return;
+		}
+
 		$role = get_role( 'administrator' );
 
 		if ( ! $role ) {
 			return;
 		}
 
-		foreach ( self::names() as $capability ) {
-			$role->add_cap( $capability );
+		$introduced = array(
+			self::MANAGE_SETTINGS    => 1,
+			self::MANAGE_RULES       => 1,
+			self::VIEW_DECISIONS     => 1,
+			self::MANAGE_CONNECTIONS => 1,
+			self::VIEW_DELIVERIES    => 2,
+			self::OPERATE_DELIVERIES => 2,
+			self::EDIT_POST_CONTROLS => 3,
+			self::OPERATE_BATCHES    => 4,
+			self::EXPORT_DATA        => 5,
+		);
+		foreach ( $introduced as $capability => $version ) {
+			if ( $version > $stored_version ) {
+				$role->add_cap( $capability );
+			}
 		}
 
 		self::set_capability_schema_version();

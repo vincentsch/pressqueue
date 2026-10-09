@@ -13,6 +13,7 @@ use DateInterval;
 use DateTimeImmutable;
 use DateTimeZone;
 use Exception;
+use PressQueue\Planning\ScheduleResolver;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\StorageValidator;
 use PressQueue\Storage\ValidationException;
@@ -146,7 +147,7 @@ final class BatchLimitService {
 			);
 		}
 
-		if ( in_array( $mode, array( 'immediate', 'queue_next', 'queue_end' ), true ) ) {
+		if ( in_array( $mode, array( 'immediate', 'queue_next', 'queue_end', 'draft' ), true ) ) {
 			return array(
 				'schedule_slot'     => $mode,
 				'scheduled_for_utc' => null,
@@ -165,8 +166,8 @@ final class BatchLimitService {
 
 		$due = $first->add( new DateInterval( 'PT' . ( (int) $schedule['interval_minutes'] * $queueable_index ) . 'M' ) );
 		$now = time();
-		if ( $due->getTimestamp() <= $now ) {
-			throw new ValidationException( 'Staggered schedule cannot be in the past.' );
+		if ( $due->getTimestamp() < $now + ScheduleResolver::MINIMUM_LEAD_SECONDS ) {
+			throw new ValidationException( 'Choose a staggered start at least 15 minutes from now.' );
 		}
 
 		if ( $due->getTimestamp() > $now + ( self::MAX_EXPLICIT_HORIZON_DAYS * DAY_IN_SECONDS ) ) {
@@ -195,7 +196,7 @@ final class BatchLimitService {
 		}
 
 		$mode = (string) ( $schedule['mode'] ?? 'inherit' );
-		if ( ! in_array( $mode, array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'staggered_explicit_time' ), true ) ) {
+		if ( ! in_array( $mode, array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'draft', 'staggered_explicit_time' ), true ) ) {
 			throw new ValidationException( 'Batch schedule mode is unsupported.' );
 		}
 
@@ -219,8 +220,8 @@ final class BatchLimitService {
 		}
 
 		$now = time();
-		if ( $first->getTimestamp() <= $now ) {
-			throw new ValidationException( 'Staggered schedule cannot be in the past.' );
+		if ( $first->getTimestamp() < $now + ScheduleResolver::MINIMUM_LEAD_SECONDS ) {
+			throw new ValidationException( 'Choose a staggered start at least 15 minutes from now.' );
 		}
 
 		if ( $first->getTimestamp() > $now + ( self::MAX_EXPLICIT_HORIZON_DAYS * DAY_IN_SECONDS ) ) {

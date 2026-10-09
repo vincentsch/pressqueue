@@ -253,6 +253,24 @@ final class PlanningContractsTest extends TestCase {
 		self::assertSame( 'invalid_taxonomy_configuration', $result->reasons[0]['code'] );
 	}
 
+	public function test_normalized_plain_text_preserves_decoded_less_than_and_entities(): void {
+		$renderer = new TemplateRenderer();
+		$event = $this->event();
+		$event->template_values_are_plain_text = true;
+		$event->template_values['title'] = $renderer->normalize_plain_text( 'Top &lt;10 tips &amp; ideas' );
+		self::assertSame( 'Top <10 tips & ideas', $renderer->render( array( 'message' => '{{ title }}' ), $event ) );
+	}
+
+	public function test_typed_metadata_matches_wordpress_boolean_and_numeric_storage(): void {
+		$event = $this->event();
+		$event->metadata['flag'] = '1';
+		$event->metadata['score'] = '1.0';
+		foreach ( array( 'flag' => true, 'score' => 1 ) as $key => $value ) {
+			$result = ( new ConditionEvaluator() )->evaluate( array( 'type' => 'condition', 'condition' => 'metadata', 'operator' => 'equals', 'value' => array( 'key' => $key, 'value' => $value ) ), $event );
+			self::assertSame( 'matched', $result->condition_result );
+		}
+	}
+
 	public function test_template_rendering_normalizes_text_and_truncates_unicode(): void {
 		$template = array(
 			'schema_version'          => 1,

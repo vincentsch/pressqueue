@@ -29,6 +29,13 @@ final class PostControlsController {
 	public const REST_NAMESPACE = 'pressqueue/v1';
 
 	/**
+	 * Classic control saves already handled in this request.
+	 *
+	 * @var array<int,bool>
+	 */
+	private static array $classic_saves = array();
+
+	/**
 	 * Register hooks.
 	 */
 	public static function register_hooks(): void {
@@ -217,7 +224,8 @@ final class PostControlsController {
 			array( self::class, 'render_meta_box' ),
 			$post_type,
 			'side',
-			'default'
+			'default',
+			array( '__back_compat_meta_box' => true )
 		);
 	}
 
@@ -237,7 +245,7 @@ final class PostControlsController {
 		$selected = $bundle['channels']['channel_public_ids'] ?? array();
 		$selected = is_array( $selected ) ? $selected : array();
 
-		wp_nonce_field( 'pressqueue_save_post_controls', 'pressqueue_controls_nonce' );
+		wp_nonce_field( 'pressqueue_save_post_controls_' . $post->ID, 'pressqueue_controls_nonce' );
 		echo '<input type="hidden" name="pressqueue_controls_present" value="1" />';
 		echo '<input type="hidden" name="pressqueue_base_control_bundle_hash" value="' . esc_attr( PostControlMetadata::bundle_hash( $bundle ) ) . '" />';
 
@@ -279,7 +287,7 @@ final class PostControlsController {
 		$schedule_mode = (string) ( $schedule['mode'] ?? 'inherit' );
 		echo '<p><label for="pressqueue-schedule-mode">' . esc_html__( 'Schedule', 'pressqueue' ) . '</label><br />';
 		echo '<select id="pressqueue-schedule-mode" name="pressqueue_schedule_mode">';
-		foreach ( array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time' ) as $schedule_option ) {
+		foreach ( array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' ) as $schedule_option ) {
 			echo '<option value="' . esc_attr( $schedule_option ) . '" ' . selected( $schedule_mode, $schedule_option, false ) . '>' . esc_html( $schedule_option ) . '</option>';
 		}
 		echo '</select></p>';
@@ -297,7 +305,7 @@ final class PostControlsController {
 
 		echo '<p><label for="pressqueue-media-mode">' . esc_html__( 'Media', 'pressqueue' ) . '</label><br />';
 		echo '<select id="pressqueue-media-mode" name="pressqueue_media_mode">';
-		foreach ( array( 'inherit', 'none', 'featured_image', 'post_media' ) as $media_option ) {
+		foreach ( array( 'inherit', 'none', 'featured_image', 'featured_image_optional', 'post_media' ) as $media_option ) {
 			echo '<option value="' . esc_attr( $media_option ) . '" ' . selected( $media_mode, $media_option, false ) . '>' . esc_html( $media_option ) . '</option>';
 		}
 		echo '</select></p>';
@@ -318,6 +326,12 @@ final class PostControlsController {
 			return;
 		}
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Only identifies the originating form; its nonce is verified below.
+		$form_post_id = isset( $_POST['post_ID'] ) ? absint( $_POST['post_ID'] ) : 0;
+		if ( $form_post_id !== $post_id || isset( self::$classic_saves[ $post_id ] ) ) {
+			return;
+		}
+
 		if ( function_exists( 'wp_is_post_autosave' ) && wp_is_post_autosave( $post_id ) ) {
 			return;
 		}
@@ -334,7 +348,7 @@ final class PostControlsController {
 			}
 
 			PostControlAuthorization::require_current_user_access( $post_id );
-			check_admin_referer( 'pressqueue_save_post_controls', 'pressqueue_controls_nonce' );
+			check_admin_referer( 'pressqueue_save_post_controls_' . $post_id, 'pressqueue_controls_nonce' );
 
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked above.
 			$input = wp_unslash( $_POST );
@@ -348,6 +362,7 @@ final class PostControlsController {
 
 			$controls = PostControlMetadata::bundle_from_form( $input );
 			self::assert_media_control_authority( $post_id, $controls );
+			self::$classic_saves[ $post_id ] = true;
 			PostControlMetadata::replace_for_post( $post_id, $controls, $base_hash );
 		} catch ( \Throwable $throwable ) {
 			if ( function_exists( 'wp_die' ) ) {
@@ -364,6 +379,11 @@ final class PostControlsController {
 			return;
 		}
 
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( null === $screen || 'post' !== $screen->base || ! PostControlAuthorization::is_supported_post_type( $screen->post_type ) ) {
+			return;
+		}
+
 		$path = defined( 'PRESSQUEUE_DIR' ) ? PRESSQUEUE_DIR . 'assets/editor/post-controls.js' : '';
 		if ( '' === $path || ! file_exists( $path ) ) {
 			return;
@@ -372,8 +392,8 @@ final class PostControlsController {
 		wp_enqueue_script(
 			'pressqueue-post-controls',
 			plugins_url( 'assets/editor/post-controls.js', PRESSQUEUE_FILE ),
-			array( 'wp-api-fetch', 'wp-components', 'wp-data', 'wp-edit-post', 'wp-element', 'wp-i18n', 'wp-plugins' ),
-			defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0-dev',
+			array( 'wp-api-fetch', 'wp-components', 'wp-data', 'wp-editor', 'wp-element', 'wp-i18n', 'wp-plugins' ),
+			defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0',
 			true
 		);
 
@@ -401,8 +421,8 @@ final class PostControlsController {
 				'rule_relevant_metadata_keys' => self::rule_metadata_allowlist(),
 				'rule_relevant_taxonomies'    => self::rule_taxonomies(),
 				'selected_rule_destinations'  => self::selected_rule_destinations(),
-				'supported_media_modes'       => array( 'inherit', 'none', 'featured_image', 'post_media' ),
-				'supported_schedule_modes'    => array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time' ),
+				'supported_media_modes'       => array( 'inherit', 'none', 'featured_image', 'featured_image_optional', 'post_media' ),
+				'supported_schedule_modes'    => array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' ),
 			),
 			'supported_next_actions' => array(
 				'preview' => PostControlAuthorization::current_user_can_access( $post_id ),

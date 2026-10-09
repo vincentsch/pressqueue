@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: PressQueue
- * Description: Conditional social publishing control plane for WordPress.
- * Version: 0.1.0-dev
+ * Description: Send WordPress posts to Buffer using rules, previews, and a delivery log.
+ * Version: 0.1.0
  * Requires at least: 6.8
  * Requires PHP: 8.1
  * Author: Vincent Schmalbach
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'PRESSQUEUE_VERSION' ) ) {
-	define( 'PRESSQUEUE_VERSION', '0.1.0-dev' );
+	define( 'PRESSQUEUE_VERSION', '0.1.0' );
 }
 
 if ( ! defined( 'PRESSQUEUE_MINIMUM_PHP' ) ) {
@@ -57,6 +57,9 @@ function pressqueue_register_admin_notice( $message ): void {
  * Render a stored requirement notice.
  */
 function pressqueue_render_admin_notice(): void {
+	if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
 	if ( empty( $GLOBALS['pressqueue_runtime_notice'] ) ) {
 		return;
 	}

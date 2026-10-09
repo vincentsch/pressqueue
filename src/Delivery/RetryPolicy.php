@@ -18,11 +18,12 @@ use PressQueue\Storage\Record\DeliveryRecord;
  * Calculates bounded automatic retries.
  */
 final class RetryPolicy {
-	public const AUTOMATIC_ATTEMPT_LIMIT = 5;
-	private const INITIAL_DELAY_SECONDS  = 60;
-	private const MAX_DELAY_SECONDS      = 21600;
-	private const MAX_RATE_LIMIT_SECONDS = 2592000;
-	private const JITTER_RATIO           = 0.2;
+	public const AUTOMATIC_ATTEMPT_LIMIT           = 5;
+	private const INITIAL_DELAY_SECONDS            = 60;
+	private const RATE_LIMIT_INITIAL_DELAY_SECONDS = 900;
+	private const MAX_DELAY_SECONDS                = 21600;
+	private const MAX_RATE_LIMIT_SECONDS           = 2592000;
+	private const JITTER_RATIO                     = 0.2;
 
 	/**
 	 * Optional jitter provider.
@@ -71,12 +72,13 @@ final class RetryPolicy {
 			}
 		}
 
-		$base_delay = min(
+		$initial_delay = 'rate_limited' === $result->provider_result ? self::RATE_LIMIT_INITIAL_DELAY_SECONDS : self::INITIAL_DELAY_SECONDS;
+		$base_delay    = min(
 			self::MAX_DELAY_SECONDS,
-			self::INITIAL_DELAY_SECONDS * ( 2 ** max( 0, $delivery->automatic_attempt_count - 1 ) )
+			$initial_delay * ( 2 ** max( 0, $delivery->automatic_attempt_count - 1 ) )
 		);
-		$jitter     = $this->jitter_seconds( $delivery, $result, $base_delay );
-		$delay      = max( 1, $base_delay + $jitter );
+		$jitter        = $this->jitter_seconds( $delivery, $result, $base_delay );
+		$delay         = max( 1, $base_delay + $jitter );
 
 		return $now->modify( '+' . $delay . ' seconds' )->format( 'Y-m-d H:i:s' );
 	}

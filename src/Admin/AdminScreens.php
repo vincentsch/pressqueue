@@ -183,12 +183,12 @@ final class AdminScreens {
 			echo '</td>';
 			echo '</tr>';
 			echo '<tr><td colspan="6">';
-			self::render_rule_form( $rule );
+			self::render_rule_form( $rule, $channels );
 			echo '</td></tr>';
 		}
 
 		echo '</tbody></table>';
-		self::render_rule_form( null );
+		self::render_rule_form( null, $channels );
 		echo '</div>';
 	}
 
@@ -362,12 +362,13 @@ final class AdminScreens {
 					'post_status'            => array( 'publish', 'future', 'draft', 'pending' ),
 					'post_type'              => $post_types,
 					'posts_per_page'         => $count,
+					// phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.SuppressFilters_suppress_filters -- Operator inventory spans languages; each post is separately capability-checked.
 					'suppress_filters'       => true,
 					'update_post_meta_cache' => false,
 					'update_post_term_cache' => false,
 				)
 			);
-			$results    = array();
+			$results = array();
 
 			foreach ( $query->posts as $post_id ) {
 				if ( self::can_preview_post( (int) $post_id ) ) {
@@ -496,9 +497,10 @@ final class AdminScreens {
 	/**
 	 * Render rule edit form.
 	 *
-	 * @param RuleRecord|null $rule Rule for edits.
+	 * @param RuleRecord|null                                     $rule Rule for edits.
+	 * @param array<int,\PressQueue\Storage\Record\ChannelRecord> $channels Local channels.
 	 */
-	private static function render_rule_form( ?RuleRecord $rule ): void {
+	private static function render_rule_form( ?RuleRecord $rule, array $channels = array() ): void {
 		$is_edit = null !== $rule;
 
 		echo '<h2>' . esc_html( $is_edit ? __( 'Edit Rule', 'pressqueue' ) : __( 'Add Rule', 'pressqueue' ) ) . '</h2>';
@@ -520,15 +522,7 @@ final class AdminScreens {
 		}
 		echo '</td></tr>';
 		self::render_condition_tree_field( 'condition_tree_json', __( 'Condition Tree JSON', 'pressqueue' ), null === $rule ? self::default_condition_tree() : $rule->condition_tree, $rule );
-		self::render_json_textarea(
-			'destination_set_json',
-			__( 'Destination Set JSON', 'pressqueue' ),
-			null === $rule ? array(
-				'schema_version' => 1,
-				'destinations'   => array(),
-			) : $rule->destination_set,
-			$rule
-		);
+		self::render_rule_destinations( $rule, $channels );
 		self::render_json_textarea(
 			'template_set_json',
 			__( 'Template Set JSON', 'pressqueue' ),
@@ -539,22 +533,28 @@ final class AdminScreens {
 			$rule
 		);
 		self::render_json_textarea( 'custom_field_allowlist_json', __( 'Custom Field Allowlist JSON', 'pressqueue' ), null === $rule ? array() : $rule->custom_field_allowlist, $rule );
-		self::render_json_textarea(
-			'schedule_policy_json',
-			__( 'Schedule Policy JSON', 'pressqueue' ),
-			null === $rule ? array(
-				'mode'           => 'immediate',
-				'schema_version' => 1,
-			) : $rule->schedule_policy_document,
+		self::render_rule_mode_field(
+			'schedule_policy_mode',
+			__( 'Schedule', 'pressqueue' ),
+			null === $rule ? 'immediate' : (string) $rule->schedule_policy_document['mode'],
+			array(
+				'draft'      => __( 'Save an unscheduled Buffer draft', 'pressqueue' ),
+				'immediate'  => __( 'Publish immediately', 'pressqueue' ),
+				'queue_next' => __( 'Next Buffer queue slot', 'pressqueue' ),
+				'queue_end'  => __( 'End of Buffer queue', 'pressqueue' ),
+			),
 			$rule
 		);
-		self::render_json_textarea(
-			'media_policy_json',
-			__( 'Media Policy JSON', 'pressqueue' ),
-			null === $rule ? array(
-				'mode'           => 'none',
-				'schema_version' => 1,
-			) : $rule->media_policy,
+		self::render_rule_mode_field(
+			'media_policy_mode',
+			__( 'Images', 'pressqueue' ),
+			null === $rule ? 'none' : (string) $rule->media_policy['mode'],
+			array(
+				'none'                    => __( 'No image', 'pressqueue' ),
+				'featured_image'          => __( 'Require a featured image', 'pressqueue' ),
+				'featured_image_optional' => __( 'Use a featured image when available', 'pressqueue' ),
+				'post_media'              => __( 'Use images selected in the post controls', 'pressqueue' ),
+			),
 			$rule
 		);
 		if ( null !== $rule && null !== $rule->source_template_public_id ) {
@@ -563,6 +563,53 @@ final class AdminScreens {
 		echo '</tbody></table>';
 		submit_button( $is_edit ? __( 'Save Rule', 'pressqueue' ) : __( 'Save Disabled Rule', 'pressqueue' ) );
 		echo '</form>';
+	}
+
+	/**
+	 * Render channel choices without requiring users to copy identifiers into JSON.
+	 *
+	 * @param RuleRecord|null                                     $rule Rule for edits.
+	 * @param array<int,\PressQueue\Storage\Record\ChannelRecord> $channels Local channels.
+	 */
+	private static function render_rule_destinations( ?RuleRecord $rule, array $channels ): void {
+		$selected = null === $rule ? array() : array_column( $rule->destination_set['destinations'], 'channel_public_id' );
+		$labels   = array();
+		foreach ( $channels as $channel ) {
+			$labels[ $channel->public_id ] = (string) ( $channel->display['display_label'] ?? $channel->display['name'] ?? $channel->public_id )
+				. ' (' . $channel->service . ', ' . ( $channel->enabled ? __( 'enabled', 'pressqueue' ) : __( 'disabled', 'pressqueue' ) ) . ')';
+		}
+		foreach ( $selected as $public_id ) {
+			if ( ! isset( $labels[ $public_id ] ) ) {
+				$labels[ $public_id ] = __( 'Missing channel', 'pressqueue' ) . ' (' . $public_id . ')';
+			}
+		}
+
+		echo '<tr><th scope="row">' . esc_html__( 'Destinations', 'pressqueue' ) . '</th><td><fieldset>';
+		echo '<legend class="screen-reader-text">' . esc_html__( 'Destinations', 'pressqueue' ) . '</legend>';
+		echo '<input type="hidden" name="destination_controls_present" value="1" />';
+		foreach ( $labels as $public_id => $label ) {
+			echo '<label><input type="checkbox" name="destination_channel_ids[]" value="' . esc_attr( $public_id ) . '" ' . checked( in_array( $public_id, $selected, true ), true, false ) . ' /> ' . esc_html( $label ) . '</label><br />';
+		}
+		echo '<p class="description">' . esc_html__( 'Select channels for an inclusion rule. Exclusion rules apply to all destinations. Selecting a channel does not enable it.', 'pressqueue' ) . '</p>';
+		echo '</fieldset></td></tr>';
+	}
+
+	/**
+	 * Render a schedule or image choice.
+	 *
+	 * @param string               $name Form field name.
+	 * @param string               $label Field label.
+	 * @param string               $value Selected mode.
+	 * @param array<string,string> $choices Mode labels.
+	 * @param RuleRecord|null      $rule Rule for field IDs.
+	 */
+	private static function render_rule_mode_field( string $name, string $label, string $value, array $choices, ?RuleRecord $rule ): void {
+		$id = self::field_id( $name, $rule );
+		echo '<tr><th scope="row"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label></th><td><select id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '">';
+		foreach ( $choices as $mode => $mode_label ) {
+			echo '<option value="' . esc_attr( $mode ) . '" ' . selected( $value, $mode, false ) . '>' . esc_html( $mode_label ) . '</option>';
+		}
+		echo '</select></td></tr>';
 	}
 
 	/**
@@ -624,7 +671,7 @@ final class AdminScreens {
 		echo '<td>' . esc_html( (string) $decision->post_id ) . '<br />' . esc_html( $decision->post_type . ' ' . $decision->post_status ) . '<br />' . esc_html( $decision->trigger ) . '</td>';
 		echo '<td>' . esc_html( null === $decision->rule_id ? '' : (string) $decision->rule_id ) . '<br />' . esc_html( null === $decision->rule_public_id ? '' : $decision->rule_public_id ) . '<br />' . esc_html( null === $decision->rule_version ? '' : (string) $decision->rule_version ) . '</td>';
 		echo '<td>' . esc_html( $decision->scope_type ) . '<br />' . esc_html( null === $decision->scope_public_id ? '' : $decision->scope_public_id ) . '</td>';
-		echo '<td><pre>' . esc_html( self::pretty_json( $decision->reasons ) ) . '</pre></td>';
+		echo '<td><pre>' . esc_html( self::pretty_json( current_user_can( 'edit_post', $decision->post_id ) ? $decision->reasons : array( array( 'code' => 'post_facts_redacted' ) ) ) ) . '</pre></td>';
 		echo '<td><pre>' . esc_html( implode( "\n\n", $delivery_text ) ) . '</pre></td>';
 		echo '</tr>';
 	}
@@ -682,7 +729,7 @@ final class AdminScreens {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Error text is sanitized for display only.
 		if ( isset( $_GET['pressqueue_detail'] ) ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Error text is sanitized for display only.
-			echo ' ' . esc_html( sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) );
+			echo ' ' . esc_html( SafeOperatorError::notice_detail( sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) ) );
 		}
 
 		echo '</p></div>';
@@ -701,12 +748,12 @@ final class AdminScreens {
 		$input        = array(
 			'condition_tree'         => self::post_json_object( 'condition_tree_json' ),
 			'custom_field_allowlist' => self::post_json_list( 'custom_field_allowlist_json' ),
-			'destination_set'        => self::post_json_object( 'destination_set_json' ),
+			'destination_set'        => self::destination_input_from_request(),
 			'effect'                 => self::post_text( 'effect', 'include' ),
-			'media_policy'           => self::post_json_object( 'media_policy_json' ),
+			'media_policy'           => self::mode_input_from_request( 'media_policy' ),
 			'name'                   => self::post_text( 'name' ),
 			'priority'               => self::post_int( 'priority', 100 ),
-			'schedule_policy'        => self::post_json_object( 'schedule_policy_json' ),
+			'schedule_policy'        => self::mode_input_from_request( 'schedule_policy' ),
 			'template_set'           => $template_set,
 			'triggers'               => $triggers,
 		);
@@ -717,6 +764,59 @@ final class AdminScreens {
 		}
 
 		return $input;
+	}
+
+	/**
+	 * Read checked channels or a legacy JSON form submission.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private static function destination_input_from_request(): array {
+		if ( '1' !== self::post_text( 'destination_controls_present' ) ) {
+			return self::post_json_object( 'destination_set_json' );
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Caller checks the nonce; values are type-checked and sanitized below.
+		$ids = isset( $_POST['destination_channel_ids'] ) ? wp_unslash( $_POST['destination_channel_ids'] ) : array();
+		if ( ! is_array( $ids ) || ! array_is_list( $ids ) ) {
+			throw new ValidationException( 'Destination choices must be a list.' );
+		}
+		if ( 'exclude' === self::post_text( 'effect' ) ) {
+			return array(
+				'schema_version' => 1,
+				'scope'          => 'all',
+			);
+		}
+		$destinations = array();
+		foreach ( $ids as $id ) {
+			if ( ! is_string( $id ) ) {
+				throw new ValidationException( 'Destination entries need a channel public ID.' );
+			}
+			$destinations[] = array( 'channel_public_id' => sanitize_text_field( $id ) );
+		}
+
+		return array(
+			'schema_version' => 1,
+			'destinations'   => $destinations,
+		);
+	}
+
+	/**
+	 * Read a mode selection or a legacy JSON form submission.
+	 *
+	 * @param string $name Policy name.
+	 * @return array<string,mixed>
+	 */
+	private static function mode_input_from_request( string $name ): array {
+		$mode = self::post_text( $name . '_mode' );
+		if ( '' === $mode ) {
+			return self::post_json_object( $name . '_json' );
+		}
+
+		return array(
+			'schema_version' => 1,
+			'mode'           => $mode,
+		);
 	}
 
 	/**
@@ -755,11 +855,7 @@ final class AdminScreens {
 			return false;
 		}
 
-		if ( 'publish' === $post->post_status ) {
-			return true;
-		}
-
-		return current_user_can( 'read_post', $post_id );
+		return current_user_can( 'edit_post', $post_id );
 	}
 
 	/**

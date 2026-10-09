@@ -1,7 +1,7 @@
 ( function ( wp ) {
 	'use strict';
 
-	if ( ! wp || ! wp.plugins || ! wp.editPost || ! wp.element || ! wp.components || ! wp.apiFetch || ! wp.data || ! wp.i18n ) {
+	if ( ! wp || ! wp.plugins || ! wp.editor || ! wp.element || ! wp.components || ! wp.apiFetch || ! wp.data || ! wp.i18n ) {
 		return;
 	}
 
@@ -9,8 +9,9 @@
 	var createElement = wp.element.createElement;
 	var useEffect = wp.element.useEffect;
 	var useState = wp.element.useState;
+	var useRef = wp.element.useRef;
 	var useSelect = wp.data.useSelect;
-	var Panel = wp.editPost.PluginDocumentSettingPanel;
+	var Panel = wp.editor.PluginDocumentSettingPanel;
 	var Button = wp.components.Button;
 	var CheckboxControl = wp.components.CheckboxControl;
 	var Notice = wp.components.Notice;
@@ -222,7 +223,9 @@
 				title: __( 'PressQueue', 'pressqueue' )
 			},
 			state.notice ? createElement( Notice, { status: state.noticeStatus, isDismissible: false }, state.notice ) : null,
+			state.dirty ? createElement( Notice, { status: 'warning', isDismissible: false }, __( 'Save PressQueue controls before publishing or updating this post.', 'pressqueue' ) ) : null,
 			createElement( SelectControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Policy', 'pressqueue' ),
 				value: controls.policy,
 				options: [
@@ -233,6 +236,7 @@
 				onChange: setPolicy
 			} ),
 			createElement( SelectControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Destinations', 'pressqueue' ),
 				value: controls.channels.mode,
 				options: [
@@ -243,6 +247,7 @@
 			} ),
 			controls.channels.mode === 'override' ? channels.map( function ( channel ) {
 				return createElement( CheckboxControl, {
+				disabled: state.busy || ! state.loaded,
 					key: channel.public_id,
 					label: channel.label,
 					checked: selected.indexOf( channel.public_id ) !== -1,
@@ -252,6 +257,7 @@
 				} );
 			} ) : null,
 			createElement( SelectControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Message', 'pressqueue' ),
 				value: message.mode,
 				options: [
@@ -261,11 +267,13 @@
 				onChange: setMessageMode
 			} ),
 			message.mode === 'override' ? createElement( TextareaControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Message text', 'pressqueue' ),
 				value: message.value || '',
 				onChange: setMessageValue
 			} ) : null,
 			createElement( SelectControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Schedule', 'pressqueue' ),
 				value: schedule.mode,
 				options: [
@@ -273,11 +281,13 @@
 					{ label: __( 'Immediate', 'pressqueue' ), value: 'immediate' },
 					{ label: __( 'Queue next', 'pressqueue' ), value: 'queue_next' },
 					{ label: __( 'Queue end', 'pressqueue' ), value: 'queue_end' },
+					{ label: __( 'Save as Buffer draft', 'pressqueue' ), value: 'draft' },
 					{ label: __( 'Explicit time', 'pressqueue' ), value: 'explicit_time' }
 				],
 				onChange: setScheduleMode
 			} ),
 			schedule.mode === 'explicit_time' ? createElement( TextControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Local date', 'pressqueue' ),
 				type: 'date',
 				value: schedule.local_date || '',
@@ -286,6 +296,7 @@
 				}
 			} ) : null,
 			schedule.mode === 'explicit_time' ? createElement( TextControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Local time', 'pressqueue' ),
 				type: 'time',
 				value: schedule.local_time || '',
@@ -294,6 +305,7 @@
 				}
 			} ) : null,
 			schedule.mode === 'explicit_time' ? createElement( TextControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Timezone', 'pressqueue' ),
 				value: schedule.timezone || '',
 				onChange: function ( value ) {
@@ -301,6 +313,7 @@
 				}
 			} ) : null,
 			schedule.mode === 'explicit_time' ? createElement( TextControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'UTC offset', 'pressqueue' ),
 				value: schedule.utc_offset || '',
 				onChange: function ( value ) {
@@ -308,24 +321,27 @@
 				}
 			} ) : null,
 			createElement( SelectControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Media', 'pressqueue' ),
 				value: media.mode,
 				options: [
 					{ label: __( 'Inherit', 'pressqueue' ), value: 'inherit' },
 					{ label: __( 'None', 'pressqueue' ), value: 'none' },
 					{ label: __( 'Featured image', 'pressqueue' ), value: 'featured_image' },
+					{ label: __( 'Featured image if available', 'pressqueue' ), value: 'featured_image_optional' },
 					{ label: __( 'Post media', 'pressqueue' ), value: 'post_media' }
 				],
 				onChange: setMediaMode
 			} ),
 			media.mode === 'post_media' ? createElement( TextControl, {
+				disabled: state.busy || ! state.loaded,
 				label: __( 'Attachment IDs', 'pressqueue' ),
 				value: media.post_media && media.post_media.attachment_ids ? media.post_media.attachment_ids.join( ',' ) : '',
 				onChange: setMediaIds
 			} ) : null,
 			state.preview ? createElement( 'pre', {}, JSON.stringify( state.preview, null, 2 ) ) : null,
-			createElement( Button, { variant: 'secondary', onClick: preview, isBusy: state.busy }, __( 'Preview', 'pressqueue' ) ),
-			createElement( Button, { variant: 'primary', onClick: save, isBusy: state.busy }, __( 'Save Controls', 'pressqueue' ) )
+			createElement( Button, { variant: 'secondary', onClick: preview, isBusy: state.busy, disabled: state.busy || ! state.loaded }, __( 'Preview', 'pressqueue' ) ),
+			createElement( Button, { variant: 'primary', onClick: save, isBusy: state.busy, disabled: state.busy || ! state.loaded }, __( 'Save Controls', 'pressqueue' ) )
 		);
 	}
 
@@ -333,6 +349,8 @@
 		var defaultState = {
 			controlBundleHash: '',
 			controls: inheritedBundle(),
+			savedControls: '',
+			loaded: false,
 			effectiveFacts: {},
 			notice: '',
 			noticeStatus: 'info',
@@ -345,34 +363,100 @@
 		var busyPair = useState( false );
 		var busy = busyPair[ 0 ];
 		var setBusy = busyPair[ 1 ];
+		var generation = useRef( 0 );
+		var inFlight = useRef( false );
+		var dirty = data.loaded && JSON.stringify( data.controls ) !== data.savedControls;
 
 		useEffect( function () {
+			var requestGeneration = ++generation.current;
+			inFlight.current = false;
+			setData( defaultState );
 			if ( ! postId ) {
+				setBusy( false );
 				return;
 			}
+			inFlight.current = true;
 			setBusy( true );
 			wp.apiFetch( { path: '/pressqueue/v1/posts/' + postId + '/controls' } )
 				.then( function ( response ) {
-					setData( {
+					if ( requestGeneration !== generation.current ) {
+						return;
+					}
+					var controls = normalizeControls( response.controls );
+					setData( Object.assign( {}, defaultState, {
 						controlBundleHash: response.control_bundle_hash,
-						controls: normalizeControls( response.controls ),
-						effectiveFacts: response.effective_facts || {},
-						notice: '',
-						noticeStatus: 'info',
-						preview: null,
-						unavailable: false
-					} );
+						controls: controls,
+						savedControls: JSON.stringify( controls ),
+						loaded: true,
+						effectiveFacts: response.effective_facts || {}
+					} ) );
 				} )
 				.catch( function () {
-					setData( Object.assign( {}, defaultState, { unavailable: true } ) );
+					if ( requestGeneration === generation.current ) {
+						setData( Object.assign( {}, defaultState, { unavailable: true } ) );
+					}
 				} )
 				.finally( function () {
-					setBusy( false );
+					finishRequest( requestGeneration );
 				} );
+			return function () {
+				generation.current++;
+			};
 		}, [ postId ] );
+
+		useEffect( function () {
+			if ( ! dirty ) {
+				return;
+			}
+			var editor = wp.data.dispatch( 'core/editor' );
+			editor.lockPostSaving( 'pressqueue-controls' );
+			return function () {
+				editor.unlockPostSaving( 'pressqueue-controls' );
+			};
+		}, [ dirty, postId ] );
+
+		function finishRequest( requestGeneration ) {
+			if ( requestGeneration === generation.current ) {
+				inFlight.current = false;
+				setBusy( false );
+			}
+		}
+
+		function request( path, method, body, onSuccess, failureMessage ) {
+			if ( inFlight.current || ! data.loaded || ! postId ) {
+				return;
+			}
+			var requestGeneration = generation.current;
+			inFlight.current = true;
+			setBusy( true );
+			wp.apiFetch( { path: path, method: method, data: body } )
+				.then( function ( response ) {
+					if ( requestGeneration === generation.current ) {
+						setData( function ( current ) {
+							return Object.assign( {}, current, onSuccess( response ), { noticeStatus: 'success' } );
+						} );
+					}
+				} )
+				.catch( function ( error ) {
+					if ( requestGeneration === generation.current ) {
+						setData( function ( current ) {
+							return Object.assign( {}, current, {
+								notice: error && error.message ? error.message : failureMessage,
+								noticeStatus: 'error',
+								preview: null
+							} );
+						} );
+					}
+				} )
+				.finally( function () {
+					finishRequest( requestGeneration );
+				} );
+		}
 
 		return {
 			busy: busy,
+			loaded: data.loaded,
+			dirty: dirty,
 			controlBundleHash: data.controlBundleHash,
 			controls: data.controls,
 			effectiveFacts: data.effectiveFacts,
@@ -381,64 +465,39 @@
 			preview: data.preview,
 			unavailable: data.unavailable,
 			setControls: function ( controls ) {
-				setData( Object.assign( {}, data, { controls: controls } ) );
+				if ( inFlight.current || ! data.loaded ) {
+					return;
+				}
+				setData( function ( current ) {
+					return Object.assign( {}, current, { controls: controls, preview: null, notice: '' } );
+				} );
 			},
 			saveControls: function () {
-				setBusy( true );
-				wp.apiFetch( {
-					path: '/pressqueue/v1/posts/' + postId + '/controls',
-					method: 'PUT',
-					data: {
-						base_control_bundle_hash: data.controlBundleHash,
-						controls: data.controls
-					}
-				} )
-					.then( function ( response ) {
-						setData( Object.assign( {}, data, {
-							controlBundleHash: response.control_bundle_hash,
-							controls: normalizeControls( response.controls ),
-							effectiveFacts: response.effective_facts || {},
-							notice: __( 'Controls saved.', 'pressqueue' ),
-							noticeStatus: 'success'
-						} ) );
-					} )
-					.catch( function ( error ) {
-						setData( Object.assign( {}, data, {
-							notice: error && error.message ? error.message : __( 'Controls could not be saved.', 'pressqueue' ),
-							noticeStatus: 'error'
-						} ) );
-					} )
-					.finally( function () {
-						setBusy( false );
-					} );
+				request( '/pressqueue/v1/posts/' + postId + '/controls', 'PUT', {
+					base_control_bundle_hash: data.controlBundleHash,
+					controls: data.controls
+				}, function ( response ) {
+					var controls = normalizeControls( response.controls );
+					return {
+						controlBundleHash: response.control_bundle_hash,
+						controls: controls,
+						savedControls: JSON.stringify( controls ),
+						effectiveFacts: response.effective_facts || {},
+						preview: null,
+						notice: __( 'Controls saved.', 'pressqueue' )
+					};
+				}, __( 'Controls could not be saved.', 'pressqueue' ) );
 			},
 			previewControls: function ( snapshot ) {
-				setBusy( true );
-				wp.apiFetch( {
-					path: '/pressqueue/v1/posts/' + postId + '/preview',
-					method: 'POST',
-					data: {
-						controls: data.controls,
-						editor_snapshot: snapshot
-					}
-				} )
-					.then( function ( response ) {
-						setData( Object.assign( {}, data, {
-							notice: __( 'Preview ready.', 'pressqueue' ),
-							noticeStatus: 'success',
-							preview: response
-						} ) );
-					} )
-					.catch( function ( error ) {
-						setData( Object.assign( {}, data, {
-							notice: error && error.message ? error.message : __( 'Preview could not be created.', 'pressqueue' ),
-							noticeStatus: 'error',
-							preview: null
-						} ) );
-					} )
-					.finally( function () {
-						setBusy( false );
-					} );
+				request( '/pressqueue/v1/posts/' + postId + '/preview', 'POST', {
+					controls: data.controls,
+					editor_snapshot: snapshot
+				}, function ( response ) {
+					return {
+						notice: __( 'Preview ready.', 'pressqueue' ),
+						preview: response
+					};
+				}, __( 'Preview could not be created.', 'pressqueue' ) );
 			}
 		};
 	}

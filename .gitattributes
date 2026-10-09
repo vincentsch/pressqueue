@@ -1,0 +1,11 @@
+* text=auto
+*.php text eol=lf
+*.js text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.sh text eol=lf
+/.vroni export-ignore
+/.env* export-ignore
+/build export-ignore
+/coverage export-ignore
+/.phpunit.result.cache export-ignore

@@ -67,6 +67,23 @@ final class PostControlMetadataTest extends TestCase {
 		self::assertSame( 'include', PostControlMetadata::read_for_post( 42 )['policy'] );
 	}
 
+	public function test_unprotected_legacy_include_cannot_authorize_delivery(): void {
+		update_post_meta( 43, PostControlMetadata::LEGACY_META_KEY, 'include' );
+		self::assertSame( 'inherit', PostControlMetadata::read_for_post( 43 )['policy'] );
+	}
+
+	public function test_message_quotes_and_backslashes_survive_wordpress_meta_storage(): void {
+		$current           = PostControlMetadata::read_for_post( 42 );
+		$bundle            = $current;
+		$bundle['message'] = array(
+			'mode'  => 'override',
+			'value' => 'Say "hello" at C:\\tools',
+		);
+		$saved             = PostControlMetadata::replace_for_post( 42, $bundle, PostControlMetadata::bundle_hash( $current ) );
+		self::assertSame( $bundle['message'], $saved['message'] );
+		self::assertSame( $bundle['message'], PostControlMetadata::read_for_post( 42 )['message'] );
+	}
+
 	public function test_override_channel_ids_are_sorted_and_empty_override_is_valid(): void {
 		$bundle = PostControlMetadata::normalize_bundle(
 			array(

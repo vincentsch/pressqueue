@@ -27,10 +27,10 @@ final class StorageEnums {
 	public const CONNECTION_STATUSES     = array( 'disconnected', 'unverified', 'verified', 'credential_invalid' );
 	public const CHANNEL_AVAILABILITIES  = array( 'unverified', 'available', 'missing', 'unsupported' );
 	public const RULE_TRIGGERS           = array( 'first_publish', 'update', 'scheduled_publication', 'bulk', 'repost' );
-	public const SCHEDULE_SLOTS          = array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' );
-	public const RULE_SCHEDULE_SLOTS     = array( 'immediate', 'queue_next', 'queue_end' );
+	public const SCHEDULE_SLOTS          = array( 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' );
+	public const RULE_SCHEDULE_SLOTS     = array( 'immediate', 'queue_next', 'queue_end', 'draft' );
 	public const SCHEDULE_POLICIES       = self::SCHEDULE_SLOTS;
-	public const MEDIA_MODES             = array( 'none', 'featured_image', 'post_media' );
+	public const MEDIA_MODES             = array( 'none', 'featured_image', 'featured_image_optional', 'post_media' );
 	public const SCOPE_TYPES             = array( 'global', 'channel' );
 	public const BATCH_TYPES             = array( 'bulk', 'repost' );
 	public const BATCH_STATUSES          = array( 'previewed', 'confirming', 'queueing', 'cancelled', 'handed_off', 'failed', 'expired' );

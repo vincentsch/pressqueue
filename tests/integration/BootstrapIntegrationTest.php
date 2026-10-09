@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Tests\Integration;
 
-use WP_UnitTestCase;
+use PressQueue\Tests\Support\PressQueueIntegrationTestCase as WP_UnitTestCase;
 
 /**
  * @coversNothing

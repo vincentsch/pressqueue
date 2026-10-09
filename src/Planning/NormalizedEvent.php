@@ -50,6 +50,7 @@ final class NormalizedEvent {
 	 * @var array<string,mixed>
 	 */
 	public array $template_values;
+	public bool $template_values_are_plain_text = false;
 	/**
 	 * Canonical PressQueue post control bundle.
 	 *
@@ -58,6 +59,7 @@ final class NormalizedEvent {
 	public array $control_bundle;
 	public string $control_bundle_hash;
 	public string $trigger_fingerprint;
+	public string $legacy_trigger_fingerprint;
 	public ?string $previous_trigger_fingerprint;
 	public ?string $previous_runtime_fingerprint;
 	public string $legacy_runtime_fingerprint;
@@ -160,6 +162,7 @@ final class NormalizedEvent {
 		$this->control_bundle_hash          = PostControlMetadata::bundle_hash( $control_bundle );
 		$this->previous_trigger_fingerprint = $previous_trigger_fingerprint;
 		$this->previous_runtime_fingerprint = $previous_runtime_fingerprint;
+		$this->legacy_trigger_fingerprint   = $this->calculate_legacy_trigger_fingerprint( $legacy_runtime_template_values ?? $this->template_values );
 		$this->trigger_fingerprint          = $trigger_fingerprint ?? $this->calculate_trigger_fingerprint();
 		$this->revision_fingerprint         = $revision_fingerprint ?? $this->calculate_revision_fingerprint();
 		$this->legacy_runtime_fingerprint   = $legacy_runtime_fingerprint ?? $this->calculate_legacy_runtime_fingerprint( $legacy_runtime_metadata ?? $this->metadata, $legacy_runtime_template_values ?? $this->template_values );
@@ -223,11 +226,48 @@ final class NormalizedEvent {
 	}
 
 	/**
-	 * Calculate the trigger fingerprint from WordPress facts that create updates.
+	 * Hash post facts without display-only author, term, timezone or domain changes.
 	 *
 	 * @return string
 	 */
 	private function calculate_trigger_fingerprint(): string {
+		$terms = array_map(
+			static fn ( array $term ): array => array_intersect_key( $term, array_flip( array( 'taxonomy', 'term_id', 'ancestor_ids' ) ) ),
+			$this->terms
+		);
+		usort(
+			$terms,
+			static function ( array $left, array $right ): int {
+				$taxonomy = strcmp( (string) $left['taxonomy'], (string) $right['taxonomy'] );
+				return 0 !== $taxonomy ? $taxonomy : ( (int) $left['term_id'] <=> (int) $right['term_id'] );
+			}
+		);
+		return CanonicalJson::hash(
+			'trigger_fingerprint_v2',
+			array(
+				'author_id'        => $this->author_id,
+				'canonical_path'   => wp_parse_url( $this->canonical_url, PHP_URL_PATH ),
+				'metadata'         => $this->non_control_metadata(),
+				'post_id'          => $this->post_id,
+				'post_status'      => $this->post_status,
+				'post_type'        => $this->post_type,
+				'published_at_gmt' => $this->published_at_gmt,
+				'content'          => array_intersect_key( $this->template_values, array_flip( array( 'title', 'content', 'excerpt' ) ) ),
+				'terms'            => $terms,
+			)
+		);
+	}
+
+	/**
+	 * Calculate the trigger fingerprint from WordPress facts that create updates.
+	 *
+	 * @param array<string,mixed> $template_values Legacy template facts.
+	 * @return string
+	 */
+	private function calculate_legacy_trigger_fingerprint( array $template_values ): string {
+		if ( isset( $template_values['metadata'] ) ) {
+			$template_values['metadata'] = $this->non_control_metadata();
+		}
 		return CanonicalJson::hash(
 			'trigger_fingerprint',
 			array(
@@ -237,7 +277,7 @@ final class NormalizedEvent {
 				'post_id'         => $this->post_id,
 				'post_status'     => $this->post_status,
 				'post_type'       => $this->post_type,
-				'template_values' => $this->trigger_template_values(),
+				'template_values' => $template_values,
 				'terms'           => $this->terms,
 			)
 		);
@@ -310,17 +350,13 @@ final class NormalizedEvent {
 	}
 
 	/**
-	 * Return template values relevant to WordPress update detection.
+	 * Whether automatic publication should skip an already old public post.
 	 *
-	 * @return array<string,mixed>
+	 * @return bool
 	 */
-	private function trigger_template_values(): array {
-		$values = $this->template_values;
-
-		if ( isset( $values['metadata'] ) ) {
-			$values['metadata'] = $this->non_control_metadata();
-		}
-
-		return $values;
+	public function is_backdated_automatic_publication(): bool {
+		return 'publish' === $this->post_status
+			&& in_array( $this->trigger, array( 'first_publish', 'scheduled_publication' ), true )
+			&& strtotime( $this->published_at_gmt . ' UTC' ) < time() - DAY_IN_SECONDS;
 	}
 }

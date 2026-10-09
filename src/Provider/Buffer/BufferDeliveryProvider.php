@@ -111,7 +111,7 @@ final class BufferDeliveryProvider implements DeliveryProvider {
 		}
 
 		if ( $status_code >= 500 ) {
-			return $this->failure( $request, 'retryable_failure', 'automatic_allowed', 'unexpected_provider_failure', $status_code, null, true, true );
+			return $this->ambiguous_or_retryable( $request, 'unexpected_provider_failure', true, true );
 		}
 
 		if ( $status_code < 200 || $status_code >= 300 ) {
@@ -135,6 +135,24 @@ final class BufferDeliveryProvider implements DeliveryProvider {
 
 		$success = $this->success_payload( $decoded );
 		if ( null !== $success ) {
+			if ( 'draft' === $request->schedule_slot && ( 'draft' !== $success['receipt']['status'] || null !== $success['receipt']['due_at'] ) ) {
+				return ProviderDeliveryResult::failure(
+					$request,
+					'ambiguous',
+					'reconcile_first',
+					'draft_not_confirmed',
+					array(
+						'classification' => 'draft_not_confirmed',
+						'remote_id'      => $success['remote_id'],
+						'status'         => $success['receipt']['status'],
+						'due_at'         => $success['receipt']['due_at'],
+						'schema_version' => 1,
+					),
+					null,
+					true,
+					true
+				);
+			}
 			$warnings                       = $this->warnings_from_errors( $decoded['errors'] ?? null );
 			$success['receipt']['warnings'] = $warnings;
 
@@ -144,6 +162,11 @@ final class BufferDeliveryProvider implements DeliveryProvider {
 				new ProviderReceipt( $success['receipt'] ),
 				$warnings
 			);
+		}
+
+		$mutation = isset( $decoded['data']['createPost'] ) && is_array( $decoded['data']['createPost'] ) ? $decoded['data']['createPost'] : null;
+		if ( 'PostActionSuccess' === ( $mutation['__typename'] ?? null ) || $this->has_mutation_execution_error( $decoded['errors'] ?? null ) ) {
+			return $this->ambiguous_or_retryable( $request, 'incomplete_mutation_receipt', true, true );
 		}
 
 		$error_code = $this->top_level_error_code( $decoded['errors'] ?? null );
@@ -241,7 +264,8 @@ final class BufferDeliveryProvider implements DeliveryProvider {
 	 * @return bool
 	 */
 	private function may_have_reached_provider( $response ): bool {
-		return is_array( $response ) && ! empty( $response['pressqueue_request_may_have_reached_provider'] );
+		return $this->response_code( $response ) > 0
+			|| ( is_array( $response ) && ! empty( $response['pressqueue_request_may_have_reached_provider'] ) );
 	}
 
 	/**
@@ -331,7 +355,7 @@ final class BufferDeliveryProvider implements DeliveryProvider {
 		}
 
 		if ( 'UNEXPECTED' === $code ) {
-			return $this->failure( $request, 'retryable_failure', 'automatic_allowed', 'unexpected_provider_failure', null, null, true, true );
+			return $this->ambiguous_or_retryable( $request, 'unexpected_provider_failure', true, true );
 		}
 
 		return $this->ambiguous_or_retryable( $request, 'unknown_graphql_error', true, true );
@@ -363,7 +387,7 @@ final class BufferDeliveryProvider implements DeliveryProvider {
 		}
 
 		if ( in_array( $typename, array( 'UnexpectedError', 'RestProxyError' ), true ) ) {
-			return $this->failure( $request, 'retryable_failure', 'automatic_allowed', 'unexpected_provider_failure', null, null, true, true );
+			return $this->ambiguous_or_retryable( $request, 'unexpected_provider_failure', true, true );
 		}
 
 		if ( 'MutationError' === $typename ) {
@@ -389,6 +413,24 @@ final class BufferDeliveryProvider implements DeliveryProvider {
 		return is_array( $first ) && isset( $first['extensions']['code'] ) && is_string( $first['extensions']['code'] )
 			? $first['extensions']['code']
 			: null;
+	}
+
+	/**
+	 * A field error means execution started, so a missing receipt cannot prove rejection.
+	 *
+	 * @param mixed $errors GraphQL errors.
+	 * @return bool
+	 */
+	private function has_mutation_execution_error( $errors ): bool {
+		if ( ! is_array( $errors ) ) {
+			return false;
+		}
+		foreach ( $errors as $error ) {
+			if ( is_array( $error ) && 'createPost' === ( $error['path'][0] ?? null ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -447,7 +489,10 @@ final class BufferDeliveryProvider implements DeliveryProvider {
 	 */
 	private function response_headers( $response ): array {
 		$headers = array();
-		$raw     = is_array( $response ) && isset( $response['headers'] ) && is_array( $response['headers'] ) ? $response['headers'] : array();
+		$raw     = is_array( $response ) ? ( $response['headers'] ?? array() ) : array();
+		if ( ! is_array( $raw ) && ! $raw instanceof \Traversable ) {
+			return $headers;
+		}
 
 		foreach ( $raw as $name => $value ) {
 			if ( is_scalar( $value ) ) {

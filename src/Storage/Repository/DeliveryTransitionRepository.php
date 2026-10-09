@@ -394,7 +394,7 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 		return $this->transactional_delivery_update(
 			$delivery_public_id,
 			static function ( object $row ) use ( $owner, $automatic ): ?array {
-				if ( 'leased' !== (string) $row->state || (string) $row->lease_owner !== $owner ) {
+				if ( 'leased' !== (string) $row->state || (string) $row->lease_owner !== $owner || null === $row->lease_expires_at || (string) $row->lease_expires_at <= StorageValidator::now() ) {
 					return null;
 				}
 
@@ -887,7 +887,7 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 		return $this->transactional_delivery_update(
 			$delivery_public_id,
 			static function ( object $row ) use ( $actor_user_id, $note ): ?array {
-				if ( 'ambiguous' !== (string) $row->state ) {
+				if ( 'ambiguous' !== (string) $row->state || 'draft_not_confirmed' === (string) $row->error_class ) {
 					return null;
 				}
 
@@ -1071,12 +1071,21 @@ final class DeliveryTransitionRepository extends AbstractRepository {
 
 		return $this->transactional_delivery_update(
 			$delivery_public_id,
-			static function ( object $row ) use ( $from_states, $to_state, $values ): ?array {
+			function ( object $row ) use ( $from_states, $to_state, $values, $actor_type ): ?array {
 				if ( ! in_array( (string) $row->state, $from_states, true ) ) {
 					return null;
 				}
 
 				$now = StorageValidator::now();
+				if ( 'recovery' === $actor_type ) {
+					if ( null === $row->lease_expires_at || (string) $row->lease_expires_at > $now ) {
+						return null;
+					}
+					$started = $this->events->has_current_lease_submission( (string) $row->public_id );
+					if ( ( 'ambiguous' === $to_state ) !== $started ) {
+						return null;
+					}
+				}
 
 				return array_merge(
 					$values,

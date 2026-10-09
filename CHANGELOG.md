@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.0 release candidate
+
+- Added Buffer draft delivery and optional featured images. A Buffer draft is
+  a remote draft; local dry run still makes no delivery request.
+- Replaced rule destination, schedule, and media JSON fields with checkboxes
+  and dropdowns. Advanced conditions and template data remain editable.
+- Block publishing and updating from the block editor while PressQueue controls
+  have unsaved changes. Prevent duplicate saves and ignore stale API responses.
+- Stop processing when database reads fail. Suppress raw SQL diagnostics that
+  could expose messages or encrypted credential records in WordPress logs.
+- Recheck current post policy, enabled rules, and safety switches before delivery.
+  Hold uncertain Buffer results for review and preserve confirmed remote IDs.
+- Fixed batch scheduling, lease recovery, scheduled publication, and duplicate
+  checks. Automatic publication recognizes WordPress imports and skips backdated archives.
+- Fixed text normalization and typed custom fields. Display-only changes do not
+  create update deliveries. Explicit times need at least 15 minutes of lead time.
+- Keep accepted delivery identities after retention removes message details.
+  Repair database drift on administrator visits without slowing public page loads.
+- Remove delegated role capabilities on uninstall and, when deletion is enabled,
+  remove post controls and runtime fingerprints across all sites.
+- Updated compatibility checks for WordPress 6.8.11 and 7.1.3 and PHP 8.1 to 8.4.
+  Fixed local matrix networking, PHP 8.0 checks, and package Plugin Check handling.
+- Added setup, contribution, and security reporting guides; clarified privacy,
+  remote requests, draft behavior, and delivery receipts.
+
 ## 2026-08-25
 
 ### Editorial controls and preview planning
@@ -132,3 +157,14 @@
 - No OAuth, media delivery, bulk publishing, evergreen reposting, retention,
   export, compaction, uninstall deletion, public release, live provider
   validation, or live social publishing proof was added.
+
+### Release preparation
+
+- Recheck current post visibility, rules, exclusions, and global delivery controls before sending.
+- Fix batch action scheduling, expired lease recovery, and MariaDB schema validation.
+- Keep accepted delivery identities during retention while clearing copied content.
+- Stop automatic capture during WordPress imports and reject password-protected posts.
+- Support featured images in background work and keep image probes outside batch transactions.
+- Prevent unsaved editor controls and overlapping saves from changing publication policy.
+- Handle incomplete Buffer responses conservatively and preserve returned remote IDs for review.
+- Use plain setup documentation, channel checkboxes, and packaged translation strings.

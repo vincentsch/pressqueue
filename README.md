@@ -1,128 +1,107 @@
 # PressQueue
 
-PressQueue is an open-source WordPress plugin for conditionally publishing and
-scheduling WordPress content through social publishing providers.
+PressQueue sends WordPress posts to Buffer using rules you set. You can choose
+which posts qualify, preview the message, and save it as a Buffer draft or
+send it to a social channel. The delivery log records what happened.
 
-Buffer is the first provider. The intended product combines:
+This repository is private. The local release candidate is `0.1.0`.
 
-- account and channel selection;
-- reusable status templates;
-- conditions based on post type, taxonomy, author, and post metadata;
-- per-post inclusion, exclusion, and scheduling controls;
-- media handling;
-- idempotent background delivery;
-- retryable failures and an auditable delivery log;
-- bounded manual bulk and selected repost batches;
-- WP-CLI controls.
+## What it does
 
-## Status
+- Match posts by type, author, category, tag, or allowed custom fields.
+- Reuse message templates and set different messages for different services.
+- Exclude a post, restrict its channels, or change its message in the editor.
+- Save Buffer drafts, publish immediately, use the Buffer queue, or set a time.
+- Preview and confirm batches of existing posts or selected reposts.
 
-PressQueue has an installable guarded development build with local storage,
-capability boundaries, dry-run and kill-switch settings, JSON-based rules,
-role-protected editor controls, a condition builder, transport-neutral
-previews, immutable decision records, and local delivery records.
-The current private development version is `0.1.0-dev`.
+Deliveries run in the background through bundled Action Scheduler. Repeated
+WordPress hooks reuse the same local delivery identity. If a response is
+uncertain, PressQueue stops and asks an operator to check Buffer before retrying.
+An accepted delivery means Buffer accepted the request. It does not prove that
+the social network has published it.
 
-The current build also includes encrypted Buffer personal API-key storage,
-fakeable Buffer organization and channel discovery, disabled-by-default channel
-enablement, an Action Scheduler backed delivery outbox, immutable Buffer
-submission with text, scheduling, and image payload support, bounded retry
-handling, a redacted delivery log, local cancel and resume controls, manual
-retry gates, and ambiguity reconciliation.
+## Requirements
 
-Editors can preview inherited policy, restrictive channel overrides, message
-overrides, schedule choices, and image media before durable work is created.
-Administrators can manage reusable template snapshots and run bounded manual
-bulk or selected repost batches that hand off confirmed local work to the same
-delivery queue.
+WordPress 6.8 or newer, PHP 8.1 or newer, and MySQL 5.7.8 or MariaDB 10.2.3 or newer, with InnoDB support.
+Buffer connections need a personal Buffer API key and PHP's Sodium extension.
+Image URLs must be public HTTPS URLs. OAuth, videos, network activation, and
+automatic recurring reposts are not supported.
 
-The current build includes a fail-closed runtime latch, privacy settings,
-administrator full-site export, WordPress personal data exporter and eraser
-callbacks, disabled-by-default retention, and preserve-by-default uninstall
-cleanup. Rendered social text, media URLs, and provider credentials are
-excluded from exports by default.
+The Buffer adapter supports Bluesky, Facebook, LinkedIn, Mastodon, Threads,
+and X. It uses conservative limits of 280 characters including the post URL,
+one image, 5 MB per image, and 4096 pixels per side. A lower Mastodon server
+limit takes precedence. Other channels stay unavailable for delivery.
 
-Default validation uses HTTP fakes and local test doubles. No live Buffer
-canary, public release, WordPress.org publication, OAuth, standing evergreen
-automation, or live social publishing proof is part of the current build.
+## Installation and setup
 
-The project will begin privately and be made public when its first release is
-tested, documented, license-clean, and useful.
+A packaged plugin includes its dependencies. Upload the ZIP through
+**Plugins > Add New > Upload Plugin** and activate it. When working from source,
+run `composer install` before activation.
 
-## Product principles
+New connections, channels, and rules start disabled. Dry run starts enabled.
+See [Getting started](docs/getting-started.md) for setup instructions, a first
+rule, draft delivery, and exclusions.
 
-- Publishing must be explicit and observable.
-- Exclusion rules fail closed.
-- A WordPress save or REST API call must never create duplicate social posts.
-- Preview and dry-run behavior come before live delivery.
-- Provider credentials stay server-side and are never logged.
-- The plugin remains useful without a hosted service.
-- Provider-specific behavior stays behind a small adapter boundary.
+The block editor has a separate **Save Controls** button in its PressQueue
+panel. Save those controls before publishing the WordPress post. The Classic
+Editor saves the controls with the post.
 
-## Clean-room boundary
+Publishing and updating are blocked while the panel has unsaved control changes.
+If a control save fails, fix the reported problem and save again.
 
-PressQueue is an independent implementation inspired by the general workflow
-of WordPress social publishing tools. It is not affiliated with Buffer,
-WordPress.org, or any third-party social publishing plugin. No third-party
-proprietary code, branding, or protected assets may be copied into this
-project.
+## Data and privacy
 
-See [docs/clean-room.md](docs/clean-room.md).
+Provider credentials are encrypted using your WordPress keys and salts. If
+those keys change, enter the Buffer credential again. Store backups securely.
 
-## Manual adoption checklist
-
-- Inventory existing WordPress social-publishing workflows and disable
-  overlapping automated posting before enabling PressQueue live delivery.
-- Create the Buffer personal API-key connection on a disposable or staging
-  site first, then keep the connection and discovered channels disabled until
-  previews are reviewed.
-- Recreate only the needed destinations, templates, and conditions as
-  PressQueue rules. There is no import path or compatibility layer.
-- Use dry-run previews, the kill switch, and reviewed batch previews before
-  enabling rules on regular publishing workflows.
-- Start with one low-risk post and confirm the delivery log, retry behavior,
-  and remote result before expanding to more destinations.
-
-## Privacy and uninstall
-
-PressQueue preserves data by default on uninstall. Retention and destructive
-uninstall cleanup are disabled until an administrator enables them with exact
-confirmation text. See [docs/privacy.md](docs/privacy.md).
-
-## License
-
-MIT for PressQueue source. Bundled dependencies keep their own notices. See
-[LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Deactivation stops PressQueue work and preserves its data. Uninstall also
+preserves data unless you enable deletion on the Privacy screen. Exports omit
+credentials and hide message text and media URLs by default. See
+[Privacy and data](docs/privacy.md).
 
 ## Development
 
-Run the default local gate with:
-
 ```bash
 composer install
-composer run ci
+composer run test:unit
+node --test tests/editor/*.test.cjs
+composer run lint:phpcs
+composer run analyse
+composer run audit:dependencies
+composer run smoke:runtime
 ```
 
-Prerequisites:
+Integration tests need the WordPress test suite and a disposable database named
+`pressqueue_tests`. The tests create and drop tables. Never use a production
+database.
 
-- PHP 8.1 or newer with `bcmath`, `curl`, `dom`, `intl`, `json`, `mbstring`,
-  `mysqli`, `sodium`, and `zip`.
-- Composer 2.
-- MySQL or MariaDB for WordPress integration tests.
-- The WordPress core test suite. Install it with
-  `bash tools/install-wp-tests.sh pressqueue_tests root '' 127.0.0.1 6.8.8`,
-  then set `WP_TESTS_DIR` if you install it somewhere other than `/tmp`.
-- A disposable WordPress install for `composer run package:smoke`. Set
-  `PACKAGE_SMOKE_WP_PATH` or `WP_PATH` to that WordPress path.
-- Plugin Check 2.1.0 for `composer run plugin-check`. Set `WP_PATH` to the
-  disposable WordPress path and `PLUGIN_CHECK_PATH` when `plugin-check/cli.php`
-  is not under `wp-content/plugins/plugin-check/`.
-  Run `composer run package:smoke` first so the private package is installed as
-  the `pressqueue` plugin slug.
-- Docker for `composer run matrix:local`. The local matrix covers PHP 8.1,
-  8.2, 8.3, and 8.4 against WordPress 6.8.8 and 7.1 by default. It stages a
-  disposable source copy and can be previewed with `composer run matrix:local
-  -- --dry-run`.
+```bash
+bash tools/install-wp-tests.sh pressqueue_tests root '' 127.0.0.1 7.1.3
+WP_TESTS_DIR=/tmp/wordpress-tests-lib-7.1.3 composer run test:integration
+```
 
-The package smoke artifact is private local evidence and is not a release
-package.
+The full gate, `composer run ci`, also needs a disposable WordPress installation.
+Set `WP_PATH` and `PACKAGE_SMOKE_WP_PATH` to its directory. The Plugin Check
+tool installs its pinned version there if it is missing. Package smoke installs,
+activates, deactivates, and uninstalls PressQueue on that site.
+Set `PLUGIN_CHECK_TARGET=/tmp/pressqueue-package-smoke/pressqueue.zip` to check
+the package; the checker reinstalls it on the disposable site without activating it.
+
+`composer run matrix:local` runs the PHP 8.1 through 8.4 matrix against
+WordPress 6.8.11 and 7.1.3 in disposable Docker containers. Use `-- --dry-run`
+to inspect its commands. See [Contributing](CONTRIBUTING.md) and
+[local package checks](docs/private-release.md).
+
+Developer references cover [WP-CLI](docs/developer/wp-cli.md),
+[observation hooks](docs/developer/observation-hooks.md), and
+[provider adapters](docs/developer/provider-extensions.md).
+
+## License and release
+
+PressQueue source uses the [MIT license](LICENSE). Bundled Action Scheduler
+uses GPL-3.0-or-later. Its license is included in the package. See
+[third-party notices](THIRD_PARTY_NOTICES.md) and the
+[release checklist](docs/public-release-checklist.md).
+
+PressQueue is an independent implementation. It is not affiliated with Buffer
+or other social publishing plugins. See [clean-room notes](docs/clean-room.md).

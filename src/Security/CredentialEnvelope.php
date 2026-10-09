@@ -364,7 +364,8 @@ final class CredentialEnvelope {
 	 */
 	private function assert_sodium_available(): void {
 		$available = $this->sodium_available ?? (
-			function_exists( 'sodium_crypto_aead_xchacha20poly1305_ietf_encrypt' )
+			extension_loaded( 'sodium' )
+			&& function_exists( 'sodium_crypto_aead_xchacha20poly1305_ietf_encrypt' )
 			&& function_exists( 'sodium_crypto_aead_xchacha20poly1305_ietf_decrypt' )
 		);
 
@@ -379,7 +380,7 @@ final class CredentialEnvelope {
 	 * @param string|null $value Secret-bearing value.
 	 */
 	private function memzero( ?string &$value ): void {
-		if ( null !== $value && function_exists( 'sodium_memzero' ) ) {
+		if ( null !== $value && extension_loaded( 'sodium' ) && function_exists( 'sodium_memzero' ) ) {
 			sodium_memzero( $value );
 		}
 	}

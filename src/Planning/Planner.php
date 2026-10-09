@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Planning;
 
+use PressQueue\Batch\DuplicateHistoryService;
 use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Runtime\RuntimeDisabledLatch;
@@ -29,6 +30,7 @@ use PressQueue\Storage\Repository\DecisionRepository;
 use PressQueue\Storage\Repository\DeliveryRepository;
 use PressQueue\Storage\Repository\RuleRepository;
 use PressQueue\Storage\RuleDocuments;
+use PressQueue\Storage\Schema;
 use PressQueue\Storage\SettingsRepository;
 use PressQueue\Storage\StorageException;
 use PressQueue\Storage\ValidationException;
@@ -37,6 +39,20 @@ use PressQueue\Storage\ValidationException;
  * Evaluates rules and optionally ensures immutable storage rows.
  */
 final class Planner {
+	/**
+	 * Shared transaction wrapper.
+	 *
+	 * @var Database
+	 */
+	private Database $database;
+
+	/**
+	 * Destination reservation and delivery history.
+	 *
+	 * @var DuplicateHistoryService
+	 */
+	private DuplicateHistoryService $duplicates;
+
 	/**
 	 * Rule repository.
 	 *
@@ -120,6 +136,9 @@ final class Planner {
 	 * @param Database|null $database Database wrapper.
 	 */
 	public function __construct( ?Database $database = null ) {
+		$database            = $database ?? Database::from_globals();
+		$this->database      = $database;
+		$this->duplicates    = new DuplicateHistoryService( $database );
 		$this->rules         = new RuleRepository( $database );
 		$this->decisions     = new DecisionRepository( $database );
 		$this->deliveries    = new DeliveryRepository( $database );
@@ -138,10 +157,11 @@ final class Planner {
 	 *
 	 * @param NormalizedEvent            $event Event.
 	 * @param array<int,RuleRecord>|null $rules Optional rules, including disabled rules.
+	 * @param bool                       $allow_probe Whether new media URL probes may run.
 	 * @return PlanningResult
 	 */
-	public function preview( NormalizedEvent $event, ?array $rules = null ): PlanningResult {
-		return $this->plan( $event, $rules ?? $this->rules->find_enabled_for_trigger( $event->trigger ), false );
+	public function preview( NormalizedEvent $event, ?array $rules = null, bool $allow_probe = true ): PlanningResult {
+		return $this->plan( $event, $rules ?? $this->rules->find_enabled_for_trigger( $event->trigger ), false, null, null, $allow_probe );
 	}
 
 	/**
@@ -182,7 +202,7 @@ final class Planner {
 		PublicIds::assert( $channel_public_id );
 		RuntimeDisabledLatch::assert_open_for( 'runtime destination planning' );
 
-		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), true, $channel_public_id, $schedule_override );
+		return $this->plan( $event, $this->rules->find_enabled_for_trigger( $event->trigger ), true, $channel_public_id, $schedule_override, false );
 	}
 
 	/**
@@ -193,9 +213,10 @@ final class Planner {
 	 * @param bool                  $durable Whether to write rows.
 	 * @param string|null           $only_channel_public_id Optional destination filter.
 	 * @param SchedulePolicy|null   $schedule_override Reviewed schedule override.
+	 * @param bool                  $allow_probe Whether new media URL probes may run.
 	 * @return PlanningResult
 	 */
-	private function plan( NormalizedEvent $event, array $rules, bool $durable, ?string $only_channel_public_id = null, ?SchedulePolicy $schedule_override = null ): PlanningResult {
+	private function plan( NormalizedEvent $event, array $rules, bool $durable, ?string $only_channel_public_id = null, ?SchedulePolicy $schedule_override = null, bool $allow_probe = true ): PlanningResult {
 		if ( null !== $only_channel_public_id ) {
 			PublicIds::assert( $only_channel_public_id );
 		}
@@ -219,6 +240,21 @@ final class Planner {
 				$durable
 			);
 
+			return new PlanningResult( $event, $decisions, array(), $durable );
+		}
+
+		if ( $event->is_backdated_automatic_publication() ) {
+			$decisions[] = $this->decision_summary(
+				$event,
+				$settings,
+				'skipped',
+				'global',
+				null,
+				null,
+				array( ReasonFactory::make( 'backdated_publication', 'Automatic first publication is skipped for posts dated more than one day ago. Use a reviewed manual batch.', 'not_matched', 'published_at_gmt', 'backdated', $event->published_at_gmt, null ) ),
+				null,
+				$durable
+			);
 			return new PlanningResult( $event, $decisions, array(), $durable );
 		}
 
@@ -429,8 +465,11 @@ final class Planner {
 						$message_template = $event->control_bundle['message']['value'];
 					}
 
-					$schedule        = $schedule_override ?? $this->schedules->resolve( $rule, $event->control_bundle );
-					$media           = $this->media->resolve( $rule, $event, $destination['destination']['capability_document'], ! $durable );
+					$schedule = $schedule_override ?? $this->schedules->resolve( $rule, $event->control_bundle );
+					if ( 'draft' === RuleDocuments::schedule_policy( $rule->schedule_policy_document )['mode'] && 'draft' !== $schedule->slot ) {
+						throw new ValidationException( 'A draft-only rule cannot be overridden to publish or schedule a social post.' );
+					}
+					$media           = $this->media->resolve( $rule, $event, $destination['destination']['capability_document'], $allow_probe );
 					$payload_preview = $this->templates->payload_preview_v2(
 						$message_template,
 						$template_set,
@@ -548,25 +587,11 @@ final class Planner {
 			$winner = array_shift( $destination_candidates );
 
 			if ( null !== $winner ) {
-				$decision = $this->decision_summary(
-					$event,
-					$settings,
-					'included',
-					'channel',
-					$channel_public_id,
-					$winner['rule'],
-					array_merge(
-						$winner['reasons'],
-						array(
-							ReasonFactory::make( 'included_destination', 'Destination is included by the winning rule.', 'matched', 'destination', 'selected', $channel_public_id, $winner['rule']->public_id ),
-						)
-					),
-					$winner['destination'],
-					$durable
-				);
-
-				$decisions[]  = $decision;
-				$deliveries[] = $this->delivery_summary( $event, $settings, $decision, $winner['destination'], $winner['payload_preview'], $durable );
+				$planned     = $this->plan_winner( $event, $settings, $channel_public_id, $winner, $durable );
+				$decisions[] = $planned['decision'];
+				if ( null !== $planned['delivery'] ) {
+					$deliveries[] = $planned['delivery'];
+				}
 			}
 
 			foreach ( $destination_candidates as $candidate ) {
@@ -608,6 +633,67 @@ final class Planner {
 		$decisions = array_merge( $decisions, $skipped_rule_decisions );
 
 		return new PlanningResult( $event, $decisions, $deliveries, $durable );
+	}
+
+	/**
+	 * Store a winner while serializing live first publication with manual reservations.
+	 *
+	 * @param NormalizedEvent     $event Event.
+	 * @param PolicySettings      $settings Settings.
+	 * @param string              $channel_public_id Destination.
+	 * @param array<string,mixed> $winner Winning candidate.
+	 * @param bool                $durable Whether to write rows.
+	 * @return array{decision:array<string,mixed>,delivery:array<string,mixed>|null}
+	 */
+	private function plan_winner( NormalizedEvent $event, PolicySettings $settings, string $channel_public_id, array $winner, bool $durable ): array {
+		$reasons = array_merge(
+			$winner['reasons'],
+			array( ReasonFactory::make( 'included_destination', 'Destination is included by the winning rule.', 'matched', 'destination', 'selected', $channel_public_id, $winner['rule']->public_id ) )
+		);
+		$store   = function () use ( $event, $settings, $channel_public_id, $winner, $durable, $reasons ): array {
+			$decision = $this->decision_summary( $event, $settings, 'included', 'channel', $channel_public_id, $winner['rule'], $reasons, $winner['destination'], $durable );
+			return array(
+				'decision' => $decision,
+				'delivery' => $this->delivery_summary( $event, $settings, $decision, $winner['destination'], $winner['payload_preview'], $durable ),
+			);
+		};
+
+		if ( ! $durable || 'live' !== $settings->delivery_mode || ! in_array( $event->trigger, array( 'first_publish', 'scheduled_publication' ), true ) ) {
+			return $store();
+		}
+
+		return $this->database->transaction(
+			function () use ( $event, $settings, $channel_public_id, $winner, $reasons, $store ): array {
+				// This is the same destination lock acquired by manual confirmation.
+				if ( 1 !== $this->database->query( 'SELECT public_id FROM `' . $this->database->table( Schema::CHANNELS ) . '` WHERE public_id = %s FOR UPDATE', array( $channel_public_id ) ) ) {
+					throw new StorageException( 'Destination could not be locked for first publication.' );
+				}
+				$decision = $this->decision_summary( $event, $settings, 'included', 'channel', $channel_public_id, $winner['rule'], $reasons, $winner['destination'], false );
+				$delivery = $this->delivery_summary( $event, $settings, $decision, $winner['destination'], $winner['payload_preview'], false );
+				$existing = $this->database->query( 'SELECT public_id FROM `' . $this->database->table( Schema::DELIVERIES ) . '` WHERE delivery_key = %s FOR UPDATE', array( $delivery['delivery_key'] ) );
+
+				// An exact replay retains the original identity even after acceptance.
+				if ( 0 === $existing && null !== $this->duplicates->blocking_bulk_duplicate( $event->post_id, $channel_public_id, null, 'live', true ) ) {
+					return array(
+						'decision' => $this->decision_summary(
+							$event,
+							$settings,
+							'skipped',
+							'channel',
+							$channel_public_id,
+							$winner['rule'],
+							array_merge( $winner['reasons'], array( ReasonFactory::make( 'first_publish_duplicate', 'Existing live delivery or confirmed manual reservation blocks first publication to this destination.', 'matched', 'destination', 'already_reserved', $channel_public_id, $channel_public_id ) ) ),
+							$winner['destination'],
+							true
+						),
+						'delivery' => null,
+					);
+				}
+
+				return $store();
+			},
+			array( Schema::CHANNELS, Schema::BATCHES, Schema::BATCH_ITEMS, Schema::DECISIONS, Schema::DELIVERIES )
+		);
 	}
 
 	/**
@@ -657,7 +743,7 @@ final class Planner {
 			try {
 				$this->validate_rule_documents( $rule );
 
-				if ( ! in_array( $event->trigger, $rule->triggers['triggers'] ?? array(), true ) ) {
+				if ( ! $rule->applies_to_trigger( $event->trigger ) ) {
 					$evaluated[] = array(
 						'condition_result' => 'not_matched',
 						'reasons'          => array(

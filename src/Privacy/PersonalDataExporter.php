@@ -178,7 +178,7 @@ final class PersonalDataExporter {
 	private static function decision_groups( Database $database, int $user_id, int $limit, int $offset ): array {
 		$table = $database->table( Schema::DECISIONS );
 		$rows  = $database->get_results_array(
-			"SELECT public_id, post_id, post_type, post_status, trigger, event_mode, result, reasons_json, snapshot_hash, created_at
+			"SELECT public_id, post_id, post_type, post_status, `trigger`, event_mode, result, reasons_json, snapshot_hash, created_at
 				FROM `$table`
 				WHERE author_id = %d
 				ORDER BY created_at ASC, public_id ASC

@@ -15,6 +15,8 @@ use PressQueue\Storage\Database;
 use PressQueue\Storage\PublicIds;
 use PressQueue\Storage\Repository\BatchItemRepository;
 use PressQueue\Storage\Schema;
+use PressQueue\Storage\StorageEnums;
+use PressQueue\Storage\StorageException;
 use PressQueue\Storage\StorageValidator;
 
 /**
@@ -37,18 +39,27 @@ final class DuplicateHistoryService {
 	/**
 	 * Return a bulk duplicate blocker for a post and channel.
 	 *
-	 * @param int    $post_id Post ID.
-	 * @param string $channel_public_id Channel public ID.
+	 * @param int         $post_id Post ID.
+	 * @param string      $channel_public_id Channel public ID.
+	 * @param string|null $exclude_batch_public_id Current batch to ignore.
+	 * @param string|null $delivery_mode Optional reservation and history mode.
+	 * @param bool        $for_update Whether to read current rows under the destination lock.
 	 * @return array<string,mixed>|null
 	 */
-	public function blocking_bulk_duplicate( int $post_id, string $channel_public_id ): ?array {
-		foreach ( $this->delivery_history( $post_id, $channel_public_id ) as $history ) {
+	public function blocking_bulk_duplicate( int $post_id, string $channel_public_id, ?string $exclude_batch_public_id = null, ?string $delivery_mode = null, bool $for_update = false ): ?array {
+		foreach ( $this->delivery_history( $post_id, $channel_public_id, $delivery_mode, $for_update ) as $history ) {
 			if ( $this->blocks_bulk( $history ) ) {
 				return $history;
 			}
 		}
 
-		return null;
+		$item = $this->batch_items->find_reserved_item( $post_id, $channel_public_id, $exclude_batch_public_id, $delivery_mode, $for_update );
+		return null === $item ? null : array(
+			'batch_item_public_id' => $item->public_id,
+			'batch_public_id'      => $item->batch_public_id,
+			'classification'       => 'reserved_batch_item',
+			'state'                => $item->state,
+		);
 	}
 
 	/**
@@ -96,17 +107,17 @@ final class DuplicateHistoryService {
 
 			$accepted_at = (string) ( $history['state_changed_at'] ?? '' );
 			if ( isset( $criteria['prior_accepted_from_utc'] ) && $accepted_at < (string) $criteria['prior_accepted_from_utc'] ) {
-				continue;
+				return null;
 			}
 
 			if ( isset( $criteria['prior_accepted_to_utc'] ) && $accepted_at > (string) $criteria['prior_accepted_to_utc'] ) {
-				continue;
+				return null;
 			}
 
 			if ( isset( $criteria['minimum_days_since_prior_acceptance'] ) ) {
 				$latest_allowed = gmdate( 'Y-m-d H:i:s', time() - ( (int) $criteria['minimum_days_since_prior_acceptance'] * DAY_IN_SECONDS ) );
 				if ( $accepted_at > $latest_allowed ) {
-					continue;
+					return null;
 				}
 			}
 
@@ -119,22 +130,34 @@ final class DuplicateHistoryService {
 	/**
 	 * Return visible delivery history for display and policy.
 	 *
-	 * @param int    $post_id Post ID.
-	 * @param string $channel_public_id Channel public ID.
+	 * @param int         $post_id Post ID.
+	 * @param string      $channel_public_id Channel public ID.
+	 * @param string|null $delivery_mode Optional mode filter.
+	 * @param bool        $for_update Whether to read current rows under the destination lock.
 	 * @return array<int,array<string,mixed>>
 	 */
-	public function delivery_history( int $post_id, string $channel_public_id ): array {
+	public function delivery_history( int $post_id, string $channel_public_id, ?string $delivery_mode = null, bool $for_update = false ): array {
 		StorageValidator::assert_unsigned_id( 'Post ID', $post_id );
 		PublicIds::assert( $channel_public_id );
+		$where = 'decisions.post_id = %d AND deliveries.channel_public_id = %s';
+		$args  = array( $post_id, $channel_public_id );
+		if ( null !== $delivery_mode ) {
+			StorageEnums::assert_delivery_mode( $delivery_mode );
+			$where .= ' AND deliveries.delivery_mode = %s';
+			$args[] = $delivery_mode;
+		}
 
-		$rows = $this->database->get_results_array(
-			'SELECT deliveries.public_id, deliveries.state, deliveries.channel_public_id, deliveries.schedule_slot, deliveries.scheduled_for_utc, deliveries.payload_hash, deliveries.remote_id, deliveries.attempt_count, deliveries.retry_safety, deliveries.reconciliation_status, deliveries.state_changed_at
+		$sql = 'SELECT deliveries.public_id, deliveries.state, deliveries.channel_public_id, deliveries.schedule_slot, deliveries.scheduled_for_utc, deliveries.payload_hash, deliveries.remote_id, deliveries.attempt_count, deliveries.retry_safety, deliveries.reconciliation_status, deliveries.state_changed_at
 				FROM `' . $this->database->table( Schema::DELIVERIES ) . '` deliveries
 				INNER JOIN `' . $this->database->table( Schema::DECISIONS ) . '` decisions ON decisions.public_id = deliveries.decision_public_id
-				WHERE decisions.post_id = %d AND deliveries.channel_public_id = %s
-				ORDER BY deliveries.state_changed_at DESC, deliveries.id DESC',
-			array( $post_id, $channel_public_id )
-		);
+				WHERE ' . $where . '
+				ORDER BY deliveries.state_changed_at DESC, deliveries.id DESC' . ( $for_update ? ' FOR UPDATE' : '' );
+		// query() throws on lock failure; fetch helpers otherwise return empty results.
+		$count = $for_update ? $this->database->query( $sql, $args ) : null;
+		$rows  = 0 === $count ? array() : $this->database->get_results_array( $sql, $args );
+		if ( null !== $count && count( $rows ) !== $count ) {
+			throw new StorageException( 'Locked delivery history could not be loaded.' );
+		}
 
 		return array_map(
 			static function ( array $row ): array {

@@ -55,6 +55,26 @@ if ( ! class_exists( 'wpdb' ) ) {
 		public string $last_error = '';
 
 		/**
+		 * Error suppression state.
+		 *
+		 * @var bool
+		 */
+		public bool $suppress_errors = false;
+
+		/**
+		 * Change query error suppression and return the previous value.
+		 *
+		 * @param bool $suppress New value.
+		 * @return bool
+		 */
+		public function suppress_errors( $suppress = true ): bool {
+			$previous              = $this->suppress_errors;
+			$this->suppress_errors = (bool) $suppress;
+
+			return $previous;
+		}
+
+		/**
 		 * Insert ID.
 		 *
 		 * @var int
@@ -399,6 +419,17 @@ function esc_html__( $text, $domain = 'default' ): string {
  */
 function esc_attr( $text ): string {
 	return esc_html( $text );
+}
+
+/**
+ * Parse a URL for tests.
+ *
+ * @param string $url URL.
+ * @param int $component URL component.
+ * @return mixed
+ */
+function wp_parse_url( $url, $component = -1 ) {
+	return parse_url( $url, $component );
 }
 
 /**
@@ -918,6 +949,7 @@ class WP_Post {
 	public int $ID                   = 0;
 	public string $post_type         = 'post';
 	public string $post_status       = 'publish';
+	public string $post_password = '';
 	public int $post_author          = 1;
 	public string $post_title        = '';
 	public string $post_excerpt      = '';
@@ -1006,9 +1038,22 @@ function get_post_meta( $post_id, $key = '', $single = false ) {
  * @return bool
  */
 function update_post_meta( $post_id, $key, $value ): bool {
-	$GLOBALS['pressqueue_test_post_meta'][ (int) $post_id ][ (string) $key ] = array( $value );
+	$GLOBALS['pressqueue_test_post_meta'][ (int) $post_id ][ (string) $key ] = array( is_string( $value ) ? stripslashes( $value ) : $value );
 
 	return true;
+}
+
+/**
+ * Match WordPress metadata slashing for unit fixtures.
+ *
+ * @param mixed $value Value.
+ * @return mixed
+ */
+function wp_slash( $value ) {
+	if ( is_array( $value ) ) {
+		return array_map( 'wp_slash', $value );
+	}
+	return is_string( $value ) ? addslashes( $value ) : $value;
 }
 
 /**
@@ -1627,7 +1672,7 @@ function as_supports( $feature ): bool {
  */
 function as_next_scheduled_action( $hook, $args = array(), $group = '' ) {
 	foreach ( $GLOBALS['pressqueue_test_as_actions'] as $action ) {
-		if ( $hook === $action['hook'] && $args === $action['args'] && $group === $action['group'] ) {
+		if ( $hook === $action['hook'] && ( null === $args || $args === $action['args'] ) && $group === $action['group'] ) {
 			return $action['id'];
 		}
 	}
@@ -1680,9 +1725,9 @@ function as_schedule_recurring_action( $timestamp, $interval, $hook, $args = arr
  */
 function as_schedule_single_action( $timestamp, $hook, $args = array(), $group = '', $unique = false ): int {
 	if ( $unique ) {
-		$existing = as_next_scheduled_action( $hook, $args, $group );
+		$existing = as_next_scheduled_action( $hook, null, $group );
 		if ( false !== $existing ) {
-			return (int) $existing;
+			return 0;
 		}
 	}
 
@@ -1708,7 +1753,7 @@ function as_schedule_single_action( $timestamp, $hook, $args = array(), $group =
  */
 function as_unschedule_action( $hook, $args = array(), $group = '' ): void {
 	foreach ( $GLOBALS['pressqueue_test_as_actions'] as $index => $action ) {
-		if ( $hook === $action['hook'] && $args === $action['args'] && $group === $action['group'] ) {
+		if ( $hook === $action['hook'] && ( null === $args || $args === $action['args'] ) && $group === $action['group'] ) {
 			unset( $GLOBALS['pressqueue_test_as_actions'][ $index ] );
 			$GLOBALS['pressqueue_test_as_actions'] = array_values( $GLOBALS['pressqueue_test_as_actions'] );
 			return;
@@ -1775,4 +1820,16 @@ if ( ! class_exists( 'WP_CLI' ) ) {
 			$GLOBALS['pressqueue_test_wp_cli_halt_status'] = (int) $status;
 		}
 	}
+}
+
+/** Match WordPress filter lookup in isolated tests. */
+function has_filter( $hook, $callback = false ) {
+	foreach ( $GLOBALS['pressqueue_test_hooks'][ $hook ] ?? array() as $priority => $entries ) {
+		foreach ( $entries as $entry ) {
+			if ( false === $callback || $entry['callback'] === $callback ) {
+				return $priority;
+			}
+		}
+	}
+	return false;
 }

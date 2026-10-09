@@ -113,6 +113,7 @@ final class SettingsRepository {
 			return $default_value;
 		}
 
+		self::refresh_option( $option );
 		$value = get_option( $option, $default_value ? '1' : '0' );
 
 		if ( '1' === $value ) {
@@ -123,7 +124,20 @@ final class SettingsRepository {
 			return false;
 		}
 
-		return $default_value;
+		return true;
+	}
+
+	/**
+	 * Refresh non-autoloaded safety controls in long-running workers.
+	 *
+	 * @param string $option Option name.
+	 */
+	public static function refresh_option( string $option ): void {
+		if ( function_exists( 'wp_cache_delete' ) ) {
+			wp_cache_delete( $option, 'options' );
+			wp_cache_delete( 'notoptions', 'options' );
+			wp_cache_delete( 'alloptions', 'options' );
+		}
 	}
 
 	/**

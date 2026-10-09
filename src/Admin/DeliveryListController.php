@@ -59,7 +59,7 @@ final class DeliveryListController {
 			$result = ( new DeliveryQueryRepository() )->query( $filters, $page, $page_size );
 			self::render_table( $result['rows'] );
 			self::render_pagination( $result['page'], $result['page_size'], $result['total'], $filters );
-		} catch ( ValidationException $exception ) {
+		} catch ( ValidationException | \PressQueue\Storage\StorageException $exception ) {
 			echo '<div class="notice notice-error"><p>' . esc_html( SafeOperatorError::message( $exception, __( 'PressQueue deliveries could not be loaded.', 'pressqueue' ) ) ) . '</p></div>';
 		}
 
@@ -244,7 +244,7 @@ final class DeliveryListController {
 		$type = str_contains( $message, 'error' ) ? 'error' : 'success';
 		echo '<div class="notice notice-' . esc_attr( $type ) . '"><p>' . esc_html( $messages[ $message ] );
 
-		$detail = self::query_text( 'pressqueue_detail', 191 );
+		$detail = SafeOperatorError::notice_detail( self::query_text( 'pressqueue_detail', 191 ) );
 		if ( '' !== $detail ) {
 			echo ' ' . esc_html( $detail );
 		}

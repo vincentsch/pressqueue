@@ -115,7 +115,7 @@ final class MediaSnapshot {
 		}
 
 		$mode = isset( $document['mode'] ) && is_string( $document['mode'] ) ? $document['mode'] : '';
-		if ( ! in_array( $mode, array( 'none', 'featured_image', 'post_media' ), true ) ) {
+		if ( ! in_array( $mode, array( 'none', 'featured_image', 'featured_image_optional', 'post_media' ), true ) ) {
 			throw new ValidationException( 'Media snapshot mode is unsupported.' );
 		}
 

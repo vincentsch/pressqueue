@@ -41,6 +41,7 @@ final class BatchQueueService {
 	private BatchRepository $batches;
 	private BatchItemRepository $items;
 	private DeliveryRepository $deliveries;
+	private DuplicateHistoryService $duplicates;
 	private RuleRepository $rules;
 	private EventNormalizer $normalizer;
 	private Planner $planner;
@@ -57,6 +58,7 @@ final class BatchQueueService {
 		$this->batches    = new BatchRepository( $this->database );
 		$this->items      = new BatchItemRepository( $this->database );
 		$this->deliveries = new DeliveryRepository( $this->database );
+		$this->duplicates = new DuplicateHistoryService( $this->database );
 		$this->rules      = new RuleRepository( $this->database );
 		$this->normalizer = new EventNormalizer();
 		$this->planner    = new Planner( $this->database );
@@ -75,13 +77,22 @@ final class BatchQueueService {
 			return;
 		}
 
-		if ( ! ( new SchemaStatus() )->is_ready_for_planning() ) {
-			return;
-		}
-
-		$service = new self();
-		foreach ( $service->batches->find_queueing() as $batch ) {
-			$service->ensure_queue_action( $batch->public_id, $batch->preview_snapshot_hash );
+		try {
+			$status = new SchemaStatus();
+			if ( $status->installed_version() < Schema::TARGET_VERSION || $status->has_active_migration_lock() || $status->has_migration_failed() ) {
+				return;
+			}
+			$service = new self();
+			foreach ( $service->batches->find_queueing() as $batch ) {
+				try {
+					$service->ensure_queue_action( $batch->public_id, $batch->preview_snapshot_hash );
+				} catch ( \Throwable $exception ) {
+					unset( $exception );
+					// A later repair pass can retry this batch without breaking the site.
+				}
+			}
+		} catch ( \Throwable $exception ) {
+			unset( $exception );
 		}
 	}
 
@@ -245,6 +256,10 @@ final class BatchQueueService {
 	private function handoff_reviewed_delivery( BatchItemRecord $item, \PressQueue\Planning\NormalizedEvent $event, SchedulePolicy $schedule ): void {
 		$this->database->transaction(
 			function () use ( $item, $event, $schedule ): void {
+				// Keep the channel-before-item lock order used by confirmation.
+				if ( 1 !== $this->database->query( 'SELECT public_id FROM `' . $this->database->table( Schema::CHANNELS ) . '` WHERE public_id = %s FOR UPDATE', array( $item->channel_public_id ) ) ) {
+					throw new StorageException( 'Destination could not be locked for batch handoff.' );
+				}
 				$locked = $this->items->lock_reserved_for_handoff( $item );
 				if ( null === $locked ) {
 					return;
@@ -275,6 +290,11 @@ final class BatchQueueService {
 					return;
 				}
 
+				if ( 'bulk' === $event->trigger && 'live' === ( $locked->preview_item['delivery']['delivery_mode'] ?? null ) && null !== $this->duplicates->blocking_bulk_duplicate( $locked->post_id, $locked->channel_public_id, $locked->batch_public_id, 'live', true ) ) {
+					$this->items->mark_terminal( $locked, 'duplicate', $this->reason( 'duplicate_delivery', 'Existing live delivery or another confirmed reservation blocks this bulk destination item.' ) );
+					return;
+				}
+
 				$runtime  = $this->planner->plan_runtime_destination( $event, $locked->channel_public_id, $schedule );
 				$delivery = $this->matching_delivery( $runtime, $locked );
 				if ( null === $delivery || ! isset( $delivery['stored_record'] ) || ! $delivery['stored_record'] instanceof DeliveryRecord ) {
@@ -294,7 +314,7 @@ final class BatchQueueService {
 					null === $record->scheduled_for_utc ? null : $record->scheduled_for_utc->format( 'Y-m-d H:i:s' )
 				);
 			},
-			array( Schema::BATCH_ITEMS, Schema::DECISIONS, Schema::DELIVERIES )
+			array( Schema::CHANNELS, Schema::BATCHES, Schema::BATCH_ITEMS, Schema::DECISIONS, Schema::DELIVERIES )
 		);
 	}
 

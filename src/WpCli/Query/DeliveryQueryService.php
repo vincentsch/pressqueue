@@ -58,8 +58,8 @@ final class DeliveryQueryService extends AbstractQueryService {
 
 		$post_id = $this->positive_int_filter( $filters['post-id'] ?? null, 'Post ID' );
 		if ( null !== $post_id ) {
-			$join    = ' INNER JOIN `' . $decision_table . '` dec ON dec.public_id = d.decision_public_id';
-			$where[] = 'dec.post_id = %d';
+			$join    = ' INNER JOIN `' . $decision_table . '` decision_row ON decision_row.public_id = d.decision_public_id';
+			$where[] = 'decision_row.post_id = %d';
 			$args[]  = $post_id;
 		}
 

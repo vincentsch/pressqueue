@@ -76,6 +76,10 @@ GRAPHQL;
 			'text'           => $this->text( $request ),
 		);
 
+		if ( 'draft' === $request->schedule_slot ) {
+			$input['saveToDraft'] = true;
+		}
+
 		if ( 'explicit_time' === $request->schedule_slot ) {
 			if ( null === $request->scheduled_for_utc ) {
 				throw new ValidationException( 'Explicit delivery schedule is missing a due time.' );
@@ -110,6 +114,7 @@ GRAPHQL;
 			case 'queue_next':
 				return 'shareNext';
 			case 'queue_end':
+			case 'draft':
 				return 'addToQueue';
 			case 'explicit_time':
 				return 'customScheduled';

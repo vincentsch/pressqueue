@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue\Planning;
 
 use PressQueue\Provider\Capability\DeliveryCapability;
+use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Record\RuleRecord;
 use PressQueue\Storage\ValidationException;
@@ -58,23 +59,29 @@ final class MediaResolver {
 			return MediaSnapshot::none();
 		}
 
-		$items = array();
-		foreach ( $policy->attachment_ids as $index => $attachment_id ) {
-			$items[] = $this->attachment_item( $event->post_id, $attachment_id, $index, $capability, $allow_probe );
+		try {
+			$items = array();
+			foreach ( $policy->attachment_ids as $index => $attachment_id ) {
+				$items[] = $this->attachment_item( $event->post_id, $attachment_id, $index, $capability, $allow_probe, 'runtime' === $event->mode );
+			}
+
+			$snapshot = new MediaSnapshot(
+				array(
+					'items'          => $items,
+					'mode'           => $policy->mode,
+					'schema_version' => 1,
+				)
+			);
+
+			if ( ! DeliveryCapability::supports_payload( $capability, 'immediate', 0, $snapshot->document() ) ) {
+				throw new ValidationException( 'Destination does not support the selected image media.' );
+			}
+		} catch ( ValidationException $exception ) {
+			if ( 'featured_image_optional' === ( $rule->media_policy['mode'] ?? null ) && 'inherit' === ( $event->control_bundle['media']['mode'] ?? 'inherit' ) ) {
+				return MediaSnapshot::none();
+			}
+			throw $exception;
 		}
-
-		$snapshot = new MediaSnapshot(
-			array(
-				'items'          => $items,
-				'mode'           => $policy->mode,
-				'schema_version' => 1,
-			)
-		);
-
-		if ( ! DeliveryCapability::supports_payload( $capability, 'immediate', 0, $snapshot->document() ) ) {
-			throw new ValidationException( 'Destination does not support the selected image media.' );
-		}
-
 		return $snapshot;
 	}
 
@@ -99,17 +106,21 @@ final class MediaResolver {
 			return new MediaPolicy( 'none' );
 		}
 
-		if ( 'featured_image' === $mode ) {
+		if ( 'featured_image' === $mode || 'featured_image_optional' === $mode ) {
 			if ( ! function_exists( 'get_post_thumbnail_id' ) ) {
 				throw new ValidationException( 'Featured image lookup is unavailable.' );
 			}
 
 			$attachment_id = (int) get_post_thumbnail_id( $event->post_id );
 			if ( $attachment_id <= 0 ) {
+				if ( 'featured_image_optional' === $mode ) {
+					return new MediaPolicy( 'none' );
+				}
+
 				throw new ValidationException( 'Featured image is missing.' );
 			}
 
-			return new MediaPolicy( 'featured_image', array( $attachment_id ) );
+			return new MediaPolicy( $mode, array( $attachment_id ) );
 		}
 
 		if ( 'post_media' !== $mode ) {
@@ -134,15 +145,16 @@ final class MediaResolver {
 	 * @param int                 $index Position.
 	 * @param array<string,mixed> $capability Capability document.
 	 * @param bool                $allow_probe Whether probing is allowed.
+	 * @param bool                $runtime Whether resolving previously saved selections for runtime work.
 	 * @return array<string,mixed>
 	 */
-	private function attachment_item( int $post_id, int $attachment_id, int $index, array $capability, bool $allow_probe ): array {
+	private function attachment_item( int $post_id, int $attachment_id, int $index, array $capability, bool $allow_probe, bool $runtime ): array {
 		$attachment = function_exists( 'get_post' ) ? get_post( $attachment_id ) : null;
 		if ( ! $attachment instanceof \WP_Post || 'attachment' !== (string) $attachment->post_type ) {
 			throw new ValidationException( 'Selected media attachment does not exist.' );
 		}
 
-		if ( ! $this->can_use_attachment( $post_id, $attachment ) ) {
+		if ( ! $this->can_use_attachment( $post_id, $attachment, $runtime ) ) {
 			throw new ValidationException( 'Selected media attachment is outside the authority boundary.' );
 		}
 
@@ -188,9 +200,21 @@ final class MediaResolver {
 	 *
 	 * @param int      $post_id Target post ID.
 	 * @param \WP_Post $attachment Attachment.
+	 * @param bool     $runtime Whether the selection came from saved runtime controls.
 	 * @return bool
 	 */
-	private function can_use_attachment( int $post_id, \WP_Post $attachment ): bool {
+	private function can_use_attachment( int $post_id, \WP_Post $attachment, bool $runtime ): bool {
+		if ( $runtime ) {
+			// Cron has no logged-in editor. Trust only selections already stored on
+			// this post; new editor selections still require the permissions below.
+			$thumbnail_id = function_exists( 'get_post_thumbnail_id' ) ? (int) get_post_thumbnail_id( $post_id ) : 0;
+			$controls     = PostControlMetadata::read_for_post( $post_id );
+			$selected_ids = $controls['media']['post_media']['attachment_ids'] ?? array();
+			return $thumbnail_id === (int) $attachment->ID
+				|| (int) $attachment->post_parent === $post_id
+				|| in_array( (int) $attachment->ID, $selected_ids, true );
+		}
+
 		if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'edit_post', $post_id ) ) {
 			return false;
 		}
@@ -225,6 +249,12 @@ final class MediaResolver {
 			}
 		}
 
+		if ( ! isset( $facts['byte_size'] ) && function_exists( 'get_attached_file' ) && function_exists( 'wp_filesize' ) ) {
+			$file = get_attached_file( $attachment_id );
+			if ( is_string( $file ) && is_file( $file ) ) {
+				$facts['byte_size'] = wp_filesize( $file );
+			}
+		}
 		return $facts;
 	}
 

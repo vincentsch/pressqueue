@@ -11,3 +11,8 @@ npm-debug.log*
 phpcs.xml
 .DS_Store
 Thumbs.db
+
+# Private planning and local credentials
+/.vroni/
+/.env
+/.env.*

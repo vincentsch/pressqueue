@@ -15,7 +15,7 @@ use PressQueue\Storage\StorageValidator;
  * Conservative local catalog for Buffer channel delivery capabilities.
  */
 final class BufferCapabilityCatalog {
-	public const VERSION = '2026-08-25.1';
+	public const VERSION = '2026-10-01.1';
 
 	private const SUPPORTED_SERVICES = array(
 		'bluesky',
@@ -27,6 +27,7 @@ final class BufferCapabilityCatalog {
 	);
 
 	private const SOURCE_URLS = array(
+		'https://developers.buffer.com/examples/create-draft-post.html',
 		'https://developers.buffer.com/guides/posts-and-scheduling.html',
 		'https://developers.buffer.com/reference.html',
 		'https://developers.buffer.com/examples/create-image-post.html',
@@ -76,7 +77,7 @@ final class BufferCapabilityCatalog {
 					'min_width'         => 1,
 				),
 				'max_text_characters' => $text_limit,
-				'schedule_slots'      => array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' ),
+				'schedule_slots'      => array( 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' ),
 				'text'                => true,
 			),
 			'schema_version'  => 2,
@@ -132,7 +133,7 @@ final class BufferCapabilityCatalog {
 			$sources[] = array(
 				'service'         => $service,
 				'source_url'      => $url,
-				'verified_on_utc' => '2026-08-25',
+				'verified_on_utc' => str_contains( $url, 'create-draft-post' ) ? '2026-10-01' : '2026-08-25',
 			);
 		}
 

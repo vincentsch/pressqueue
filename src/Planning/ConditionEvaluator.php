@@ -506,14 +506,21 @@ final class ConditionEvaluator {
 	 * @return bool
 	 */
 	private function scalar_equals( $left, $right ): bool {
+		if ( is_bool( $right ) && is_string( $left ) ) {
+			if ( ! in_array( $left, array( '0', '1', '' ), true ) ) {
+				throw new ValidationException( 'Metadata value cannot be compared as a boolean.' );
+			}
+			$left = '1' === $left;
+		}
 		if ( is_bool( $left ) || is_bool( $right ) || null === $left || null === $right ) {
 			return $left === $right;
 		}
-
-		if ( is_int( $left ) || is_float( $left ) || is_int( $right ) || is_float( $right ) ) {
-			return (string) $left === (string) $right;
+		if ( is_int( $right ) || is_float( $right ) ) {
+			if ( ! is_numeric( $left ) ) {
+				throw new ValidationException( 'Metadata value cannot be compared as a number.' );
+			}
+			return (float) $left === (float) $right;
 		}
-
 		return (string) $left === (string) $right;
 	}
 

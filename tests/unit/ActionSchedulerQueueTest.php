@@ -58,9 +58,9 @@ final class ActionSchedulerQueueTest extends TestCase {
 		$first  = $queue->schedule_batch_queue( $batch_public_id, $snapshot_hash );
 		$second = $queue->schedule_batch_queue( $batch_public_id, $snapshot_hash );
 
-		self::assertSame( $first, $second );
+		self::assertNotSame( $first, $second );
 		self::assertTrue( $queue->has_batch_queue_action( $batch_public_id, $snapshot_hash ) );
-		self::assertCount( 1, $GLOBALS['pressqueue_test_as_actions'] );
+		self::assertCount( 2, $GLOBALS['pressqueue_test_as_actions'] );
 		self::assertSame( ActionSchedulerQueue::BATCH_QUEUE_HOOK, $GLOBALS['pressqueue_test_as_actions'][0]['hook'] );
 		self::assertSame( ActionSchedulerQueue::GROUP, $GLOBALS['pressqueue_test_as_actions'][0]['group'] );
 		self::assertSame( array( $batch_public_id, $snapshot_hash ), $GLOBALS['pressqueue_test_as_actions'][0]['args'] );

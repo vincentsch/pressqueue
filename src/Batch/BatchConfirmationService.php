@@ -88,7 +88,23 @@ final class BatchConfirmationService {
 		$this->assert_items_unchanged( $stored_items, $evaluation['items'] );
 
 		$confirmed = $this->database->transaction(
-			function () use ( $batch, $actor_user_id ): BatchRecord {
+			function () use ( $batch, $actor_user_id, $stored_items ): BatchRecord {
+				// Serialize confirmations on shared destinations before reserving.
+				$channels = array();
+				foreach ( $stored_items as $item ) {
+					if ( null !== $item->channel_public_id ) {
+						$channels[ $item->channel_public_id ] = true;
+					}
+				}
+				ksort( $channels, SORT_STRING );
+				foreach ( array_keys( $channels ) as $channel ) {
+					$this->database->get_row( 'SELECT public_id FROM `' . $this->database->table( Schema::CHANNELS ) . '` WHERE public_id = %s FOR UPDATE', array( $channel ) );
+				}
+				$fresh = $this->preview->evaluate( $batch, null, null, $stored_items, false );
+				if ( $fresh['snapshot_hash'] !== $batch->preview_snapshot_hash ) {
+					throw new ValidationException( 'Batch preview changed before reservation.' );
+				}
+				$this->assert_items_unchanged( $stored_items, $fresh['items'] );
 				$confirming = $this->batches->transition(
 					$batch->public_id,
 					$batch->lock_version,
@@ -129,7 +145,7 @@ final class BatchConfirmationService {
 
 				return $queueing;
 			},
-			array( Schema::BATCHES, Schema::BATCH_ITEMS )
+			array( Schema::BATCHES, Schema::BATCH_ITEMS, Schema::CHANNELS )
 		);
 
 		try {

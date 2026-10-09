@@ -1,80 +1,73 @@
-# Privacy, Export, Retention, and Uninstall
+# Privacy and data
 
-PressQueue stores local planning, delivery, batch, provider, and operator data
-so publishing can be audited without depending on a hosted service. Provider
-credentials remain server-side and are never exported.
+PressQueue stores its settings and delivery history in your WordPress database.
+This includes post and user IDs, channel details, rendered messages, image URLs,
+and Buffer receipts. These records help explain a delivery and avoid duplicates.
 
-## Runtime Latch
+## Credentials and remote requests
 
-PressQueue uses the `pressqueue_runtime_disabled` option as a fail-closed
-runtime latch.
+Buffer credentials are encrypted using the site's WordPress keys and salts.
+They stay on the server and never appear in exports. Changing the keys and salts
+makes saved credentials unreadable. Enter the Buffer key again afterward.
 
-- `1` means delivery runtime is closed.
-- `0` means delivery runtime is open.
-- Missing or malformed values are treated as closed.
+Testing a connection and syncing channels contact Buffer. Live delivery sends
+message text, schedule details, channel identifiers, and selected image URLs.
+Image selection may also contact the image host to check the file. See
+[Buffer's terms](https://buffer.com/legal#terms) and
+[privacy policy](https://buffer.com/legal#privacy-policy).
 
-Activation creates or closes the latch before migrations and opens it only
-after storage, capabilities, settings, privacy defaults, and retention defaults
-validate successfully. Deactivation closes the latch before unscheduling
-delivery work.
+PressQueue does not add analytics or tracking requests.
 
-When closed, PressQueue denies capture, finalization, durable planning, batch
-preview or confirmation, batch recovery, queue sweeps, retry, resume, worker
-entry, and the final pre-provider HTTP boundary. Read-only admin screens,
-full-site export, personal data export or erasure, local cancellation,
-reconciliation, privacy recovery, and uninstall cleanup remain available.
+## Export
 
-## Full-Site Export
+An administrator with `export_pressqueue_data` can download JSON from
+**PressQueue > Privacy**. Credentials are always omitted. Message text and
+image URLs are hidden unless the administrator enters the confirmation shown
+on that screen.
 
-Administrators with `export_pressqueue_data` can download paged JSON exports
-from the Privacy screen.
+Each export page holds at most 10,000 records and 50 MB. Submit the returned
+cursor to continue a larger export. Treat exports containing message text as
+private site data.
 
-Exports include:
-
-- metadata such as generated time, cursor, record limit, byte limit, and export
-  hash;
-- privacy and runtime settings snapshots;
-- selected fields from PressQueue-owned tables.
-
-Exports do not include credential envelope JSON. Rendered social text and
-media URLs are redacted by default. Including rendered payloads requires the
-exact confirmation text shown on the Privacy screen.
-
-Each export page is capped at 10,000 records and 50 MB. The returned cursor can
-be submitted to continue the export.
-
-## Personal Data Requests
-
-PressQueue registers WordPress personal data exporter and eraser callbacks.
-Those callbacks resolve the request email address to a local WordPress user and
-only return or erase PressQueue records tied to that user ID.
-
-The eraser does not remove delivery or batch audit rows. It clears local actor
-references that directly identify the requesting user while preserving
-operational history.
+WordPress's personal data export and erasure tools also include PressQueue.
+They find records linked to the WordPress user whose email was requested.
+Erasure clears optional operator references. It retains audit references such
+as post author and batch creator IDs, and reports this in the erasure result.
 
 ## Retention
 
-Retention is disabled by default. When enabled, the bounded retention runner
-deletes or redacts eligible resolved work older than the configured retention
-period. The retention period must be between 30 and 3650 days.
+Retention starts disabled. If you enable it, PressQueue removes or redacts old,
+resolved work after the selected period, between 30 and 3650 days. Unresolved
+work, including ambiguous deliveries, is preserved. The screen asks for exact
+confirmation because cleanup can delete history.
 
-Retention preserves unresolved delivery and batch work. It processes old
-delivery events, batch items, deliveries, decisions, batches, and provider
-diagnostics in bounded chunks with resumable option state.
+Accepted deliveries keep their identity, state, receipt identifier, and linked
+decision IDs to prevent duplicate sending. Retention clears their copied message,
+image snapshot, and detailed receipt. It also clears the linked decision content.
+These small identity records remain until you delete plugin data on uninstall.
 
-Enabling retention requires exact confirmation text because it can delete or
-redact local audit records.
+## Deactivation and uninstall
 
-## Uninstall
+Deactivation stops new capture and background work and keeps the data.
+Uninstall also preserves data by default. PressQueue removes its capabilities
+from roles. It unschedules its background actions when Action Scheduler is available.
 
-Uninstall preserves PressQueue data by default. If uninstall deletion is
-enabled, uninstall removes local PressQueue tables, options, transients,
-administrator role capabilities, and known PressQueue post metadata for each
-site in a multisite network.
+If you enable **Delete data on uninstall** before removing the plugin, it also
+deletes its tables, settings, preview transients, and post metadata, including
+runtime fingerprints. Each site in a multisite network uses its own deletion
+setting. Removing local data does not delete posts already accepted by Buffer.
 
-Action Scheduler actions owned by PressQueue are unscheduled during uninstall
-even when stored data is preserved.
+On multisite, PressQueue can remove a deleted site's tables only when the plugin
+is loaded in the deletion request. Network administrators should check for leftover
+`*_pressqueue_*` tables when deleting sites. These tables may contain encrypted
+credentials and delivery history.
 
-Enabling uninstall deletion requires exact confirmation text because the
-cleanup is destructive.
+## Runtime recovery
+
+PressQueue stops delivery if its stored privacy or runtime state is invalid.
+The Privacy screen shows the runtime state and allows settings repair.
+
+For developers, `pressqueue_runtime_disabled` accepts `1` for stopped and `0`
+for active. Missing or malformed values stop delivery. Activation opens it after
+setup succeeds; deactivation closes it before unscheduling work. Read operations,
+exports, local cancellation, and reconciliation remain available while stopped.

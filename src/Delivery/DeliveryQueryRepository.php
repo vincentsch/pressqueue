@@ -185,7 +185,7 @@ final class DeliveryQueryRepository {
 
 		$identifier = $this->optional_identifier( $filters );
 		if ( null !== $identifier ) {
-			$clauses[]                = '(public_id = %s OR delivery_key = %s OR intent_occurrence_key = %s OR (remote_id = %s AND BINARY remote_id = BINARY %s))';
+			$clauses[]                = '(BINARY public_id = BINARY %s OR BINARY delivery_key = BINARY %s OR BINARY intent_occurrence_key = BINARY %s OR (remote_id = %s AND BINARY remote_id = BINARY %s))';
 			$args[]                   = $identifier;
 			$args[]                   = $identifier;
 			$args[]                   = $identifier;

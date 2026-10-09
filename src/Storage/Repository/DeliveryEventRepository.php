@@ -179,6 +179,21 @@ final class DeliveryEventRepository extends AbstractRepository {
 	}
 
 	/**
+	 * Check submission events belonging to the most recently acquired lease.
+	 *
+	 * @param string $delivery_public_id Delivery public ID.
+	 * @return bool
+	 */
+	public function has_current_lease_submission( string $delivery_public_id ): bool {
+		PublicIds::assert( $delivery_public_id );
+		$table = $this->delivery_events_table();
+		return null !== $this->database->get_var(
+			"SELECT id FROM `$table` WHERE delivery_public_id = %s AND event_type = 'submission_started' AND id > COALESCE((SELECT MAX(lease_event.id) FROM `$table` lease_event WHERE lease_event.delivery_public_id = %s AND lease_event.event_type = 'leased'), 0) LIMIT 1",
+			array( $delivery_public_id, $delivery_public_id )
+		);
+	}
+
+	/**
 	 * Check whether an attempt has a submission-started event.
 	 *
 	 * @param string $delivery_public_id Delivery public ID.

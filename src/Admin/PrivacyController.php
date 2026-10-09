@@ -279,7 +279,7 @@ final class PrivacyController {
 
 		$type = str_contains( $message, 'error' ) ? 'error' : 'success';
 		echo '<div class="notice notice-' . esc_attr( $type ) . '"><p>' . esc_html( $messages[ $message ] );
-		$detail = self::query_text( 'pressqueue_detail', 191 );
+		$detail = SafeOperatorError::notice_detail( self::query_text( 'pressqueue_detail', 191 ) );
 		if ( '' !== $detail ) {
 			echo ' ' . esc_html( $detail );
 		}

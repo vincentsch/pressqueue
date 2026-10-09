@@ -47,7 +47,18 @@ try {
 	);
 
 	foreach ( $entries as $entry ) {
-		copy_path( $root . '/' . $entry, $plugin_root . '/' . $entry );
+		$destination = 'THIRD_PARTY_NOTICES.md' === $entry ? 'THIRD_PARTY_NOTICES.txt' : $entry;
+		copy_path( $root . '/' . $entry, $plugin_root . '/' . $destination );
+	}
+
+	$plugin_source = file_get_contents( $plugin_root . '/pressqueue.php' );
+	if ( false === $plugin_source || 1 !== preg_match( '/^\s*\*\s*Version:\s*(\S+)/m', $plugin_source, $version_match ) ) {
+		throw new RuntimeException( 'The plugin version header is missing.' );
+	}
+	$package_composer = json_decode( (string) file_get_contents( $plugin_root . '/composer.json' ), true, 512, JSON_THROW_ON_ERROR );
+	$package_composer['version'] = $version_match[1];
+	if ( false === file_put_contents( $plugin_root . '/composer.json', json_encode( $package_composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ) . "\n" ) ) {
+		throw new RuntimeException( 'Unable to write the package version metadata.' );
 	}
 
 	run_command(
@@ -310,7 +321,7 @@ function assert_zip_contents( string $zip_path ): array {
 		'pressqueue/pressqueue.php',
 		'pressqueue/uninstall.php',
 		'pressqueue/readme.txt',
-		'pressqueue/THIRD_PARTY_NOTICES.md',
+		'pressqueue/THIRD_PARTY_NOTICES.txt',
 		'pressqueue/languages/',
 		'pressqueue/languages/pressqueue.pot',
 		'pressqueue/assets/admin/condition-builder.js',
@@ -436,7 +447,7 @@ function package_smoke_evidence_dir( string $root ): string {
 		return rtrim( $override, '/\\' );
 	}
 
-	return $root . '/.vroni/wip/qa/p04-private-rc/package';
+	return $root . '/build/qa/package';
 }
 
 /**
@@ -639,7 +650,7 @@ function deactivate_package( array $wp_command, string $wp_path ): void {
  * @param string            $wp_path WordPress path.
  */
 function assert_scripts_enqueue( array $wp_command, string $wp_path ): void {
-	$code = '$_GET["page"]="pressqueue-rules"; do_action("admin_enqueue_scripts"); if (!wp_script_is("pressqueue-condition-builder", "enqueued")) { throw new RuntimeException("Condition builder script was not enqueued."); } do_action("enqueue_block_editor_assets"); if (!wp_script_is("pressqueue-post-controls", "enqueued")) { throw new RuntimeException("Post controls script was not enqueued."); }';
+	$code = '$_GET["page"]="pressqueue-rules"; do_action("admin_enqueue_scripts"); if (!wp_script_is("pressqueue-condition-builder", "enqueued")) { throw new RuntimeException("Condition builder script was not enqueued."); } require_once ABSPATH . "wp-admin/includes/screen.php"; set_current_screen("post"); get_current_screen()->post_type="post"; do_action("enqueue_block_editor_assets"); if (!wp_script_is("pressqueue-post-controls", "enqueued")) { throw new RuntimeException("Post controls script was not enqueued."); }';
 
 	run_command(
 		array_merge(

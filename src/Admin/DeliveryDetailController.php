@@ -168,7 +168,11 @@ final class DeliveryDetailController {
 	 */
 	private static function render_payload_summary( DeliveryDisplaySnapshot $snapshot ): void {
 		echo '<h2>' . esc_html__( 'Payload Summary', 'pressqueue' ) . '</h2>';
-		echo '<pre>' . esc_html( DeliveryDisplaySnapshot::pretty_json( $snapshot->delivery->payload_preview ) ) . '</pre>';
+		if ( null !== $snapshot->decision && current_user_can( 'edit_post', $snapshot->decision->post_id ) ) {
+			echo '<pre>' . esc_html( DeliveryDisplaySnapshot::pretty_json( $snapshot->delivery->payload_preview ) ) . '</pre>';
+		} else {
+			echo '<p>' . esc_html__( 'Message and media details are hidden because you cannot edit the source post.', 'pressqueue' ) . '</p>';
+		}
 		echo '<h2>' . esc_html__( 'Receipt and Error Summary', 'pressqueue' ) . '</h2>';
 		echo '<pre>' . esc_html(
 			DeliveryDisplaySnapshot::pretty_json(
@@ -200,7 +204,8 @@ final class DeliveryDetailController {
 		echo '<tr><th scope="row">' . esc_html__( 'Result', 'pressqueue' ) . '</th><td><code>' . esc_html( $decision->result ) . '</code></td></tr>';
 		echo '<tr><th scope="row">' . esc_html__( 'Trigger', 'pressqueue' ) . '</th><td><code>' . esc_html( $decision->trigger ) . '</code></td></tr>';
 		echo '<tr><th scope="row">' . esc_html__( 'Snapshot hash', 'pressqueue' ) . '</th><td><code>' . esc_html( $decision->snapshot_hash ) . '</code></td></tr>';
-		echo '<tr><th scope="row">' . esc_html__( 'Reasons', 'pressqueue' ) . '</th><td><pre>' . esc_html( DeliveryDisplaySnapshot::pretty_json( array( 'reasons' => $decision->reasons ) ) ) . '</pre></td></tr>';
+		$reasons = current_user_can( 'edit_post', $decision->post_id ) ? $decision->reasons : array( array( 'code' => 'post_facts_redacted' ) );
+		echo '<tr><th scope="row">' . esc_html__( 'Reasons', 'pressqueue' ) . '</th><td><pre>' . esc_html( DeliveryDisplaySnapshot::pretty_json( array( 'reasons' => $reasons ) ) ) . '</pre></td></tr>';
 		echo '</tbody></table>';
 
 		if ( current_user_can( Capabilities::VIEW_DECISIONS ) ) {
@@ -249,8 +254,13 @@ final class DeliveryDetailController {
 	 */
 	private static function render_reconciliation_forms( DeliveryRecord $delivery ): void {
 		echo '<h3>' . esc_html__( 'Ambiguity Reconciliation', 'pressqueue' ) . '</h3>';
+		if ( 'draft_not_confirmed' === $delivery->error_class ) {
+			echo '<div class="notice notice-error inline"><p>' . esc_html__( 'Buffer returned a post that was not confirmed as an unscheduled draft. The kill switch has been enabled. Check the returned remote ID in Buffer immediately; this post may be scheduled or published. PressQueue cannot remove it remotely.', 'pressqueue' ) . '</p></div>';
+		}
 		self::reconciliation_form( $delivery, 'confirmed_remote_id', __( 'Confirm Remote ID', 'pressqueue' ), true );
-		self::reconciliation_form( $delivery, 'confirmed_not_accepted', __( 'Confirm Not Accepted', 'pressqueue' ), false );
+		if ( 'draft_not_confirmed' !== $delivery->error_class ) {
+			self::reconciliation_form( $delivery, 'confirmed_not_accepted', __( 'Confirm Not Accepted', 'pressqueue' ), false );
+		}
 		self::reconciliation_form( $delivery, 'cancelled', __( 'Cancel Ambiguous Delivery', 'pressqueue' ), false );
 	}
 
@@ -269,7 +279,8 @@ final class DeliveryDetailController {
 		echo '<input type="hidden" name="delivery_public_id" value="' . esc_attr( $delivery->public_id ) . '" />';
 		echo '<input type="hidden" name="outcome" value="' . esc_attr( $outcome ) . '" />';
 		if ( $needs_remote_id ) {
-			echo '<p><label>' . esc_html__( 'Buffer remote ID', 'pressqueue' ) . ' <input name="remote_id" type="text" maxlength="191" required /></label></p>';
+			$returned_remote_id = is_string( $delivery->error_detail['remote_id'] ?? null ) ? $delivery->error_detail['remote_id'] : '';
+			echo '<p><label>' . esc_html__( 'Buffer remote ID', 'pressqueue' ) . ' <input name="remote_id" type="text" maxlength="191" value="' . esc_attr( $returned_remote_id ) . '" required /></label></p>';
 		}
 		echo '<p><label>' . esc_html__( 'Evidence note', 'pressqueue' ) . '<br /><textarea name="note" maxlength="500" rows="3" class="large-text"></textarea></label></p>';
 		echo '<p><label><input type="checkbox" name="confirm_local_effect" value="1" required /> ' . esc_html( self::reconciliation_confirmation() ) . '</label></p>';
@@ -377,7 +388,7 @@ final class DeliveryDetailController {
 		$type = str_contains( $message, 'error' ) ? 'error' : 'success';
 		echo '<div class="notice notice-' . esc_attr( $type ) . '"><p>' . esc_html( $messages[ $message ] );
 
-		$detail = self::query_text( 'pressqueue_detail', 191 );
+		$detail = SafeOperatorError::notice_detail( self::query_text( 'pressqueue_detail', 191 ) );
 		if ( '' !== $detail ) {
 			echo ' ' . esc_html( $detail );
 		}

@@ -32,6 +32,10 @@ final class TemplateRenderer {
 			throw new ValidationException( 'Inline template message is invalid.' );
 		}
 
+		$message = $this->normalize_plain_text( $message );
+		if ( preg_match( '/\{\{|\}\}/', preg_replace( '/\{\{\s*[^}]+?\s*\}\}/', '', $message ) ?? '' ) ) {
+			throw new ValidationException( 'Inline template contains malformed tags.' );
+		}
 		$rendered = preg_replace_callback(
 			'/\{\{\s*([^}]+?)\s*\}\}/',
 			function ( array $matches ) use ( $template, $event ): string {
@@ -44,11 +48,7 @@ final class TemplateRenderer {
 			throw new ValidationException( 'Inline template could not be rendered.' );
 		}
 
-		if ( preg_match( '/\{\{|\}\}/', $rendered ) ) {
-			throw new ValidationException( 'Inline template contains malformed tags.' );
-		}
-
-		$rendered = $this->normalize_plain_text( $rendered );
+		$rendered = trim( preg_replace( '/\s+/u', ' ', $rendered ) ?? '' );
 
 		if ( $this->length( $rendered ) > self::MAX_RENDERED_LENGTH ) {
 			$rendered = $this->truncate( $rendered, self::MAX_RENDERED_LENGTH );
@@ -222,7 +222,8 @@ final class TemplateRenderer {
 			case 'canonical_url':
 			case 'published_at':
 			case 'author':
-				return $this->normalize_plain_text( (string) ( $event->template_values[ $tag ] ?? '' ) );
+				$value = (string) ( $event->template_values[ $tag ] ?? '' );
+				return $event->template_values_are_plain_text ? $value : $this->normalize_plain_text( $value );
 		}
 
 		if ( str_starts_with( $tag, 'terms:' ) ) {
@@ -325,18 +326,24 @@ final class TemplateRenderer {
 	 * Normalize plain text.
 	 *
 	 * @param string $value Raw value.
+	 * @param bool   $legacy Whether to reproduce the old fingerprint normalization.
 	 * @return string
 	 */
-	public function normalize_plain_text( string $value ): string {
+	public function normalize_plain_text( string $value, bool $legacy = false ): string {
 		$value = $this->clean_utf8( $value );
 		$value = $this->strip_shortcode_markup( $value );
-		$value = html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		if ( $legacy ) {
+			$value = html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		}
 
 		if ( function_exists( 'wp_strip_all_tags' ) ) {
 			$value = wp_strip_all_tags( $value, true );
 		} else {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags -- Fallback is used only when WordPress is unavailable in isolated tests.
 			$value = strip_tags( $value );
+		}
+		if ( ! $legacy ) {
+			$value = html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		}
 
 		$value = preg_replace( '/\s+/u', ' ', $value );

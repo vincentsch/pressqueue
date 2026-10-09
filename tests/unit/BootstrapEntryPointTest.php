@@ -32,7 +32,7 @@ final class BootstrapEntryPointTest extends TestCase {
 	 * @depends test_main_file_bootstraps_without_http_requests
 	 */
 	public function test_activation_hook_runs_single_site_activation(): void {
-		do_action( 'activate_pressqueue/pressqueue.php', false );
+		do_action( 'activate_' . \plugin_basename( dirname( __DIR__, 2 ) . '/pressqueue.php' ), false );
 
 		self::assertSame( 1, did_action( 'pressqueue_after_activation' ) );
 		self::assertSame( array(), $GLOBALS['pressqueue_test_deactivated'] );

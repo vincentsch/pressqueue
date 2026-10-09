@@ -247,7 +247,7 @@ final class QueueSweep {
 			return;
 		}
 
-		$has_submission = $delivery->attempt_count > 0 && $this->events->has_submission_started( $delivery->public_id, $delivery->attempt_count );
+		$has_submission = $this->events->has_current_lease_submission( $delivery->public_id );
 		if ( $has_submission ) {
 			$this->transitions->recover_lease_to_ambiguous(
 				$delivery->public_id,

@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace PressQueue\Privacy;
 
 use PressQueue\Scheduler\ActionSchedulerQueue;
+use PressQueue\Editorial\PostControlMetadata;
+use PressQueue\Planning\EventNormalizer;
 use PressQueue\Security\Capabilities;
 use PressQueue\Storage\Schema;
 use Throwable;
@@ -19,11 +21,32 @@ use Throwable;
  */
 final class UninstallPolicy {
 	/**
+	 * Include plugin tables when WordPress permanently deletes a network site.
+	 *
+	 * @param array<int,string> $tables Existing site tables.
+	 * @param int               $site_id Deleted site ID.
+	 * @return array<int,string>
+	 */
+	public static function site_deletion_tables( array $tables, int $site_id ): array {
+		$wpdb   = $GLOBALS['wpdb'];
+		$prefix = $wpdb->get_blog_prefix( $site_id );
+		foreach ( Schema::table_suffixes() as $suffix ) {
+			$tables[] = $prefix . 'pressqueue_' . $suffix;
+		}
+		return array_values( array_unique( $tables ) );
+	}
+
+	/**
 	 * Run uninstall cleanup for one site or every site in a multisite network.
 	 */
 	public static function uninstall(): void {
 		if ( function_exists( 'is_multisite' ) && is_multisite() && function_exists( 'get_sites' ) && function_exists( 'switch_to_blog' ) && function_exists( 'restore_current_blog' ) ) {
-			$sites = get_sites( array( 'fields' => 'ids' ) );
+			$sites = get_sites(
+				array(
+					'fields' => 'ids',
+					'number' => 0,
+				)
+			);
 			foreach ( $sites as $site_id ) {
 				switch_to_blog( (int) $site_id );
 				try {
@@ -71,20 +94,23 @@ final class UninstallPolicy {
 	}
 
 	/**
-	 * Remove plugin capabilities from administrator roles.
+	 * Remove plugin capabilities from all roles, including delegated editor roles.
 	 */
 	private static function remove_role_capabilities(): void {
 		if ( ! function_exists( 'get_role' ) ) {
 			return;
 		}
 
-		$role = get_role( 'administrator' );
-		if ( ! $role || ! method_exists( $role, 'remove_cap' ) ) {
-			return;
-		}
+		$role_names = function_exists( 'wp_roles' ) ? array_keys( wp_roles()->get_names() ) : array( 'administrator' );
+		foreach ( $role_names as $role_name ) {
+			$role = get_role( $role_name );
+			if ( ! $role || ! method_exists( $role, 'remove_cap' ) ) {
+				continue;
+			}
 
-		foreach ( Capabilities::names() as $capability ) {
-			$role->remove_cap( $capability );
+			foreach ( Capabilities::names() as $capability ) {
+				$role->remove_cap( $capability );
+			}
 		}
 	}
 
@@ -98,15 +124,15 @@ final class UninstallPolicy {
 			return;
 		}
 
-		$keys = self::post_meta_keys();
+		$keys         = self::post_meta_keys();
+		$placeholders = implode( ', ', array_fill( 0, count( $keys ), '%s' ) );
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Uninstall cleanup must remove plugin-owned metadata.
 		$wpdb->query(
 			$wpdb->prepare(
-				'DELETE FROM %i WHERE meta_key IN (%s, %s)',
-				$wpdb->postmeta,
-				$keys[0],
-				$keys[1]
+				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Only placeholder tokens are composed; all identifiers and values are bound.
+				'DELETE FROM %i WHERE meta_key IN (' . $placeholders . ')',
+				array_merge( array( $wpdb->postmeta ), $keys )
 			)
 		);
 	}
@@ -127,7 +153,7 @@ final class UninstallPolicy {
 		$wpdb->query(
 			$wpdb->prepare(
 				'DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s OR option_name LIKE %s',
-				array( $wpdb->options, $like, '_transient_pressqueue_%', '_transient_timeout_pressqueue_%' )
+				array( $wpdb->options, $like, $wpdb->esc_like( '_transient_pressqueue_' ) . '%', $wpdb->esc_like( '_transient_timeout_pressqueue_' ) . '%' )
 			)
 		);
 	}
@@ -161,8 +187,12 @@ final class UninstallPolicy {
 	 */
 	private static function post_meta_keys(): array {
 		return array(
-			'_pressqueue_controls',
-			'_pressqueue_policy',
+			PostControlMetadata::META_KEY,
+			PostControlMetadata::LEGACY_META_KEY,
+			EventNormalizer::META_FIRST_PUBLISH_SEEN_AT,
+			EventNormalizer::META_LAST_RUNTIME_FINGERPRINT,
+			EventNormalizer::META_LAST_TRIGGER_FINGERPRINT,
+			EventNormalizer::META_LAST_DELIVERY_REVISION_FINGERPRINT,
 		);
 	}
 }

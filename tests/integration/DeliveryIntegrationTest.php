@@ -34,7 +34,7 @@ use PressQueue\Storage\Schema;
 use PressQueue\Storage\SchemaMigrator;
 use PressQueue\Storage\SettingsRepository;
 use PressQueue\Tests\Fixtures\Provider\FixtureDeliveryProvider;
-use WP_UnitTestCase;
+use PressQueue\Tests\Support\PressQueueIntegrationTestCase as WP_UnitTestCase;
 
 /**
  * @covers \PressQueue\Delivery\DeliveryWorker
@@ -62,6 +62,89 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 		$this->resetStorage();
 
 		parent::tearDown();
+	}
+
+	/** @dataProvider current_policy_changes */
+	public function test_changed_policy_holds_old_queue_without_submitting( string $change ): void {
+		$delivery = $this->liveDelivery();
+		$scheduler = $this->fakeScheduler();
+		$provider = $this->acceptedProvider();
+		$registry = new ProviderRegistry( array(), array( 'buffer' => $provider ) );
+		( new QueueSweep( Database::from_globals(), $scheduler, $registry ) )->run();
+		$decision = ( new DecisionRepository() )->find_by_public_id( $delivery->decision_public_id );
+		self::assertNotNull( $decision );
+		switch ( $change ) {
+			case 'unpublished':
+				wp_update_post( array( 'ID' => 42, 'post_status' => 'draft' ) );
+				break;
+			case 'password':
+				wp_update_post( array( 'ID' => 42, 'post_password' => 'private' ) );
+				break;
+			case 'excluded':
+				update_post_meta( 42, '_pressqueue_policy', 'exclude' );
+				break;
+			case 'disabled_rule':
+				$rules = new RuleRepository();
+				$rule = $rules->find_by_public_id( (string) $decision->rule_public_id );
+				$rules->update( $rule->public_id, $rule->lock_version, array( 'enabled' => false ) );
+				break;
+			case 'dry_run':
+				( new SettingsRepository() )->set_dry_run_enabled( true );
+				break;
+			case 'new_exclusion':
+				$rules = new RuleRepository();
+				$input = $this->ruleInput( $delivery->channel_public_id );
+				$input['effect'] = 'exclude';
+				$input['destination_set'] = array( 'schema_version' => 1, 'scope' => 'all' );
+				$input['triggers'] = array( 'update' );
+				$rule = $rules->create( $input );
+				$rule = $rules->mark_version_previewed( $rule->public_id, $rule->lock_version, $rule->version );
+				$rules->update( $rule->public_id, $rule->lock_version, array( 'enabled' => true ) );
+				break;
+		}
+		( new DeliveryWorker( Database::from_globals(), $registry, $scheduler, static fn (): string => 'fixture' ) )->run( $delivery->public_id );
+		$stored = ( new DeliveryRepository() )->find_by_public_id( $delivery->public_id );
+		self::assertSame( 'held', $stored->state );
+		self::assertSame( 0, $stored->attempt_count );
+		self::assertCount( 0, $provider->requests );
+	}
+
+	public static function current_policy_changes(): array {
+		return array_map( static fn ( string $change ): array => array( $change ), array( 'unpublished', 'password', 'excluded', 'disabled_rule', 'dry_run', 'new_exclusion' ) );
+	}
+
+	public function test_kill_switch_changed_after_preflight_is_read_fresh(): void {
+		global $wpdb;
+		$delivery = $this->liveDelivery();
+		( new SettingsRepository() )->set_kill_switch_enabled( false );
+		$scheduler = $this->fakeScheduler();
+		$provider = $this->acceptedProvider();
+		$registry = new ProviderRegistry( array(), array( 'buffer' => $provider ) );
+		( new QueueSweep( Database::from_globals(), $scheduler, $registry ) )->run();
+		$worker = new DeliveryWorker( Database::from_globals(), $registry, $scheduler,
+			static function () use ( $wpdb ): string {
+				$wpdb->update( $wpdb->options, array( 'option_value' => '1' ), array( 'option_name' => SettingsRepository::KILL_SWITCH_OPTION ) );
+				return 'fixture';
+			}
+		);
+		$worker->run( $delivery->public_id );
+		self::assertSame( 'held', ( new DeliveryRepository() )->find_by_public_id( $delivery->public_id )->state );
+		self::assertCount( 0, $provider->requests );
+	}
+
+	public function test_recovery_and_submission_recheck_locked_lease_authority(): void {
+		$delivery = $this->liveDelivery();
+		$transitions = new \PressQueue\Storage\Repository\DeliveryTransitionRepository();
+		$transitions->queue_proposed( $delivery->public_id, array( 'classification' => 'fixture' ) );
+		$owner = str_repeat( 'a', 32 );
+		$leased = $transitions->acquire_lease( $delivery->public_id, $owner, gmdate( 'Y-m-d H:i:s', time() + 300 ) );
+		self::assertNotNull( $leased );
+		self::assertNull( $transitions->recover_lease_to_queue( $delivery->public_id, array( 'classification' => 'fixture' ) ) );
+		$db = Database::from_globals();
+		$db->update_rows( $db->table( Schema::DELIVERIES ), array( 'lease_expires_at' => gmdate( 'Y-m-d H:i:s', time() - 10 ) ), array( 'public_id' => $delivery->public_id ), array() );
+		self::assertNull( $transitions->submission_started( $delivery->public_id, $owner ) );
+		self::assertNull( $transitions->recover_lease_to_ambiguous( $delivery->public_id, array( 'classification' => 'fixture' ) ) );
+		self::assertSame( 'queued', $transitions->recover_lease_to_queue( $delivery->public_id, array( 'classification' => 'fixture' ) )->state );
 	}
 
 	public function test_sweep_and_worker_accept_delivery_once_with_event_history(): void {
@@ -260,8 +343,18 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	 * @return \PressQueue\Storage\Record\DeliveryRecord
 	 */
 	private function liveDelivery() {
+		if ( null === get_post( 42 ) ) {
+			wp_insert_post( array( 'import_id' => 42, 'post_type' => 'post', 'post_status' => 'publish', 'post_title' => 'Fixture post' ) );
+		}
 		$destination = $this->enabledDestination();
 		$rule        = ( new RuleRepository() )->create( $this->ruleInput( $destination['channel']->public_id ) );
+		$rules = new RuleRepository();
+		$rule = $rules->mark_version_previewed( $rule->public_id, $rule->lock_version, $rule->version );
+		$rule = $rules->update( $rule->public_id, $rule->lock_version, array( 'enabled' => true ) );
+		( new SettingsRepository() )->set_dry_run_enabled( false );
+		wp_update_post( array( 'ID' => 42, 'post_status' => 'publish', 'post_password' => '' ) );
+		delete_post_meta( 42, '_pressqueue_policy' );
+		delete_post_meta( 42, '_pressqueue_controls' );
 		$decision    = ( new DecisionRepository() )->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $destination['channel']->public_id ) );
 		$final_text  = "Hello from integration\n\nhttps://example.test/post";
 
@@ -302,6 +395,16 @@ final class DeliveryIntegrationTest extends WP_UnitTestCase {
 	private function fixtureDelivery() {
 		$destination = $this->fixtureDestination();
 		$rule        = ( new RuleRepository() )->create( $this->ruleInput( $destination['channel']->public_id ) );
+		$rules = new RuleRepository();
+		$rule = $rules->mark_version_previewed( $rule->public_id, $rule->lock_version, $rule->version );
+		$rule = $rules->enable_after_preview( $rule->public_id, $rule->lock_version );
+		( new SettingsRepository() )->set_dry_run_enabled( false );
+		if ( null === get_post( 42 ) ) {
+			wp_insert_post( array( 'import_id' => 42, 'post_type' => 'post', 'post_status' => 'publish', 'post_title' => 'Fixture post' ) );
+		}
+		wp_update_post( array( 'ID' => 42, 'post_status' => 'publish', 'post_password' => '' ) );
+		delete_post_meta( 42, '_pressqueue_policy' );
+		delete_post_meta( 42, '_pressqueue_controls' );
 		$decision    = ( new DecisionRepository() )->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $destination['channel']->public_id ) );
 		$final_text  = "Hello from fixture\n\nhttps://example.test/post";
 

@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   pull_request:
   push:
@@ -36,6 +39,9 @@ jobs:
       - name: Run unit tests
         run: composer run test:unit
 
+      - name: Run editor tests
+        run: node --test tests/editor/*.test.cjs
+
       - name: Run PHPCS
         run: composer run lint:phpcs
 
@@ -43,13 +49,13 @@ jobs:
         run: composer run analyse
 
       - name: Audit dependencies
-        run: composer run audit
+        run: composer run audit:dependencies
 
       - name: Run runtime guard smoke
         run: composer run smoke:runtime
 
   integration:
-    name: WordPress ${{ matrix.wordpress }} integration on PHP ${{ matrix.php }}
+    name: WordPress ${{ matrix.wordpress }} on PHP ${{ matrix.php }} and ${{ matrix.database }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -58,11 +64,14 @@ jobs:
           - '8.1'
           - '8.4'
         wordpress:
-          - '6.8.8'
-          - '7.1'
+          - '6.8.11'
+          - '7.1.3'
+        database:
+          - 'mysql:8.0'
+          - 'mariadb:10.11'
     services:
       mysql:
-        image: mysql:8.0
+        image: ${{ matrix.database }}
         env:
           MYSQL_DATABASE: pressqueue_tests
           MYSQL_ALLOW_EMPTY_PASSWORD: yes
@@ -154,7 +163,7 @@ jobs:
 
       - name: Install disposable WordPress
         run: |
-          vendor/bin/wp core download --version=6.8.8 --path=/tmp/pressqueue-wp
+          vendor/bin/wp core download --version=7.1.3 --path=/tmp/pressqueue-wp
           vendor/bin/wp config create --dbname=pressqueue_plugin_check --dbuser=root --dbpass='' --dbhost=127.0.0.1 --path=/tmp/pressqueue-wp
           vendor/bin/wp core install --url=http://example.test --title=PressQueue --admin_user=admin --admin_password=password --admin_email=admin@example.test --path=/tmp/pressqueue-wp
 
@@ -173,4 +182,5 @@ jobs:
       - name: Run Plugin Check
         env:
           WP_PATH: /tmp/pressqueue-wp
+          PLUGIN_CHECK_TARGET: /tmp/pressqueue-package-smoke/pressqueue.zip
         run: composer run plugin-check

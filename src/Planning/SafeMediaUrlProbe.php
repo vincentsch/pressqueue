@@ -53,7 +53,10 @@ final class SafeMediaUrlProbe {
 	 * @return array<string,mixed>
 	 */
 	public function probe( string $url, array $known_image_facts = array() ): array {
-		$parts       = $this->validate_url( $url );
+		$parts = $this->validate_url( $url );
+		if ( class_exists( '\\WP_Http' ) && ( new \WP_Http() )->block_request( $url ) ) {
+			throw new ValidationException( 'Media URL checks are blocked by WordPress HTTP settings.' );
+		}
 		$addresses   = $this->resolve_safe_addresses( (string) $parts['host'] );
 		$resolved_ip = $addresses[0];
 
@@ -249,6 +252,9 @@ final class SafeMediaUrlProbe {
 	 * @return array<int,string>
 	 */
 	private function default_resolver( string $host ): array {
+		if ( ! function_exists( 'dns_get_record' ) ) {
+			throw new ValidationException( 'Media URL checks require DNS lookup support.' );
+		}
 		$records = dns_get_record( $host, DNS_A + DNS_AAAA + DNS_CNAME );
 		if ( false === $records ) {
 			return array();
@@ -287,9 +293,20 @@ final class SafeMediaUrlProbe {
 			throw new ValidationException( 'Media URL resolved address is unsafe.' );
 		}
 
+		if ( class_exists( '\\WP_HTTP_Proxy' ) ) {
+			$proxy = new \WP_HTTP_Proxy();
+			if ( $proxy->is_enabled() && $proxy->send_through_proxy( $url ) ) {
+				throw new ValidationException( 'Pinned media URL checks cannot use the configured HTTP proxy.' );
+			}
+		}
+		if ( ! function_exists( 'stream_socket_client' ) ) {
+			throw new ValidationException( 'Media URL checks require TLS socket support.' );
+		}
+
 		$context = stream_context_create(
 			array(
 				'ssl' => array(
+					'cafile'           => $this->certificate_authority_file(),
 					'SNI_enabled'      => true,
 					'SNI_server_name'  => $host,
 					'peer_name'        => $host,
@@ -320,9 +337,10 @@ final class SafeMediaUrlProbe {
 			. "Connection: close\r\n\r\n"
 		);
 
+		$deadline           = microtime( true ) + self::TIMEOUT_SECONDS;
 		$raw_headers        = '';
 		$raw_headers_length = 0;
-		while ( ! feof( $socket ) && ! str_contains( $raw_headers, "\r\n\r\n" ) && $raw_headers_length <= 32768 ) {
+		while ( ! feof( $socket ) && ! str_contains( $raw_headers, "\r\n\r\n" ) && $raw_headers_length <= 32768 && microtime( true ) < $deadline ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Raw socket reads pin the validated DNS result.
 			$chunk = fread( $socket, 1024 );
 			if ( false === $chunk || '' === $chunk ) {
@@ -343,7 +361,7 @@ final class SafeMediaUrlProbe {
 		$body                        = 'GET' === $method ? $body : '';
 		$body_length                 = strlen( $body );
 
-		while ( 'GET' === $method && ! feof( $socket ) && $body_length < self::MAX_TRANSFER_BYTES ) {
+		while ( 'GET' === $method && ! feof( $socket ) && $body_length < self::MAX_TRANSFER_BYTES && microtime( true ) < $deadline ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Raw socket reads pin the validated DNS result.
 			$chunk = fread( $socket, min( 8192, self::MAX_TRANSFER_BYTES - $body_length ) );
 			if ( false === $chunk || '' === $chunk ) {
@@ -374,6 +392,19 @@ final class SafeMediaUrlProbe {
 			'status'    => $status,
 			'width'     => is_array( $image ) ? (int) $image[0] : 0,
 		);
+	}
+
+	/**
+	 * Use WordPress's bundled trust store for the pinned TLS connection.
+	 *
+	 * @return string
+	 */
+	private function certificate_authority_file(): string {
+		if ( defined( 'ABSPATH' ) && defined( 'WPINC' ) ) {
+			return ABSPATH . WPINC . '/certificates/ca-bundle.crt';
+		}
+		$file = ini_get( 'openssl.cafile' );
+		return false === $file ? '' : $file;
 	}
 
 	/**
@@ -421,6 +452,7 @@ final class SafeMediaUrlProbe {
 				'3fff::/20',
 				'fc00::/7',
 				'fe80::/10',
+				'fec0::/10',
 				'ff00::/8',
 			);
 

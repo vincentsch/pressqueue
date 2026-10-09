@@ -54,6 +54,7 @@ final class RuntimeDisabledLatch {
 			return false;
 		}
 
+		\PressQueue\Storage\SettingsRepository::refresh_option( self::OPTION );
 		return '0' === get_option( self::OPTION, '1' );
 	}
 

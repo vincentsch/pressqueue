@@ -12,6 +12,7 @@ namespace PressQueue\Privacy;
 use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\Database;
+use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Schema;
 use PressQueue\Storage\SchemaStatus;
 use Throwable;
@@ -304,7 +305,7 @@ final class RetentionService {
 		$rows       = $this->database->get_results_array(
 			"SELECT d.public_id, COALESCE(d.state_changed_at, d.updated_at, d.created_at) AS retention_time
 				FROM `$deliveries` d
-				WHERE " . $this->resolved_delivery_sql( 'd' ) . "
+				WHERE d.state <> 'accepted' AND " . $this->resolved_delivery_sql( 'd' ) . "
 					AND COALESCE(d.state_changed_at, d.updated_at, d.created_at) < %s
 					AND NOT EXISTS (SELECT 1 FROM `$events` e WHERE e.delivery_public_id = d.public_id)
 					AND NOT EXISTS (
@@ -317,7 +318,43 @@ final class RetentionService {
 			array_merge( $args, array( self::CHUNK_SIZE ) )
 		);
 
-		return $this->delete_public_id_rows( Schema::DELIVERIES, $rows, 'deliveries' );
+		$result   = $this->delete_public_id_rows( Schema::DELIVERIES, $rows, 'deliveries' );
+		$marker   = CanonicalJson::encode_object(
+			array(
+				'schema_version' => 1,
+				'redacted'       => 'retention',
+			)
+		);
+		$redacted = $this->database->transaction(
+			function () use ( $deliveries, $marker, $cutoff ): int {
+				$ids = $this->database->get_results_array(
+					"SELECT public_id, decision_public_id FROM `$deliveries` WHERE state = 'accepted' AND COALESCE(state_changed_at, updated_at, created_at) < %s AND payload_preview_json <> %s ORDER BY id ASC LIMIT %d",
+					array( $cutoff, $marker, self::CHUNK_SIZE )
+				);
+				if ( array() === $ids ) {
+					return 0;
+				}
+				$public_ids   = array_column( $ids, 'public_id' );
+				$decision_ids = array_column( $ids, 'decision_public_id' );
+				$placeholders = implode( ', ', array_fill( 0, count( $ids ), '%s' ) );
+				$changed      = $this->database->query(
+					"UPDATE `$deliveries` SET payload_preview_json = %s, media_snapshot_json = NULL, receipt_json = NULL, error_detail_json = NULL, reconciliation_note = NULL WHERE public_id IN ($placeholders) AND state = 'accepted' AND payload_preview_json <> %s",
+					array_merge( array( $marker ), $public_ids, array( $marker ) )
+				);
+				$decisions    = $this->database->table( Schema::DECISIONS );
+				$this->database->query(
+					"UPDATE `$decisions` SET snapshot_json = %s, reasons_json = %s WHERE public_id IN ($placeholders) AND snapshot_json <> %s",
+					array_merge( array( $marker, '[]' ), $decision_ids, array( $marker ) )
+				);
+				return $changed;
+			},
+			array( Schema::DELIVERIES, Schema::DECISIONS )
+		);
+
+		$result['counters']['changed']  += $redacted;
+		$result['counters']['redacted'] += $redacted;
+		$result['more']                  = $result['more'] || $redacted >= self::CHUNK_SIZE;
+		return $result;
 	}
 
 	/**

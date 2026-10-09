@@ -1,7 +1,21 @@
 # Public Release Checklist
 
-PressQueue is still private development software. A public release requires an
-explicit release decision and a fresh release candidate.
+PressQueue 0.1.0 is prepared as a local release candidate. Publication still
+requires the owner's approval. Use the source snapshot when starting public Git
+history, so private development history stays private.
+
+## Prepared locally
+
+The local candidate has an installable ZIP, a source snapshot, and four admin
+screenshots. Setup and privacy guides, dependency licenses, translation files,
+and CI checks are included. QA records the package hashes and compatibility
+results separately from public source.
+
+Before submission, confirm the WordPress.org account and plugin slug. Set up a
+private security reporting route on the public repository. The candidate remains
+private, and none of these steps submits or publishes it.
+
+## Release checks
 
 Before a public release:
 
@@ -20,7 +34,9 @@ Before a public release:
 - regenerate the translation catalog from source;
 - review `readme.txt`, `docs/releases/`, `LICENSE`, and
   `THIRD_PARTY_NOTICES.md`;
-- capture screenshots for key admin screens without secrets;
+- capture screenshots for key admin screens with disposable fixture data;
+- enable private vulnerability reporting or name a private reporting contact;
+- check the Git history as well as the current tree for private site details;
 - run a clean-room review for names, copy, assets, and bundled dependencies;
 - record the package filename, package SHA-256, source commit, supported
   runtime matrix, Plugin Check version, and test result summary.

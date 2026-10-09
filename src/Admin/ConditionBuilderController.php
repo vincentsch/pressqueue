@@ -43,7 +43,7 @@ final class ConditionBuilderController {
 			'pressqueue-condition-builder',
 			plugins_url( 'assets/admin/condition-builder.js', PRESSQUEUE_FILE ),
 			array( 'wp-i18n' ),
-			defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0-dev',
+			defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0',
 			true
 		);
 

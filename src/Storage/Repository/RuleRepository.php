@@ -298,7 +298,7 @@ final class RuleRepository extends AbstractRepository {
 			array_filter(
 				$this->find_enabled(),
 				static function ( RuleRecord $rule ) use ( $trigger ): bool {
-					return in_array( $trigger, $rule->triggers['triggers'] ?? array(), true );
+					return $rule->applies_to_trigger( $trigger );
 				}
 			)
 		);

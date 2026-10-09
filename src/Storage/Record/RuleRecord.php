@@ -17,6 +17,18 @@ use DateTimeImmutable;
  * Represents one persisted rule version.
  */
 final class RuleRecord {
+	/**
+	 * Exclusions apply to every trigger, and first publication includes scheduled posts.
+	 *
+	 * @param string $trigger Event trigger.
+	 * @return bool
+	 */
+	public function applies_to_trigger( string $trigger ): bool {
+		$triggers = $this->triggers['triggers'] ?? array();
+		return 'exclude' === $this->effect
+			|| in_array( $trigger, $triggers, true )
+			|| ( 'scheduled_publication' === $trigger && in_array( 'first_publish', $triggers, true ) );
+	}
 	public int $id;
 	public string $public_id;
 	public string $name;

@@ -50,6 +50,9 @@ final class EventNormalizer {
 		if ( ! $post instanceof \WP_Post ) {
 			return null;
 		}
+		if ( '' !== (string) $post->post_password ) {
+			return null;
+		}
 
 		if ( ! PostControlAuthorization::is_supported_post( (int) $post->ID ) ) {
 			return null;
@@ -74,7 +77,7 @@ final class EventNormalizer {
 		$metadata           = $this->metadata( (int) $post->ID, $metadata_allowlist, $control_bundle );
 		$template_values    = $this->template_values( $post, $canonical_url, $terms, $metadata );
 		$legacy_metadata    = $this->legacy_metadata( (int) $post->ID, $metadata_allowlist );
-		$legacy_templates   = $this->template_values( $post, $canonical_url, $terms, $legacy_metadata );
+		$legacy_templates   = $this->template_values( $post, $canonical_url, $terms, $legacy_metadata, true );
 		$previous_trigger   = $this->previous_trigger_fingerprint( (int) $post->ID );
 		$previous_runtime   = $this->previous_runtime_fingerprint( (int) $post->ID );
 
@@ -103,11 +106,12 @@ final class EventNormalizer {
 			$intent_occurrence_key
 		);
 
+		$event->template_values_are_plain_text = true;
 		if ( null !== $intent_occurrence_key || ! in_array( $trigger, array( 'first_publish', 'update', 'scheduled_publication' ), true ) ) {
 			return $event;
 		}
 
-		return new NormalizedEvent(
+		$event                                 = new NormalizedEvent(
 			$mode,
 			$source,
 			$trigger,
@@ -131,6 +135,8 @@ final class EventNormalizer {
 			$legacy_templates,
 			HashKeys::ordinary_intent_occurrence_key( $this->site_identifier(), (int) $post->ID, $trigger, $event->trigger_fingerprint )
 		);
+		$event->template_values_are_plain_text = true;
+		return $event;
 	}
 
 	/**
@@ -178,7 +184,7 @@ final class EventNormalizer {
 		$modified_at_gmt    = $this->required_snapshot_datetime( $snapshot, 'modified_at_gmt' );
 		$template_values    = $this->template_values_from_snapshot( $snapshot, $author_id, $canonical_url, $terms, $metadata, $published_at_gmt );
 
-		return new NormalizedEvent(
+		$event                                 = new NormalizedEvent(
 			'preview',
 			$source,
 			$trigger,
@@ -198,6 +204,8 @@ final class EventNormalizer {
 			null,
 			$this->previous_runtime_fingerprint( $post_id )
 		);
+		$event->template_values_are_plain_text = true;
+		return $event;
 	}
 
 	/**
@@ -397,22 +405,23 @@ final class EventNormalizer {
 	 * @param string                         $canonical_url Canonical URL.
 	 * @param array<int,array<string,mixed>> $terms Terms.
 	 * @param array<string,mixed>            $metadata Metadata.
+	 * @param bool                           $legacy Whether to reproduce old fingerprint text normalization.
 	 * @return array<string,mixed>
 	 */
-	private function template_values( \WP_Post $post, string $canonical_url, array $terms, array $metadata ): array {
+	private function template_values( \WP_Post $post, string $canonical_url, array $terms, array $metadata, bool $legacy = false ): array {
 		$renderer = new TemplateRenderer();
 		$user     = get_userdata( (int) $post->post_author );
 
 		return array(
-			'author'           => $user instanceof \WP_User ? $renderer->normalize_plain_text( (string) $user->display_name ) : '',
+			'author'           => $user instanceof \WP_User ? $renderer->normalize_plain_text( (string) $user->display_name, $legacy ) : '',
 			'author_public_id' => $this->author_public_id( (int) $post->post_author ),
 			'canonical_url'    => $canonical_url,
-			'content'          => $renderer->normalize_plain_text( (string) $post->post_content ),
-			'excerpt'          => $renderer->normalize_plain_text( (string) $post->post_excerpt ),
+			'content'          => $renderer->normalize_plain_text( (string) $post->post_content, $legacy ),
+			'excerpt'          => $renderer->normalize_plain_text( (string) $post->post_excerpt, $legacy ),
 			'metadata'         => $metadata,
 			'published_at'     => $this->published_at_display( (string) $post->post_date_gmt, (string) $post->post_date ),
 			'terms'            => $terms,
-			'title'            => $renderer->normalize_plain_text( (string) $post->post_title ),
+			'title'            => $renderer->normalize_plain_text( (string) $post->post_title, $legacy ),
 		);
 	}
 

@@ -1,7 +1,7 @@
-# Private Development Package
+# Local release candidate
 
-The private development package is a local validation artifact. It is not a
-public release and must not be distributed as a WordPress.org package.
+The release candidate is a local validation artifact. Keep it private until the
+owner approves publication.
 
 ## Scope
 
@@ -29,7 +29,7 @@ composer install
 composer run test:unit
 composer run lint:phpcs
 composer run analyse
-composer audit --format=plain
+composer run audit:dependencies
 composer run smoke:runtime
 ```
 
@@ -37,7 +37,7 @@ With a disposable WordPress install, run:
 
 ```bash
 PACKAGE_SMOKE_WP_PATH=/path/to/wordpress composer run package:smoke
-WP_PATH=/path/to/wordpress PLUGIN_CHECK_PATH=/path/to/plugin-check/cli.php composer run plugin-check
+WP_PATH=/path/to/wordpress PLUGIN_CHECK_TARGET=/tmp/pressqueue-package-smoke/pressqueue.zip composer run plugin-check
 ```
 
 For local compatibility coverage, run:
@@ -55,3 +55,6 @@ versions with `PRESSQUEUE_MATRIX_PHP` and `PRESSQUEUE_MATRIX_WORDPRESS`.
 Raw package smoke artifacts, browser captures, or logs belong in a scratch
 directory that is not part of public source. Durable QA evidence should be a
 small summary that records commands, versions, results, and limitations.
+
+Local QA evidence is written under `build/qa/` unless you set an evidence path.
+This directory is excluded from Git and from the installable ZIP.

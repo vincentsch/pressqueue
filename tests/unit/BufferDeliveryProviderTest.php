@@ -26,6 +26,53 @@ use PressQueue\Storage\Record\DeliveryRecord;
  * @covers \PressQueue\Provider\Dto\ProviderReceipt
  */
 final class BufferDeliveryProviderTest extends TestCase {
+	public function test_partial_mutation_responses_are_never_safe_to_retry(): void {
+		foreach ( array(
+			array(
+				'data'   => array(
+					'createPost' => array(
+						'__typename' => 'PostActionSuccess',
+						'post'       => null,
+					),
+				),
+				'errors' => array( array( 'extensions' => array( 'code' => 'RATE_LIMIT_EXCEEDED' ) ) ),
+			),
+			array(
+				'data'   => array( 'createPost' => null ),
+				'errors' => array(
+					array(
+						'path'       => array( 'createPost', 'post' ),
+						'extensions' => array( 'code' => 'NOT_FOUND' ),
+					),
+				),
+			),
+			array(
+				'data'   => array( 'createPost' => null ),
+				'errors' => array( array( 'extensions' => array( 'code' => 'UNAUTHORIZED' ) ), array( 'path' => array( 'createPost' ) ) ),
+			),
+		) as $body ) {
+			$provider = new BufferDeliveryProvider( null, static fn (): array => self::jsonResponse( $body ) );
+			$result   = $provider->submit( $this->request(), 'fixture credential' );
+			self::assertSame( 'ambiguous', $result->provider_result );
+			self::assertSame( 'reconcile_first', $result->retry_safety );
+		}
+	}
+
+	public function test_rate_limit_headers_work_with_wordpress_style_traversable_headers(): void {
+		$provider = new BufferDeliveryProvider(
+			null,
+			static fn (): array => array(
+				'body'     => '{}',
+				'headers'  => new \ArrayIterator( array( 'Retry-After' => '3600' ) ),
+				'response' => array( 'code' => 429 ),
+			)
+		);
+		$before   = time();
+		$result   = $provider->submit( $this->request(), 'fixture credential' );
+		self::assertSame( 'rate_limited', $result->provider_result );
+		self::assertNotNull( $result->retry_after_utc );
+		self::assertGreaterThanOrEqual( $before + 3600, $result->retry_after_utc->getTimestamp() );
+	}
 	public function test_encoder_is_byte_stable_and_appends_canonical_url(): void {
 		$request = $this->request();
 		$encoder = new BufferPostEncoder();
@@ -81,6 +128,77 @@ final class BufferDeliveryProviderTest extends TestCase {
 
 		self::assertSame( 'shareNext', $encoder->variables( $this->request( 'queue_next' ) )['input']['mode'] );
 		self::assertSame( 'addToQueue', $encoder->variables( $this->request( 'queue_end' ) )['input']['mode'] );
+	}
+
+	public function test_draft_explicitly_sets_save_to_draft_without_due_time(): void {
+		$input = ( new BufferPostEncoder() )->variables( $this->request( 'draft' ) )['input'];
+		self::assertTrue( $input['saveToDraft'] );
+		self::assertSame( 'addToQueue', $input['mode'] );
+		self::assertArrayNotHasKey( 'dueAt', $input );
+		self::assertArrayNotHasKey( 'saveToDraft', ( new BufferPostEncoder() )->variables( $this->request() )['input'] );
+	}
+
+	public function test_draft_success_requires_confirmed_draft_status_and_no_due_date(): void {
+		foreach ( array( array( 'draft', null, 'accepted' ), array( 'scheduled', null, 'ambiguous' ), array( 'draft', '2026-10-02T12:00:00Z', 'ambiguous' ), array( null, null, 'ambiguous' ) ) as $case ) {
+			$provider = new BufferDeliveryProvider(
+				null,
+				static function () use ( $case ): array {
+					return self::jsonResponse(
+						array(
+							'data' => array(
+								'createPost' => array(
+									'__typename' => 'PostActionSuccess',
+									'post'       => array(
+										'id'     => 'remote-draft-1',
+										'status' => $case[0],
+										'dueAt'  => $case[1],
+										'text'   => 'Hello world',
+									),
+								),
+							),
+						)
+					);
+				}
+			);
+			$result   = $provider->submit( $this->request( 'draft' ), 'fixture credential' );
+			self::assertSame( $case[2], $result->provider_result );
+			if ( 'ambiguous' === $case[2] ) {
+				self::assertSame( 'remote-draft-1', $result->error_detail['remote_id'] );
+				self::assertSame( 'reconcile_first', $result->retry_safety );
+			}
+		}
+	}
+
+	public function test_submitted_server_errors_require_reconciliation_not_an_automatic_retry(): void {
+		foreach ( array( 500, 502, 503, 504 ) as $status ) {
+			$provider = new BufferDeliveryProvider(
+				null,
+				static function () use ( $status ): array {
+					return array(
+						'body'     => '{}',
+						'response' => array( 'code' => $status ),
+					);
+				}
+			);
+			$result   = $provider->submit( $this->request(), 'fixture credential' );
+			self::assertSame( 'ambiguous', $result->provider_result );
+			self::assertSame( 'reconcile_first', $result->retry_safety );
+		}
+	}
+
+	public function test_realistic_bad_success_response_without_a_fake_marker_is_ambiguous(): void {
+		$provider = new BufferDeliveryProvider(
+			null,
+			static function (): array {
+				return array(
+					'body'     => '{broken',
+					'response' => array( 'code' => 200 ),
+				);
+			}
+		);
+		$result   = $provider->submit( $this->request(), 'fixture credential' );
+		self::assertSame( 'ambiguous', $result->provider_result );
+		self::assertSame( 'reconcile_first', $result->retry_safety );
 	}
 
 	public function test_accepted_response_stores_sanitized_receipt_and_redacted_warnings(): void {

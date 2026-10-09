@@ -688,7 +688,7 @@ final class SchemaMigrator {
 	 */
 	private function normalize_column_type( string $type ): string {
 		$type = strtolower( $type );
-		$type = preg_replace( '/\b(bigint|int|tinyint)\(\d+\)/', '$1', $type );
+		$type = preg_replace( '/\b(tinyint|smallint|mediumint|int|bigint)\(\d+\)/', '$1', $type );
 
 		return preg_replace( '/\s+/', ' ', trim( (string) $type ) );
 	}

@@ -183,6 +183,19 @@ final class SafeOperatorError {
 	}
 
 	/**
+	 * Only display fixed diagnostics supplied through a redirect URL.
+	 *
+	 * @param string $detail Requested notice detail.
+	 * @return string
+	 */
+	public static function notice_detail( string $detail ): string {
+		if ( in_array( $detail, self::ALLOWED_MESSAGES, true ) || 1 === preg_match( '/^Failure classification: (stale_record|storage_unavailable|validation_failed|storage_error|operator_error)\\.$/', $detail ) ) {
+			return $detail;
+		}
+		return '';
+	}
+
+	/**
 	 * Return a safe activation failure notice.
 	 *
 	 * @param Throwable $throwable Failure.

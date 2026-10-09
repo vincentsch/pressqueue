@@ -53,6 +53,8 @@ final class BufferDiscoveryProviderTest extends TestCase {
 		);
 
 		$account = $provider->account( 'fixture credential' );
+		$body    = json_decode( $requests[0][1]['body'], false, 512, JSON_THROW_ON_ERROR );
+		self::assertIsObject( $body->variables );
 
 		self::assertSame( 'buffer', $account->provider );
 		self::assertSame( 'acct_1', $account->remote_account_id );
@@ -121,7 +123,7 @@ final class BufferDiscoveryProviderTest extends TestCase {
 		self::assertStringContainsString( 'maxCharacters', $body['query'] );
 		self::assertSame( 'available', $channels[0]->availability );
 		self::assertSame( 2, $channels[0]->capability_document['schema_version'] );
-		self::assertSame( array( 'immediate', 'queue_next', 'queue_end', 'explicit_time' ), $channels[0]->capability_document['delivery']['schedule_slots'] );
+		self::assertSame( array( 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' ), $channels[0]->capability_document['delivery']['schedule_slots'] );
 		self::assertSame( 280, $channels[0]->capability_document['delivery']['max_text_characters'] );
 		self::assertTrue( $channels[0]->capability_document['delivery']['text'] );
 		self::assertSame( 1, $channels[0]->capability_document['delivery']['image']['max_items'] );

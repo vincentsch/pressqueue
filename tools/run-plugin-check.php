@@ -76,12 +76,26 @@ run_wp_cli_command( $command, $root );
 $target = getenv( 'PLUGIN_CHECK_TARGET' );
 
 if ( false === $target || '' === $target ) {
-	$target = 'pressqueue';
+	$target = is_file( sys_get_temp_dir() . '/pressqueue-package-smoke/pressqueue.zip' ) ? sys_get_temp_dir() . '/pressqueue-package-smoke/pressqueue.zip' : 'pressqueue';
 }
 
 if ( 'pressqueue' !== $target && ! file_exists( $target ) ) {
 	fwrite( STDERR, "Plugin Check target not found at " . $target . ". Run composer run package:smoke first.\n" );
 	exit( 1 );
+}
+
+// The pinned checker accepts installed slugs and directories, but cannot run
+// runtime checks directly against a local ZIP. Install the reviewed artifact
+// into the disposable site without activating it, then check its slug.
+if ( is_file( $target ) && 'zip' === strtolower( pathinfo( $target, PATHINFO_EXTENSION ) ) ) {
+	run_wp_cli_command(
+		array_merge(
+			resolve_wp_cli_command( $wp_cli_cache ),
+			array( 'plugin', 'install', $target, '--force', '--path=' . $wp_path )
+		),
+		$root
+	);
+	$target = 'pressqueue';
 }
 
 $command = array_merge(

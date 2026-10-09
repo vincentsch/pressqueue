@@ -63,9 +63,11 @@ wp pressqueue batches show <batch_public_id>
 
 ## Dry Assessments
 
-Mutation commands default to a zero-write assessment. Without `--apply`, they
-do not schedule Action Scheduler work, create rows, append events, probe media
-URLs, decrypt credentials, or contact providers.
+Mutation commands default to an assessment. Without `--apply`, they do not
+schedule actions, create rows, append events, or submit posts to providers.
+Retry and resume assessments decrypt credentials locally to check whether they
+are usable. Message and batch previews may check selected public image URLs and
+cache the result. Credentials never appear in command output.
 
 An assessment that is allowed or blocked exits `0` because the assessment
 completed successfully. Applying a missing-record, stale-state, conflict, or

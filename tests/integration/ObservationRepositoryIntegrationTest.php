@@ -17,7 +17,7 @@ use PressQueue\Storage\Schema;
 use PressQueue\Storage\SchemaMigrator;
 use PressQueue\Storage\SettingsRepository;
 use RuntimeException;
-use WP_UnitTestCase;
+use PressQueue\Tests\Support\PressQueueIntegrationTestCase as WP_UnitTestCase;
 
 /**
  * @covers \PressQueue\Storage\ObservationPayloads

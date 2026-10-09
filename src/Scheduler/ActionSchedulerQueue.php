@@ -107,7 +107,11 @@ class ActionSchedulerQueue {
 			return;
 		}
 
-		self::ensure_recurring_actions();
+		try {
+			self::ensure_recurring_actions();
+		} catch ( \Throwable $exception ) {
+			unset( $exception );
+		}
 		BatchQueueService::recover_queueing_batches();
 	}
 
@@ -203,7 +207,7 @@ class ActionSchedulerQueue {
 		RuntimeDisabledLatch::assert_open_for( 'delivery scheduling' );
 		$this->assert_ready();
 
-		$action_id = as_schedule_single_action( $timestamp ?? time(), self::WORKER_HOOK, array( $delivery_public_id ), self::GROUP, true );
+		$action_id = as_schedule_single_action( $timestamp ?? time(), self::WORKER_HOOK, array( $delivery_public_id ), self::GROUP, false );
 		if ( ! is_numeric( $action_id ) || (int) $action_id <= 0 ) {
 			throw new StorageUnavailableException( 'Action Scheduler did not create a delivery action.' );
 		}
@@ -238,7 +242,7 @@ class ActionSchedulerQueue {
 		$this->assert_ready();
 
 		$args      = array( $batch_public_id, $preview_snapshot_hash );
-		$action_id = as_schedule_single_action( time(), self::BATCH_QUEUE_HOOK, $args, self::GROUP, true );
+		$action_id = as_schedule_single_action( time(), self::BATCH_QUEUE_HOOK, $args, self::GROUP, false );
 		if ( ! is_numeric( $action_id ) || (int) $action_id <= 0 ) {
 			throw new StorageUnavailableException( 'Action Scheduler did not create a batch queue action.' );
 		}

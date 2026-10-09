@@ -619,7 +619,7 @@ final class ConnectionController {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Error text is sanitized for display only.
 		if ( isset( $_GET['pressqueue_detail'] ) ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Error text is sanitized for display only.
-			echo ' ' . esc_html( sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) );
+			echo ' ' . esc_html( SafeOperatorError::notice_detail( sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) ) );
 		}
 
 		echo '</p></div>';
@@ -649,7 +649,7 @@ final class ConnectionController {
 	 * @param string|null $value Secret-bearing value.
 	 */
 	private static function memzero( ?string &$value ): void {
-		if ( null !== $value && function_exists( 'sodium_memzero' ) ) {
+		if ( null !== $value && extension_loaded( 'sodium' ) && function_exists( 'sodium_memzero' ) ) {
 			sodium_memzero( $value );
 		}
 	}

@@ -71,7 +71,7 @@ final class ExportService {
 				'generated_at_utc'          => self::rfc3339( $started_at ),
 				'include_rendered_payloads' => $include_rendered_payloads,
 				'page_size'                 => $page_size,
-				'plugin_version'            => defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0-dev',
+				'plugin_version'            => defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0',
 				'schema_version'            => 1,
 				'site_url_hash'             => $this->site_url_hash(),
 				'snapshot_cutoff_utc'       => self::rfc3339( $started_at ),
@@ -88,8 +88,13 @@ final class ExportService {
 			$payload['tables'][ $suffix ] = array();
 		}
 
-		$emitted     = 0;
-		$next_cursor = null;
+		$encoded_base = wp_json_encode( $payload );
+		if ( ! is_string( $encoded_base ) ) {
+			throw new ValidationException( 'Export JSON could not be encoded.' );
+		}
+		$encoded_bytes = strlen( $encoded_base );
+		$emitted       = 0;
+		$next_cursor   = null;
 
 		foreach ( $this->table_fields() as $suffix => $fields ) {
 			if ( ! $this->table_is_reachable( $suffix, $cursor ) ) {
@@ -100,28 +105,29 @@ final class ExportService {
 			$rows         = $this->fetch_rows( $suffix, $fields, $table_cursor, $page_size - $emitted + 1, $started_at );
 
 			foreach ( $rows as $row ) {
-				$normalized                       = $this->normalize_row( $suffix, $row, $include_rendered_payloads );
-				$candidate                        = $payload;
-				$candidate['tables'][ $suffix ][] = $normalized;
-				$encoded_candidate                = wp_json_encode( $candidate );
-
-				if ( ! is_string( $encoded_candidate ) ) {
+				$normalized  = $this->normalize_row( $suffix, $row, $include_rendered_payloads );
+				$encoded_row = wp_json_encode( $normalized );
+				$row_cursor  = new ExportCursor( $suffix, (string) $row[ $this->timestamp_field( $suffix ) ], (string) $row['public_id'] );
+				$cursor_json = wp_json_encode( $row_cursor->to_array() );
+				if ( ! is_string( $encoded_row ) || ! is_string( $cursor_json ) ) {
 					throw new ValidationException( 'Export JSON could not be encoded.' );
 				}
 
-				if ( strlen( $encoded_candidate ) > $byte_limit ) {
+				// Encode each row once. Reserve room for a continuation cursor so
+				// a truncated download stays inside the same byte limit.
+				$added_bytes = strlen( $encoded_row ) + ( array() === $payload['tables'][ $suffix ] ? 0 : 1 );
+				if ( $encoded_bytes + $added_bytes + strlen( $cursor_json ) - 4 > $byte_limit ) {
 					if ( 0 === $emitted ) {
 						throw new ValidationException( 'One export row exceeds the byte limit.' );
 					}
-
 					$payload['truncated'] = true;
 					break 2;
 				}
 
-				$payload = $candidate;
+				$payload['tables'][ $suffix ][] = $normalized;
+				$encoded_bytes                 += $added_bytes;
 				++$emitted;
-
-				$next_cursor = new ExportCursor( $suffix, (string) $row[ $this->timestamp_field( $suffix ) ], (string) $row['public_id'] );
+				$next_cursor = $row_cursor;
 
 				if ( $emitted >= $page_size ) {
 					$payload['truncated'] = true;
@@ -144,15 +150,16 @@ final class ExportService {
 	 * @param string|null $cursor_string Cursor string.
 	 */
 	public function stream_download( bool $include_rendered_payloads, ?string $cursor_string = null ): void {
+		if ( headers_sent() ) {
+			throw new ValidationException( 'Export download headers could not be sent.' );
+		}
 		$handle = $this->page_stream( $cursor_string, $include_rendered_payloads );
 
 		try {
-			if ( ! headers_sent() ) {
-				header( 'Content-Type: application/json; charset=UTF-8' );
-				header( 'Content-Disposition: attachment; filename="pressqueue-export-' . gmdate( 'Ymd-His' ) . '.json"' );
-				header( 'X-Content-Type-Options: nosniff' );
-				header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
-			}
+			header( 'Content-Type: application/json; charset=UTF-8' );
+			header( 'Content-Disposition: attachment; filename="pressqueue-export-' . gmdate( 'Ymd-His' ) . '.json"' );
+			header( 'X-Content-Type-Options: nosniff' );
+			header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
 
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- The download body is generated JSON, not HTML.
 			fpassthru( $handle );

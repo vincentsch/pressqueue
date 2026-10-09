@@ -44,6 +44,18 @@ if ( ! function_exists( 'add_action' ) ) {
 	}
 }
 
+if ( ! function_exists( 'add_filter' ) ) {
+	function add_filter( $hook_name, $callback, $priority = 10, $accepted_args = 1 ) {
+		add_action( $hook_name, $callback, $priority, $accepted_args );
+	}
+}
+
+if ( ! function_exists( 'get_option' ) ) {
+	function get_option( $option, $default = false ) {
+		return $default;
+	}
+}
+
 if ( ! function_exists( 'do_action' ) ) {
 	function do_action( $hook_name ) {
 		$GLOBALS['pressqueue_smoke_fired_actions'][] = $hook_name;
@@ -74,7 +86,7 @@ if ( ! function_exists( 'plugin_dir_path' ) ) {
 
 if ( ! function_exists( 'plugin_basename' ) ) {
 	function plugin_basename( $file ) {
-		return basename( dirname( $file ) ) . '/' . basename( $file );
+		return 'pressqueue/' . basename( $file );
 	}
 }
 

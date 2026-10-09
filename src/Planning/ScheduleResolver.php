@@ -20,6 +20,8 @@ use PressQueue\Storage\ValidationException;
  * Resolves provider-neutral schedule controls.
  */
 final class ScheduleResolver {
+	public const MINIMUM_LEAD_SECONDS = 900;
+
 	/**
 	 * Current UTC clock.
 	 *
@@ -118,8 +120,8 @@ final class ScheduleResolver {
 			$utc = $local->setTimezone( new DateTimeZone( 'UTC' ) );
 		}
 
-		if ( $utc->getTimestamp() <= $this->now->getTimestamp() ) {
-			throw new ValidationException( 'Explicit schedule cannot be in the past.' );
+		if ( $utc->getTimestamp() < $this->now->getTimestamp() + self::MINIMUM_LEAD_SECONDS ) {
+			throw new ValidationException( 'Choose an explicit time at least 15 minutes from now.' );
 		}
 
 		if ( $utc->getTimestamp() > $this->now->modify( '+365 days' )->getTimestamp() ) {

@@ -43,7 +43,7 @@ use PressQueue\Storage\SettingsRepository;
 use PressQueue\Storage\ValidationException;
 use PressQueue\WpCli\DeliveryCommand;
 use PressQueue\WpCli\ExitCodes;
-use WP_UnitTestCase;
+use PressQueue\Tests\Support\PressQueueIntegrationTestCase as WP_UnitTestCase;
 
 /**
  * @covers \PressQueue\Admin\AdminScreens
@@ -525,6 +525,8 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertInstanceOf( \WP_User::class, $user );
 		$user->add_cap( Capabilities::VIEW_DELIVERIES );
 		$user->add_cap( Capabilities::OPERATE_DELIVERIES );
+		wp_set_current_user( 0 );
+		wp_set_current_user( $user_id );
 
 		$_GET['delivery_public_id'] = $delivery->public_id;
 
@@ -548,6 +550,8 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		$user = get_userdata( $user_id );
 		self::assertInstanceOf( \WP_User::class, $user );
 		$user->add_cap( Capabilities::VIEW_DELIVERIES );
+		wp_set_current_user( 0 );
+		wp_set_current_user( $user_id );
 
 		ob_start();
 		AdminScreens::render_default_page();
@@ -558,6 +562,37 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertStringNotContainsString( 'PressQueue Decisions', $html );
 	}
 
+	public function test_non_ascii_identifier_filter_is_safe(): void {
+		$this->liveDelivery( 42 );
+		$result = ( new DeliveryQueryRepository() )->query( array( 'identifier' => 'Müller' ) );
+		self::assertSame( 0, $result['total'] );
+	}
+
+	public function test_retention_scrubs_accepted_content_and_keeps_duplicate_identity(): void {
+		$delivery = $this->liveDelivery( 42 );
+		$this->updateDelivery( $delivery->public_id, array( 'state' => 'accepted', 'state_changed_at' => '2020-01-01 00:00:00' ) );
+		$service = new \PressQueue\Privacy\RetentionService();
+		$method = new \ReflectionMethod( $service, 'delete_deliveries' );
+		$method->setAccessible( true );
+		$result = $method->invoke( $service, '2021-01-01 00:00:00', array() );
+		self::assertSame( 1, $result['counters']['redacted'] );
+		$stored = ( new DeliveryRepository() )->find_by_public_id( $delivery->public_id );
+		self::assertNotNull( $stored );
+		self::assertSame( 'accepted', $stored->state );
+		self::assertSame( $delivery->delivery_key, $stored->delivery_key );
+		self::assertSame( 'retention', $stored->payload_preview['redacted'] );
+		self::assertNotNull( ( new \PressQueue\Batch\DuplicateHistoryService() )->blocking_bulk_duplicate( 42, $delivery->channel_public_id, null, 'live' ) );
+	}
+
+	public function test_repost_gap_uses_latest_acceptance_instead_of_an_older_match(): void {
+		$destination = $this->enabledDestination();
+		$older = $this->liveDelivery( 42, $destination );
+		$recent = $this->liveDelivery( 42, $destination );
+		$this->updateDelivery( $older->public_id, array( 'state' => 'accepted', 'state_changed_at' => gmdate( 'Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS ) ) );
+		$this->updateDelivery( $recent->public_id, array( 'state' => 'accepted', 'state_changed_at' => gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS ) ) );
+		self::assertNull( ( new \PressQueue\Batch\DuplicateHistoryService() )->prior_accepted_delivery( 42, $destination['channel']->public_id, array( 'minimum_days_since_prior_acceptance' => 7 ) ) );
+	}
+
 	/**
 	 * Create an authenticated command user with one capability.
 	 *
@@ -566,10 +601,10 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 	 */
 	private function commandUser( string $capability ): int {
 		$user_id = (int) self::factory()->user->create();
-		wp_set_current_user( $user_id );
 		$user = get_userdata( $user_id );
 		self::assertInstanceOf( \WP_User::class, $user );
 		$user->add_cap( $capability );
+		wp_set_current_user( $user_id );
 
 		return $user_id;
 	}
@@ -618,8 +653,18 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 	 * @param array{connection:ConnectionRecord,channel:ChannelRecord}|null $destination Destination.
 	 */
 	private function liveDelivery( int $post_id = 42, ?array $destination = null ): DeliveryRecord {
+		if ( null === get_post( $post_id ) ) {
+			wp_insert_post( array( 'import_id' => $post_id, 'post_type' => 'post', 'post_status' => 'publish', 'post_title' => 'Fixture post' ) );
+		}
 		$destination = $destination ?? $this->enabledDestination();
 		$rule        = ( new RuleRepository() )->create( $this->ruleInput( $destination['channel']->public_id ) );
+		$rules = new RuleRepository();
+		$rule = $rules->mark_version_previewed( $rule->public_id, $rule->lock_version, $rule->version );
+		$rule = $rules->update( $rule->public_id, $rule->lock_version, array( 'enabled' => true ) );
+		( new SettingsRepository() )->set_dry_run_enabled( false );
+		wp_update_post( array( 'ID' => $post_id, 'post_status' => 'publish', 'post_password' => '' ) );
+		delete_post_meta( $post_id, '_pressqueue_policy' );
+		delete_post_meta( $post_id, '_pressqueue_controls' );
 		$decision    = ( new DecisionRepository() )->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $destination, $post_id ) );
 		$final_text  = "Hello from integration\n\nhttps://example.test/post-" . (string) $post_id;
 

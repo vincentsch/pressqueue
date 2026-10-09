@@ -50,7 +50,7 @@ final class BufferGraphqlClient {
 			array(
 				'operationName' => $operation_name,
 				'query'         => $query,
-				'variables'     => $variables,
+				'variables'     => (object) $variables,
 			)
 		);
 

@@ -54,6 +54,7 @@ final class DeliveryWorker {
 	private LeaseService $leases;
 	private RetryPolicy $retry_policy;
 	private ResultClassifier $classifier;
+	private DeliveryPolicyGate $policy_gate;
 
 	/**
 	 * Optional credential resolver.
@@ -85,6 +86,7 @@ final class DeliveryWorker {
 		$this->leases              = new LeaseService();
 		$this->retry_policy        = new RetryPolicy();
 		$this->classifier          = new ResultClassifier();
+		$this->policy_gate         = new DeliveryPolicyGate( $database );
 		$this->credential_resolver = $credential_resolver;
 	}
 
@@ -174,12 +176,13 @@ final class DeliveryWorker {
 				return;
 			}
 
-			if ( $this->runtime_closed_during_submission() ) {
+			$hold_reason = $this->submission_hold_reason( $leased );
+			if ( null !== $hold_reason ) {
 				$this->transitions->hold_leased(
 					$leased->public_id,
 					$owner,
 					array(
-						'classification' => 'runtime_disabled',
+						'classification' => $hold_reason,
 						'schema_version' => 1,
 					)
 				);
@@ -193,12 +196,13 @@ final class DeliveryWorker {
 
 			$submission_started = true;
 			$request            = $this->request_from_delivery( $started );
-			if ( $this->runtime_closed_during_submission() ) {
+			$hold_reason        = $this->submission_hold_reason( $leased );
+			if ( null !== $hold_reason ) {
 				$this->transitions->hold_leased(
 					$leased->public_id,
 					$owner,
 					array(
-						'classification' => 'runtime_disabled',
+						'classification' => $hold_reason,
 						'schema_version' => 1,
 					)
 				);
@@ -235,10 +239,28 @@ final class DeliveryWorker {
 	 *
 	 * @phpstan-impure
 	 *
-	 * @return bool
+	 * @param DeliveryRecord $delivery Frozen delivery.
+	 * @return string|null
 	 */
-	private function runtime_closed_during_submission(): bool {
-		return RuntimeDisabledLatch::is_closed();
+	private function submission_hold_reason( DeliveryRecord $delivery ): ?string {
+		if ( RuntimeDisabledLatch::is_closed() ) {
+			return 'runtime_disabled';
+		}
+		if ( $this->settings->is_kill_switch_enabled() ) {
+			return 'kill_switch_enabled';
+		}
+		if ( $this->settings->is_dry_run_enabled() ) {
+			return 'dry_run_enabled';
+		}
+		if ( 'explicit_time' === $delivery->schedule_slot && ( null === $delivery->scheduled_for_utc || $delivery->scheduled_for_utc->getTimestamp() <= time() ) ) {
+			return 'schedule_time_expired';
+		}
+		try {
+			return $this->policy_gate->hold_reason( $delivery );
+		} catch ( Throwable $exception ) {
+			unset( $exception );
+			return 'policy_check_failed';
+		}
 	}
 
 	/**
@@ -248,18 +270,11 @@ final class DeliveryWorker {
 	 * @return array<string,mixed>
 	 */
 	private function preflight( DeliveryRecord $delivery ): array {
-		if ( RuntimeDisabledLatch::is_closed() ) {
+		$hold_reason = $this->submission_hold_reason( $delivery );
+		if ( null !== $hold_reason ) {
 			return array(
 				'hold'       => true,
-				'hold_class' => 'runtime_disabled',
-				'ok'         => false,
-			);
-		}
-
-		if ( $this->settings->is_kill_switch_enabled() ) {
-			return array(
-				'hold'       => true,
-				'hold_class' => 'kill_switch_enabled',
+				'hold_class' => $hold_reason,
 				'ok'         => false,
 			);
 		}
@@ -308,7 +323,19 @@ final class DeliveryWorker {
 		} catch ( CredentialEnvelopeException | StorageException | ValidationException $exception ) {
 			unset( $exception );
 
-			return $this->preflight_failure( 'credential_unavailable', 'not_retryable' );
+			$this->connections->mark_credential_invalid(
+				$connection->public_id,
+				array(
+					'classification' => 'credential_unavailable',
+					'schema_version' => 1,
+				)
+			);
+
+			return array(
+				'hold'       => true,
+				'hold_class' => 'credential_unavailable',
+				'ok'         => false,
+			);
 		}
 
 		return array(
@@ -327,6 +354,9 @@ final class DeliveryWorker {
 	 * @param ProviderDeliveryResult $result Result.
 	 */
 	private function store_result( DeliveryRecord $delivery, string $owner, ProviderDeliveryResult $result ): void {
+		if ( 'draft_not_confirmed' === $result->error_class ) {
+			$this->settings->set_kill_switch_enabled( true );
+		}
 		if ( 'invalid_credential' === $result->error_class && null !== $delivery->bound_connection_public_id ) {
 			$this->connections->mark_credential_invalid(
 				$delivery->bound_connection_public_id,
@@ -577,7 +607,7 @@ final class DeliveryWorker {
 	 * @param array<string,mixed> $preflight Preflight state.
 	 */
 	private function clear_preflight_credential( array &$preflight ): void {
-		if ( isset( $preflight['credential'] ) && is_string( $preflight['credential'] ) && function_exists( 'sodium_memzero' ) ) {
+		if ( isset( $preflight['credential'] ) && is_string( $preflight['credential'] ) && extension_loaded( 'sodium' ) && function_exists( 'sodium_memzero' ) ) {
 			sodium_memzero( $preflight['credential'] );
 		}
 

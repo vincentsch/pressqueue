@@ -10,7 +10,9 @@ declare(strict_types=1);
 namespace PressQueue\Tests\Integration;
 
 use PressQueue\Batch\BatchConfirmationService;
+use PressQueue\Batch\BatchCancellationService;
 use PressQueue\Batch\BatchPreviewService;
+use PressQueue\Batch\BatchQueueService;
 use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Planning\EventCollector;
 use PressQueue\Planning\EventNormalizer;
@@ -36,7 +38,7 @@ use PressQueue\Storage\ValidationException;
 use PressQueue\WpCli\BatchCommand;
 use PressQueue\WpCli\ExitCodes;
 use RuntimeException;
-use WP_UnitTestCase;
+use PressQueue\Tests\Support\PressQueueIntegrationTestCase as WP_UnitTestCase;
 
 /**
  * @covers \PressQueue\Planning\ConditionEvaluation
@@ -55,12 +57,79 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		$this->resetStorage();
 		( new SchemaMigrator( Database::from_globals() ) )->migrate();
 		RuntimeDisabledLatch::open();
+		Capabilities::grant_to_administrators( false );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
 	}
 
 	protected function tearDown(): void {
 		$this->resetStorage();
 
 		parent::tearDown();
+	}
+
+	public function test_display_only_changes_do_not_create_update_events(): void {
+		$post_id = $this->publishedPost();
+		$first_term = self::factory()->term->create( array( 'name' => 'AAA', 'taxonomy' => 'category' ) );
+		$second_term = self::factory()->term->create( array( 'name' => 'MMM', 'taxonomy' => 'category' ) );
+		wp_set_post_terms( $post_id, array( $first_term, $second_term ), 'category' );
+		$normalizer = new EventNormalizer();
+		$first = $normalizer->from_post_id( $post_id, 'runtime', 'integration', 'update' );
+		self::assertNotNull( $first );
+		$post = get_post( $post_id );
+		wp_update_user( array( 'ID' => $post->post_author, 'display_name' => 'New display name' ) );
+		wp_update_term( $first_term, 'category', array( 'name' => 'ZZZ' ) );
+		update_option( 'timezone_string', 'Pacific/Auckland' );
+		$second = $normalizer->from_post_id( $post_id, 'runtime', 'integration', 'update' );
+		self::assertNotNull( $second );
+		self::assertSame( $first->trigger_fingerprint, $second->trigger_fingerprint );
+		self::assertNotSame( $first->revision_fingerprint, $second->revision_fingerprint );
+		update_option( 'timezone_string', '' );
+	}
+
+	public function test_backdated_first_publication_records_a_skip_without_delivery(): void {
+		$destination = $this->enabledDestination();
+		$this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
+		$post_id = self::factory()->post->create( array( 'post_status' => 'publish', 'post_date' => '2020-01-01 12:00:00', 'post_date_gmt' => '2020-01-01 12:00:00' ) );
+		$event = ( new EventNormalizer() )->from_post_id( $post_id, 'preview', 'integration', 'first_publish' );
+		self::assertNotNull( $event );
+		$preview = ( new Planner() )->preview( $event );
+		self::assertSame( array(), $preview->deliveries );
+		self::assertSame( 'skipped', $preview->decisions[0]['result'] );
+		EventCollector::capture_status_transition( 'publish', 'draft', get_post( $post_id ) );
+		EventCollector::finalize();
+		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+		self::assertSame( 1, $this->rowCount( Schema::DECISIONS ) );
+		self::assertNotSame( '', get_post_meta( $post_id, EventNormalizer::META_FIRST_PUBLISH_SEEN_AT, true ) );
+	}
+
+	public function test_scheduled_first_publication_matches_default_rule_and_global_exclusions(): void {
+		$destination = $this->enabledDestination();
+		$rule = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
+		$post_id = self::factory()->post->create( array( 'post_status' => 'publish', 'post_title' => 'Scheduled publication' ) );
+		$event = ( new EventNormalizer() )->from_post_id( $post_id, 'preview', 'integration', 'scheduled_publication' );
+		self::assertNotNull( $event );
+		$result = ( new Planner() )->preview( $event );
+		self::assertCount( 1, $result->deliveries );
+		self::assertTrue( $rule->applies_to_trigger( 'scheduled_publication' ) );
+	}
+
+	public function test_password_protected_posts_cannot_be_planned(): void {
+		$post_id = self::factory()->post->create( array( 'post_status' => 'publish', 'post_password' => 'private' ) );
+		self::assertNull( ( new EventNormalizer() )->from_post_id( $post_id, 'runtime', 'integration', 'first_publish' ) );
+	}
+
+	public function test_multiple_batches_can_have_real_action_scheduler_queue_actions(): void {
+		self::assertTrue( class_exists( 'ActionScheduler_DataController' ) );
+		\ActionScheduler_DataController::mark_migration_complete();
+		$queue = new ActionSchedulerQueue();
+		self::assertTrue( $queue->is_ready() );
+		$first = '01K8Z8D0PKH2N8J7S3K5A9C6DE';
+		$second = '01K8Z8D0PKH2N8J7S3K5A9C6DF';
+		self::assertGreaterThan( 0, $queue->schedule_batch_queue( $first, str_repeat( 'a', 64 ) ) );
+		self::assertGreaterThan( 0, $queue->schedule_batch_queue( $second, str_repeat( 'b', 64 ) ) );
+		self::assertTrue( $queue->has_batch_queue_action( $first, str_repeat( 'a', 64 ) ) );
+		self::assertTrue( $queue->has_batch_queue_action( $second, str_repeat( 'b', 64 ) ) );
+		ActionSchedulerQueue::unschedule_all();
 	}
 
 	public function test_fixture_exclusion_rule_records_excluded_decision_with_taxonomy_and_metadata_reasons(): void {
@@ -108,9 +177,34 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 
 		self::assertSame( array( 'excluded', 'skipped' ), array_column( $result->decisions, 'result' ) );
 		self::assertSame( $skipped->public_id, $result->decisions[1]['rule_public_id'] );
-		self::assertSame( 'not_matched', $result->decisions[1]['reasons'][0]['result'] );
+			self::assertSame( 'not_matched', $result->decisions[1]['reasons'][0]['condition_result'] );
 		self::assertSame( 0, $this->rowCount( Schema::DECISIONS ) );
 		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
+	public function test_draft_rule_refuses_post_and_batch_public_schedule_overrides(): void {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$destination              = $this->enabledDestination();
+		$input                    = $this->includeRuleInput( $destination['channel_public_id'] );
+		$input['schedule_policy'] = 'draft';
+		$rule                     = $this->createEnabledRule( $input );
+		$post_id                  = $this->publishedPost();
+		$bundle                   = PostControlMetadata::default_bundle();
+		$bundle['schedule']       = array( 'mode' => 'immediate' );
+		update_post_meta( $post_id, PostControlMetadata::META_KEY, PostControlMetadata::encoded( $bundle ) );
+		$result = $this->planPost( $post_id, array( $rule ) );
+		self::assertContains( 'policy_error', array_column( $result->decisions, 'result' ) );
+		self::assertSame( array(), $result->deliveries );
+		$normalizer = new EventNormalizer();
+		$event      = $normalizer->from_post_id( $post_id, 'runtime', 'integration', 'first_publish', array() );
+		self::assertNotNull( $event );
+		$batch_result = ( new Planner() )->preview_runtime_destination(
+			$event,
+			$destination['channel_public_id'],
+			new \PressQueue\Planning\SchedulePolicy( 'queue_end', null, null, array() )
+		);
+		self::assertContains( 'policy_error', array_column( $batch_result->decisions, 'result' ) );
+		self::assertSame( array(), $batch_result->deliveries );
 	}
 
 	public function test_include_planning_creates_idempotent_dry_run_delivery_and_live_identity_separately(): void {
@@ -163,6 +257,7 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 				array(
 					'condition_tree'         => $this->metadataExistsCondition( '_pressqueue_non_scalar' ),
 					'custom_field_allowlist' => array( '_pressqueue_non_scalar' ),
+					'inline_template'        => array( 'schema_version' => 1, 'message' => '{{ title }}', 'custom_field_allowlist' => array( '_pressqueue_non_scalar' ) ),
 					'name'                   => 'Broken include',
 				)
 			)
@@ -269,8 +364,9 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		$connection_rule     = $this->createEnabledRule( $this->includeRuleInput( $enabled_channel->public_id ) );
 
 		$connection_result = $this->planPost( $this->publishedPost(), array( $connection_rule ) );
-		self::assertSame( 'policy_error', $connection_result->decisions[0]['result'] );
-		self::assertSame( 'disabled_connection', $connection_result->decisions[0]['reasons'][ count( $connection_result->decisions[0]['reasons'] ) - 1 ]['code'] );
+		$connection_decisions = array_values( array_filter( $connection_result->decisions, static fn ( array $decision ): bool => $decision['rule_public_id'] === $connection_rule->public_id ) );
+		self::assertSame( 'policy_error', $connection_decisions[0]['result'] );
+		self::assertSame( 'disabled_connection', $connection_decisions[0]['reasons'][ count( $connection_decisions[0]['reasons'] ) - 1 ]['code'] );
 	}
 
 	public function test_unsupported_channel_capability_is_explainable_policy_error(): void {
@@ -310,20 +406,23 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 	}
 
 	public function test_invalid_taxonomy_configuration_is_policy_error(): void {
+		register_taxonomy( 'pq_missing_taxonomy', 'post' );
+		$term = self::factory()->term->create( array( 'taxonomy' => 'pq_missing_taxonomy' ) );
 		$destination = $this->enabledDestination();
 		$rule        = $this->createEnabledRule(
 			array_merge(
 				$this->includeRuleInput( $destination['channel_public_id'] ),
 				array(
-					'condition_tree' => $this->taxonomyCondition( 'pressqueue_missing_taxonomy', array( 'missing-term' ) ),
+					'condition_tree' => $this->taxonomyCondition( 'pq_missing_taxonomy', array( (int) $term ) ),
 				)
 			)
 		);
+		unregister_taxonomy( 'pq_missing_taxonomy' );
 
 		$result = $this->planPost( $this->publishedPost(), array( $rule ) );
 
 		self::assertSame( 'policy_error', $result->decisions[0]['result'] );
-		self::assertSame( 'invalid_taxonomy_configuration', $result->decisions[0]['reasons'][0]['code'] );
+		self::assertSame( 'malformed_rule', $result->decisions[0]['reasons'][0]['code'] );
 		self::assertSame( array(), $result->deliveries );
 		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
 	}
@@ -366,6 +465,10 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		$destination = $this->enabledDestination();
 		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
 		$post_id     = $this->publishedPost();
+		// This is an existing pre-upgrade post, not a first publish in this request.
+		$captured = new \ReflectionProperty( EventCollector::class, 'captured' );
+		$captured->setAccessible( true );
+		$captured->setValue( null, array() );
 		$normalizer  = new EventNormalizer();
 		$before      = $normalizer->from_post_id( $post_id, 'runtime', 'integration', 'update', $normalizer->metadata_allowlist_for_rules( array( $rule ) ) );
 
@@ -457,6 +560,197 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( array( 'reserved' ), array_values( array_unique( array_column( $items, 'state' ) ) ) );
 	}
 
+	public function test_manual_bulk_reservation_blocks_first_publish_before_handoff(): void {
+		$fixture = $this->bulkRuntimeFixture();
+		$batch   = $fixture['batch'];
+		( new BatchConfirmationService( null, new CountingBatchQueueScheduler() ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+		self::assertSame( 'reserved', ( new BatchItemRepository() )->find_by_batch( $batch->public_id )[0]->state );
+
+		$runtime = $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+		self::assertSame( array(), $runtime->deliveries );
+		self::assertContains( 'first_publish_duplicate', array_column( $runtime->decisions[0]['reasons'], 'code' ) );
+		$replay = $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+		self::assertSame( $runtime->decisions[0]['public_id'], $replay->decisions[0]['public_id'] );
+		( new BatchQueueService( null, new CountingBatchQueueScheduler() ) )->process( $batch->public_id, $batch->preview_snapshot_hash );
+		$item = ( new BatchItemRepository() )->find_by_batch( $batch->public_id )[0];
+
+		self::assertSame( 'queued', $item->state );
+		self::assertSame( 1, $this->rowCount( Schema::DELIVERIES ), 'A confirmed manual reservation and first_publish must not create different-identity live deliveries.' );
+		$after_handoff = $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+		self::assertSame( array(), $after_handoff->deliveries );
+		self::assertSame( $runtime->decisions[0]['public_id'], $after_handoff->decisions[0]['public_id'] );
+		( new BatchQueueService( null, new CountingBatchQueueScheduler() ) )->process( $batch->public_id, $batch->preview_snapshot_hash );
+		self::assertSame( 1, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
+	public function test_first_publish_before_bulk_confirmation_invalidates_preview(): void {
+		$fixture = $this->bulkRuntimeFixture();
+		$batch   = $fixture['batch'];
+		$runtime = $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+		self::assertCount( 1, $runtime->deliveries );
+
+		try {
+			( new BatchConfirmationService( null, new CountingBatchQueueScheduler() ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+			self::fail( 'Runtime-first delivery must invalidate the manual preview before reservation.' );
+		} catch ( ValidationException $exception ) {
+			self::assertStringContainsString( 'changed', $exception->getMessage() );
+		}
+
+		self::assertSame( 'previewed', ( new BatchItemRepository() )->find_by_batch( $batch->public_id )[0]->state );
+		self::assertSame( 1, $this->rowCount( Schema::DELIVERIES ) );
+		$replay = $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+		self::assertSame( $runtime->deliveries[0]['public_id'], $replay->deliveries[0]['public_id'] );
+		self::assertSame( 1, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
+	/**
+	 * @dataProvider reservationModes
+	 */
+	public function test_manual_reservation_keeps_dry_and_live_planning_separate( bool $manual_dry_run ): void {
+		$fixture = $this->bulkRuntimeFixture( $manual_dry_run );
+		$batch   = $fixture['batch'];
+		( new BatchConfirmationService( null, new CountingBatchQueueScheduler() ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+		$settings = new SettingsRepository();
+		$settings->set_dry_run_enabled( ! $manual_dry_run );
+		$runtime = $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+		self::assertCount( 1, $runtime->deliveries );
+		self::assertSame( $manual_dry_run ? 'live' : 'dry_run', $runtime->deliveries[0]['delivery_mode'] );
+
+		$settings->set_dry_run_enabled( $manual_dry_run );
+		( new BatchQueueService( null, new CountingBatchQueueScheduler() ) )->process( $batch->public_id, $batch->preview_snapshot_hash );
+		self::assertSame( 'queued', ( new BatchItemRepository() )->find_by_batch( $batch->public_id )[0]->state );
+		self::assertSame( 2, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
+	/**
+	 * @return array<string,array{bool}>
+	 */
+	public function reservationModes(): array {
+		return array( 'manual dry run' => array( true ), 'manual live' => array( false ) );
+	}
+
+	public function test_cancelled_manual_reservation_allows_first_publish(): void {
+		$fixture = $this->bulkRuntimeFixture();
+		$batch   = $fixture['batch'];
+		( new BatchConfirmationService( null, new CountingBatchQueueScheduler() ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+		self::assertSame( array(), $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) )->deliveries );
+		( new BatchCancellationService() )->cancel( $batch->public_id, $fixture['user_id'] );
+		$runtime = $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+		self::assertCount( 1, $runtime->deliveries );
+		self::assertSame( 'held', $runtime->deliveries[0]['state'] );
+	}
+
+	public function test_update_rule_still_plans_and_bulk_handoff_rechecks_history(): void {
+		$fixture = $this->bulkRuntimeFixture();
+		$batch   = $fixture['batch'];
+		( new BatchConfirmationService( null, new CountingBatchQueueScheduler() ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+		$event = ( new EventNormalizer() )->from_post_id( $fixture['post_id'], 'runtime', 'integration', 'update' );
+		self::assertNotNull( $event );
+		$runtime = ( new Planner() )->plan_runtime( $event );
+		self::assertCount( 1, $runtime->deliveries );
+
+		( new BatchQueueService( null, new CountingBatchQueueScheduler() ) )->process( $batch->public_id, $batch->preview_snapshot_hash );
+		self::assertSame( 'duplicate', ( new BatchItemRepository() )->find_by_batch( $batch->public_id )[0]->state );
+		self::assertSame( 1, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
+	public function test_accepted_runtime_identity_replays_and_deliberate_repost_hands_off(): void {
+		$fixture  = $this->bulkRuntimeFixture();
+		$runtime  = $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+		$database = Database::from_globals();
+		// Seed a local accepted receipt without contacting a provider.
+		$database->query( 'UPDATE `' . $database->table( Schema::DELIVERIES ) . '` SET state = %s, remote_id = %s, attempt_count = 1 WHERE public_id = %s', array( 'accepted', 'fixture-accepted', $runtime->deliveries[0]['public_id'] ) );
+		$replay = $this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+		self::assertSame( $runtime->deliveries[0]['public_id'], $replay->deliveries[0]['public_id'] );
+
+		$batch = ( new BatchPreviewService() )->preview( 'repost', $fixture['batch']->filters, $fixture['batch']->batch_limits, $fixture['user_id'] );
+		self::assertSame( 'previewed', ( new BatchItemRepository() )->find_by_batch( $batch->public_id )[0]->state );
+		( new BatchConfirmationService( null, new CountingBatchQueueScheduler() ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+		( new BatchQueueService( null, new CountingBatchQueueScheduler() ) )->process( $batch->public_id, $batch->preview_snapshot_hash );
+		$item = ( new BatchItemRepository() )->find_by_batch( $batch->public_id )[0];
+		self::assertSame( 'queued', $item->state );
+		self::assertNotSame( $runtime->deliveries[0]['public_id'], $item->delivery_public_id );
+		self::assertSame( 2, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
+	public function test_first_publish_and_handoff_keep_outer_transaction_rollback(): void {
+		$fixture  = $this->bulkRuntimeFixture();
+		$batch    = $fixture['batch'];
+		$database = Database::from_globals();
+		$event    = ( new EventNormalizer() )->from_post_id( $fixture['post_id'], 'runtime', 'integration', 'first_publish' );
+		self::assertNotNull( $event );
+		try {
+			$database->transaction(
+				static function () use ( $database, $event ): void {
+					self::assertCount( 1, ( new Planner( $database ) )->plan_runtime( $event )->deliveries );
+					throw new RuntimeException( 'Rollback outer runtime transaction.' );
+				}
+			);
+			self::fail( 'Outer runtime rollback must propagate.' );
+		} catch ( RuntimeException $exception ) {
+			self::assertSame( 'Rollback outer runtime transaction.', $exception->getMessage() );
+		}
+		self::assertSame( 0, $this->rowCount( Schema::DECISIONS ) );
+		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+
+		( new BatchConfirmationService( null, new CountingBatchQueueScheduler() ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+		try {
+			$database->transaction(
+				function () use ( $database, $batch ): void {
+					( new BatchQueueService( $database, new CountingBatchQueueScheduler() ) )->process( $batch->public_id, $batch->preview_snapshot_hash );
+					self::assertSame( 1, $this->rowCount( Schema::DELIVERIES ) );
+					self::assertSame( 'queued', ( new BatchItemRepository( $database ) )->find_by_batch( $batch->public_id )[0]->state );
+					throw new RuntimeException( 'Rollback outer handoff transaction.' );
+				}
+			);
+			self::fail( 'Outer handoff rollback must propagate.' );
+		} catch ( RuntimeException $exception ) {
+			self::assertSame( 'Rollback outer handoff transaction.', $exception->getMessage() );
+		}
+		self::assertSame( 0, $this->rowCount( Schema::DECISIONS ) );
+		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+		self::assertSame( 'reserved', ( new BatchItemRepository() )->find_by_batch( $batch->public_id )[0]->state );
+		self::assertSame( 'queueing', ( new BatchRepository() )->find_by_public_id( $batch->public_id )->status );
+		( new BatchQueueService( $database, new CountingBatchQueueScheduler() ) )->process( $batch->public_id, $batch->preview_snapshot_hash );
+		self::assertSame( 1, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
+	public function test_paused_runtime_and_handoff_preserve_manual_reservation(): void {
+		$fixture = $this->bulkRuntimeFixture();
+		$batch   = $fixture['batch'];
+		( new BatchConfirmationService( null, new CountingBatchQueueScheduler() ) )->confirm( $batch->public_id, $batch->preview_snapshot_hash, $fixture['user_id'] );
+		RuntimeDisabledLatch::close();
+		( new BatchQueueService( null, new CountingBatchQueueScheduler() ) )->process( $batch->public_id, $batch->preview_snapshot_hash );
+		try {
+			$this->planPost( $fixture['post_id'], array( $fixture['rule'] ) );
+			self::fail( 'Paused runtime must refuse durable planning.' );
+		} catch ( ValidationException $exception ) {
+			self::assertStringContainsString( 'disabled', $exception->getMessage() );
+		}
+		self::assertSame( 'reserved', ( new BatchItemRepository() )->find_by_batch( $batch->public_id )[0]->state );
+		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+	}
+
+	/**
+	 * Create a manual preview and a runtime rule sharing one local destination.
+	 *
+	 * @return array{batch:BatchRecord,user_id:int,post_id:int,rule:RuleRecord}
+	 */
+	private function bulkRuntimeFixture( bool $dry_run = false ): array {
+		// Live identities stay held locally throughout these fake-only checks.
+		( new SettingsRepository() )->set_dry_run_enabled( $dry_run );
+		( new SettingsRepository() )->set_kill_switch_enabled( true );
+		$fixture = $this->durableBulkPreview();
+		$item    = ( new BatchItemRepository() )->find_by_batch( $fixture['batch']->public_id )[0];
+		self::assertNotNull( $item->channel_public_id );
+		$fixture['post_id'] = $item->post_id;
+		$input             = $this->includeRuleInput( $item->channel_public_id );
+		$input['triggers'] = array( 'first_publish', 'update', 'repost' );
+		$fixture['rule']   = $this->createEnabledRule( $input );
+
+		return $fixture;
+	}
+
 	public function test_batch_confirmation_stale_batch_state_does_not_schedule_handoff(): void {
 		$fixture   = $this->durableBulkPreview();
 		$batch     = $fixture['batch'];
@@ -501,6 +795,8 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		$user = get_userdata( $user_id );
 		self::assertInstanceOf( \WP_User::class, $user );
 		$user->add_cap( Capabilities::OPERATE_BATCHES );
+		wp_set_current_user( 0 );
+		wp_set_current_user( $user_id );
 
 		$destination            = $this->enabledDestination();
 		$rule_input             = $this->includeRuleInput( $destination['channel_public_id'] );

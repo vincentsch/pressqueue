@@ -185,9 +185,10 @@ final class BatchPreviewService {
 	 * @param array<string,mixed>|null        $filters Optional filters.
 	 * @param array<string,mixed>|null        $batch_limits Optional limits.
 	 * @param array<int,BatchItemRecord>|null $stored_items Optional stored item identities.
+	 * @param bool                            $allow_probe Whether new media URL probes may run.
 	 * @return array{items:array<int,array<string,mixed>>,queueable_items:array<int,array<string,mixed>>,summary:array<string,mixed>,snapshot_hash:string}
 	 */
-	public function evaluate( BatchRecord $batch, ?array $filters = null, ?array $batch_limits = null, ?array $stored_items = null ): array {
+	public function evaluate( BatchRecord $batch, ?array $filters = null, ?array $batch_limits = null, ?array $stored_items = null, bool $allow_probe = true ): array {
 		$filters      = $filters ?? $batch->filters;
 		$batch_limits = $batch_limits ?? $batch->batch_limits;
 		$trigger      = $batch->batch_type;
@@ -220,7 +221,7 @@ final class BatchPreviewService {
 				continue;
 			}
 
-			$result     = $this->planner->preview( $event, $rules );
+			$result     = $this->planner->preview( $event, $rules, $allow_probe );
 			$post_items = $this->items_for_result( $batch, $result, $position, $repost, $repost_hash );
 
 			foreach ( $post_items as $item ) {
@@ -335,7 +336,7 @@ final class BatchPreviewService {
 			$reason_message    = 'Destination item is queueable after preview.';
 
 			if ( 'bulk' === $batch->batch_type ) {
-				$blocking = $this->duplicates->blocking_bulk_duplicate( $result->event->post_id, $channel_public_id );
+				$blocking = $this->duplicates->blocking_bulk_duplicate( $result->event->post_id, $channel_public_id, $batch->public_id );
 				if ( null !== $blocking ) {
 					$state          = 'duplicate';
 					$reason_code    = 'duplicate_delivery';
@@ -760,6 +761,7 @@ final class BatchPreviewService {
 			'post_status'            => $filters['post_statuses'],
 			'post_type'              => $filters['post_types'],
 			'posts_per_page'         => $candidate_limit,
+			// phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.SuppressFilters_suppress_filters -- Explicit candidate selection must bypass unrelated frontend/language filters; every item is separately authorized.
 			'suppress_filters'       => true,
 			'update_post_meta_cache' => false,
 			'update_post_term_cache' => false,

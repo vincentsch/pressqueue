@@ -43,6 +43,38 @@ final class Database {
 	 */
 	public function __construct( \wpdb $wpdb ) {
 		$this->wpdb = $wpdb;
+		if ( function_exists( 'add_filter' ) && ! has_filter( 'pre_get_table_charset', array( self::class, 'table_charset' ) ) ) {
+			add_filter( 'pre_get_table_charset', array( self::class, 'table_charset' ), 10, 2 );
+		}
+	}
+
+	/**
+	 * Tell WordPress the text charset of our tables with ASCII identity columns.
+	 *
+	 * @param mixed  $charset Existing filter value.
+	 * @param string $table Table name.
+	 * @return mixed
+	 */
+	public static function table_charset( $charset, string $table ) {
+		if ( ! self::has_global_database() ) {
+			return $charset;
+		}
+		$wpdb = $GLOBALS['wpdb'];
+		foreach ( Schema::table_suffixes() as $suffix ) {
+			if ( $table === $wpdb->prefix . 'pressqueue_' . $suffix ) {
+				// Let WordPress populate per-column metadata before overriding the
+				// mixed ASCII/UTF-8 whole-query charset. Column validation still uses
+				// its actual database collation.
+				remove_filter( 'pre_get_table_charset', array( self::class, 'table_charset' ), 10 );
+				try {
+					$column_charset = $wpdb->get_col_charset( $table, 'public_id' );
+				} finally {
+					add_filter( 'pre_get_table_charset', array( self::class, 'table_charset' ), 10, 2 );
+				}
+				return is_wp_error( $column_charset ) ? $column_charset : $wpdb->charset;
+			}
+		}
+		return $charset;
 	}
 
 	/**
@@ -101,9 +133,8 @@ final class Database {
 	 */
 	public function query( string $sql, array $args = array() ): int {
 		$prepared = $this->prepare( $sql, $args );
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- The SQL is prepared above.
-		$result = $this->wpdb->query( $prepared );
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter -- Values are prepared and identifiers are internal.
+		$result = $this->quiet_query( fn () => $this->wpdb->query( $prepared ) );
 
 		if ( false === $result ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Database exceptions are not rendered directly.
@@ -123,8 +154,9 @@ final class Database {
 	public function get_row( string $sql, array $args = array() ): ?object {
 		$prepared = $this->prepare( $sql, $args );
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- The SQL is prepared above.
-		$row = $this->wpdb->get_row( $prepared );
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter -- Values are bound by the prepare() wrapper above; identifiers are validated internally.
+		$row = $this->quiet_query( fn () => $this->wpdb->get_row( $prepared ) );
+		$this->assert_read_succeeded();
 
 		return is_object( $row ) ? $row : null;
 	}
@@ -139,8 +171,9 @@ final class Database {
 	public function get_var( string $sql, array $args = array() ): ?string {
 		$prepared = $this->prepare( $sql, $args );
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- The SQL is prepared above.
-		$value = $this->wpdb->get_var( $prepared );
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter -- Values are bound by the prepare() wrapper above; identifiers are validated internally.
+		$value = $this->quiet_query( fn () => $this->wpdb->get_var( $prepared ) );
+		$this->assert_read_succeeded();
 
 		if ( null === $value ) {
 			return null;
@@ -159,8 +192,9 @@ final class Database {
 	public function get_results( string $sql, array $args = array() ): array {
 		$prepared = $this->prepare( $sql, $args );
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- The SQL is prepared above.
-		$rows = $this->wpdb->get_results( $prepared );
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter -- Values are bound by the prepare() wrapper above; identifiers are validated internally.
+		$rows = $this->quiet_query( fn () => $this->wpdb->get_results( $prepared ) );
+		$this->assert_read_succeeded();
 
 		return is_array( $rows ) ? $rows : array();
 	}
@@ -175,8 +209,9 @@ final class Database {
 	public function get_results_array( string $sql, array $args = array() ): array {
 		$prepared = $this->prepare( $sql, $args );
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- The SQL is prepared above.
-		$rows = $this->wpdb->get_results( $prepared, ARRAY_A );
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,PluginCheck.Security.DirectDB.UnescapedDBParameter -- Values are bound by the prepare() wrapper above; identifiers are validated internally.
+		$rows = $this->quiet_query( fn () => $this->wpdb->get_results( $prepared, ARRAY_A ) );
+		$this->assert_read_succeeded();
 
 		return is_array( $rows ) ? $rows : array();
 	}
@@ -381,6 +416,31 @@ final class Database {
 		}
 
 		return $deleted > 0;
+	}
+
+	/**
+	 * Keep raw SQL and stored payloads out of WordPress error output and logs.
+	 *
+	 * @template T
+	 * @param callable():T $callback Query operation.
+	 * @return T
+	 */
+	private function quiet_query( callable $callback ) {
+		$previous = $this->wpdb->suppress_errors( true );
+		try {
+			return $callback();
+		} finally {
+			$this->wpdb->suppress_errors( $previous );
+		}
+	}
+
+	/**
+	 * Refuse to interpret a failed read as missing configuration or history.
+	 */
+	private function assert_read_succeeded(): void {
+		if ( '' !== (string) $this->wpdb->last_error ) {
+			throw new StorageException( 'PressQueue could not read its stored data.' );
+		}
 	}
 
 	/**

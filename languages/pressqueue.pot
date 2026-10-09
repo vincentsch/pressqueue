@@ -1,188 +1,1738 @@
 # Copyright (C) 2026 Vincent Schmalbach
-# This file is distributed under the MIT license.
+# This file is distributed under the MIT.
 msgid ""
 msgstr ""
-"Project-Id-Version: PressQueue 0.1.0-dev\n"
-"Report-Msgid-Bugs-To: https://github.com/vincentsch/pressqueue\n"
-"POT-Creation-Date: 2026-08-25 00:00+0000\n"
+"Project-Id-Version: PressQueue 0.1.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/pressqueue\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: PressQueue manual catalog\n"
+"POT-Creation-Date: 2026-10-09T10:30:17+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: pressqueue\n"
 
-#: src/Admin/PrivacyController.php
-msgid "PressQueue Privacy"
+#. Plugin Name of the plugin
+#: pressqueue.php:3
+#: src/Admin/AdminScreens.php:71
+#: src/Admin/AdminScreens.php:72
+#: src/Admin/PostControlsController.php:223
+#: src/Privacy/PersonalDataEraser.php:37
+#: src/Privacy/PersonalDataExporter.php:39
+#: assets/editor/post-controls.js:223
+msgid "PressQueue"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Privacy"
+#. Description of the plugin
+#: pressqueue.php:4
+msgid "Send WordPress posts to Buffer using rules, previews, and a delivery log."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "You are not allowed to manage PressQueue privacy settings."
+#. Author of the plugin
+#: pressqueue.php:8
+msgid "Vincent Schmalbach"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Stored PressQueue privacy state is invalid. Runtime delivery remains disabled until it is repaired."
+#: pressqueue.php:81
+msgid "PressQueue requires PHP 8.1 or newer."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "You are not allowed to export PressQueue data."
+#: pressqueue.php:90
+msgid "PressQueue requires WordPress 6.8 or newer."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "PressQueue data export failed."
+#: pressqueue.php:94
+msgid "PressQueue does not support network activation yet. Activate it per site."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "You are not allowed to run PressQueue retention."
+#: pressqueue.php:213
+#: pressqueue.php:248
+msgid "PressQueue could not load its Composer autoloader. Run composer install before activating."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Runtime State"
+#: pressqueue.php:261
+msgid "PressQueue could not complete activation setup."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention and Uninstall"
+#: src/Admin/AdminPostBoundary.php:32
+#: src/Admin/DeliveryActionController.php:168
+msgid "PressQueue changes require POST."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention"
+#: src/Admin/AdminScreens.php:84
+#: src/Admin/AdminScreens.php:151
+msgid "PressQueue Rules"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Delete or redact eligible resolved local records after the retention period."
+#: src/Admin/AdminScreens.php:84
+msgid "Rules"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention days"
+#: src/Admin/AdminScreens.php:85
+#: src/Admin/AdminScreens.php:202
+msgid "PressQueue Preview"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Uninstall deletion"
+#: src/Admin/AdminScreens.php:85
+#: assets/editor/post-controls.js:343
+msgid "Preview"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Delete local plugin data when PressQueue is uninstalled."
+#: src/Admin/AdminScreens.php:86
+#: src/Admin/AdminScreens.php:235
+msgid "PressQueue Decisions"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention confirmation"
+#: src/Admin/AdminScreens.php:86
+msgid "Decisions"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Uninstall confirmation"
+#: src/Admin/AdminScreens.php:87
+#: src/Admin/AdminScreens.php:127
+msgid "PressQueue Settings"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Save Privacy Settings"
+#: src/Admin/AdminScreens.php:87
+msgid "Settings"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Export"
+#: src/Admin/AdminScreens.php:133
+msgid "Dry run"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Cursor"
+#: src/Admin/AdminScreens.php:133
+msgid "Create local dry-run delivery rows only."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Rendered payloads"
+#: src/Admin/AdminScreens.php:134
+msgid "Kill switch"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Include rendered social text and media URLs."
+#: src/Admin/AdminScreens.php:134
+msgid "Hold live-mode delivery rows locally."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Export confirmation"
+#: src/Admin/AdminScreens.php:136
+msgid "Save Settings"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Download Export"
+#: src/Admin/AdminScreens.php:157
+msgid "No local destinations exist yet. Add a connection and synchronize channels first."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention Run"
+#: src/Admin/AdminScreens.php:160
+msgid "Saved Rules"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Run Retention Chunk"
+#: src/Admin/AdminScreens.php:161
+msgid "Saved PressQueue rules"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Privacy operation failed."
+#: src/Admin/AdminScreens.php:162
+#: src/Admin/AdminScreens.php:515
+#: src/Admin/TemplateController.php:52
+#: src/Admin/TemplateController.php:252
+msgid "Name"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Privacy settings saved."
+#: src/Admin/AdminScreens.php:162
+#: src/Admin/AdminScreens.php:516
+msgid "Effect"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention is already running."
+#: src/Admin/AdminScreens.php:162
+#: src/Admin/AdminScreens.php:517
+msgid "Priority"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention completed."
+#: src/Admin/AdminScreens.php:162
+#: src/Admin/TemplateController.php:52
+msgid "Version"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention processed one chunk."
+#: src/Admin/AdminScreens.php:162
+#: src/Admin/AdminScreens.php:177
+#: src/Admin/ConnectionController.php:298
+#: src/Admin/ConnectionController.php:410
+#: src/Admin/ConnectionController.php:420
+#: src/Admin/TemplateController.php:52
+#: src/Admin/TemplateController.php:65
+msgid "Enabled"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention is disabled."
+#: src/Admin/AdminScreens.php:162
+#: src/Admin/BatchController.php:264
+#: src/Admin/ConnectionController.php:286
+#: src/Admin/ConnectionController.php:410
+#: src/Admin/TemplateController.php:52
+msgid "Actions"
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention did not run because runtime delivery is disabled."
+#: src/Admin/AdminScreens.php:168
+msgid "No rules have been created."
 msgstr ""
 
-#: src/Admin/PrivacyController.php
-msgid "Retention did not run because storage is not ready."
+#: src/Admin/AdminScreens.php:177
+#: src/Admin/ConnectionController.php:298
+#: src/Admin/ConnectionController.php:420
+#: src/Admin/TemplateController.php:65
+msgid "Disabled"
 msgstr ""
 
-#: assets/admin/condition-builder.js
-msgid "All"
+#: src/Admin/AdminScreens.php:209
+#: src/Admin/AdminScreens.php:434
+#: src/Admin/DeliveryListController.php:87
+msgid "Post ID"
 msgstr ""
 
-#: assets/admin/condition-builder.js
-msgid "Any"
+#: src/Admin/AdminScreens.php:210
+#: src/Admin/DeliveryDetailController.php:205
+msgid "Trigger"
 msgstr ""
 
-#: assets/admin/condition-builder.js
-msgid "Add Group"
+#: src/Admin/AdminScreens.php:215
+msgid "Preview Post"
 msgstr ""
 
-#: assets/admin/condition-builder.js
+#: src/Admin/AdminScreens.php:237
+msgid "Recent PressQueue decisions"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:238
+#: src/Admin/BatchController.php:190
+msgid "Created"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:238
+#: src/Admin/DeliveryDetailController.php:204
+msgid "Result"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:238
+#: src/Admin/BatchController.php:306
+#: src/Admin/DeliveryListController.php:111
+msgid "Post"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:238
+msgid "Rule"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:238
+msgid "Scope"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:238
+#: src/Admin/DeliveryDetailController.php:208
+msgid "Reasons"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:238
+#: src/Admin/BatchController.php:306
+#: src/Admin/DeliveryListController.php:111
+msgid "Delivery"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:244
+msgid "No decisions have been recorded."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:260
+msgid "You are not allowed to manage PressQueue settings."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:275
+#: src/Admin/AdminScreens.php:299
+#: src/Admin/AdminScreens.php:313
+#: src/Admin/AdminScreens.php:328
+#: src/Admin/AdminScreens.php:345
+msgid "You are not allowed to manage PressQueue rules."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:397
+msgid "You are not allowed to view PressQueue decisions."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:437
+msgid "Preview Rule"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:449
+msgid "Preview Recent"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:474
+msgid "Enable After Preview"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:493
+msgid "Disable Rule"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:506
+msgid "Edit Rule"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:506
+msgid "Add Rule"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:516
+#: assets/editor/post-controls.js:233
+msgid "Include"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:516
+#: assets/editor/post-controls.js:234
+msgid "Exclude"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:518
+msgid "Triggers"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:524
+msgid "Condition Tree JSON"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:528
+#: src/Admin/TemplateController.php:253
+msgid "Template Set JSON"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:535
+msgid "Custom Field Allowlist JSON"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:538
+#: src/Admin/BatchController.php:306
+#: src/Admin/PostControlsController.php:288
+#: assets/editor/post-controls.js:277
+msgid "Schedule"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:541
+msgid "Save an unscheduled Buffer draft"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:542
+msgid "Publish immediately"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:543
+msgid "Next Buffer queue slot"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:544
+msgid "End of Buffer queue"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:550
+msgid "Images"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:553
+msgid "No image"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:554
+msgid "Require a featured image"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:555
+msgid "Use a featured image when available"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:556
+msgid "Use images selected in the post controls"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:561
+msgid "Template Source"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:564
+msgid "Save Rule"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:564
+msgid "Save Disabled Rule"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:579
+msgid "enabled"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:579
+msgid "disabled"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:583
+msgid "Missing channel"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:587
+#: src/Admin/AdminScreens.php:588
+#: src/Admin/PostControlsController.php:260
+#: assets/editor/post-controls.js:240
+msgid "Destinations"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:593
+msgid "Select channels for an inclusion rule. Exclusion rules apply to all destinations. Selecting a channel does not enable it."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:689
+msgid "Preview Result"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:705
+msgid "Preview failed."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:706
+msgid "Preview is ready."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:707
+msgid "Rule disabled."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:708
+msgid "Rule enabled."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:709
+msgid "Rule change failed."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:710
+msgid "Rule saved disabled."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:711
+msgid "Settings saved."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:712
+msgid "Template snapshot adopted. Preview the rule before re-enabling it."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:713
+msgid "Template removed from selection."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:714
+msgid "Template disabled."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:715
+msgid "Template enabled for selection."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:716
+msgid "Template change failed."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:717
+msgid "Template saved disabled."
+msgstr ""
+
+#: src/Admin/AdminScreens.php:906
+#: src/Admin/DeliveryListController.php:165
+msgid "Previous"
+msgstr ""
+
+#. translators: 1: current page number, 2: total page count.
+#: src/Admin/AdminScreens.php:910
+#: src/Admin/DeliveryListController.php:169
+#, php-format
+msgid "Page %1$d of %2$d"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:922
+#: src/Admin/DeliveryListController.php:172
+msgid "Next"
+msgstr ""
+
+#: src/Admin/AdminScreens.php:1078
+#: src/Admin/DeliveryDetailController.php:426
+msgid "You are not allowed to use this PressQueue screen."
+msgstr ""
+
+#: src/Admin/BatchController.php:52
+#: src/Admin/BatchController.php:75
+msgid "PressQueue Batches"
+msgstr ""
+
+#: src/Admin/BatchController.php:53
+msgid "Batches"
+msgstr ""
+
+#: src/Admin/BatchController.php:92
+#: src/Admin/BatchController.php:111
+#: src/Admin/BatchController.php:125
+#: src/Admin/BatchController.php:140
+#: src/Admin/BatchController.php:553
+msgid "You are not allowed to operate PressQueue batches."
+msgstr ""
+
+#: src/Admin/BatchController.php:159
+msgid "Create Preview"
+msgstr ""
+
+#: src/Admin/BatchController.php:164
+msgid "Batch type"
+msgstr ""
+
+#: src/Admin/BatchController.php:169
+msgid "Filters JSON"
+msgstr ""
+
+#: src/Admin/BatchController.php:170
+msgid "Limits JSON"
+msgstr ""
+
+#: src/Admin/BatchController.php:172
+msgid "Preview Batch"
+msgstr ""
+
+#: src/Admin/BatchController.php:188
+msgid "Recent Batches"
+msgstr ""
+
+#: src/Admin/BatchController.php:189
+msgid "Recent PressQueue batches"
+msgstr ""
+
+#: src/Admin/BatchController.php:190
+msgid "Batch"
+msgstr ""
+
+#: src/Admin/BatchController.php:190
+#: src/Admin/BatchController.php:241
+#: src/Admin/ConnectionController.php:286
+msgid "Status"
+msgstr ""
+
+#: src/Admin/BatchController.php:190
+msgid "Confirmed"
+msgstr ""
+
+#: src/Admin/BatchController.php:190
+msgid "Expiry"
+msgstr ""
+
+#: src/Admin/BatchController.php:190
+#: src/Admin/BatchController.php:252
+msgid "Counts"
+msgstr ""
+
+#: src/Admin/BatchController.php:196
+msgid "No batches have been previewed."
+msgstr ""
+
+#: src/Admin/BatchController.php:229
+msgid "Batch does not exist."
+msgstr ""
+
+#: src/Admin/BatchController.php:234
+msgid "Back to Batches"
+msgstr ""
+
+#: src/Admin/BatchController.php:236
+msgid "Batch Summary"
+msgstr ""
+
+#: src/Admin/BatchController.php:239
+msgid "Batch public ID"
+msgstr ""
+
+#: src/Admin/BatchController.php:240
+msgid "Type"
+msgstr ""
+
+#: src/Admin/BatchController.php:242
+msgid "Creator"
+msgstr ""
+
+#: src/Admin/BatchController.php:243
+msgid "Confirmer"
+msgstr ""
+
+#: src/Admin/BatchController.php:244
+msgid "Created at"
+msgstr ""
+
+#: src/Admin/BatchController.php:245
+msgid "Confirmed at"
+msgstr ""
+
+#: src/Admin/BatchController.php:246
+msgid "Preview expires at"
+msgstr ""
+
+#: src/Admin/BatchController.php:247
+msgid "Preview snapshot hash"
+msgstr ""
+
+#: src/Admin/BatchController.php:266
+msgid "Confirm Batch"
+msgstr ""
+
+#: src/Admin/BatchController.php:270
+msgid "Cancel Batch"
+msgstr ""
+
+#: src/Admin/BatchController.php:274
+msgid "Recover Queue Action"
+msgstr ""
+
+#: src/Admin/BatchController.php:304
+msgid "Items"
+msgstr ""
+
+#: src/Admin/BatchController.php:305
+msgid "PressQueue batch items"
+msgstr ""
+
+#: src/Admin/BatchController.php:306
+msgid "Item"
+msgstr ""
+
+#: src/Admin/BatchController.php:306
+#: src/Admin/DeliveryListController.php:111
+msgid "Destination"
+msgstr ""
+
+#: src/Admin/BatchController.php:306
+#: src/Admin/PostControlsController.php:279
+#: assets/editor/post-controls.js:261
+msgid "Message"
+msgstr ""
+
+#: src/Admin/BatchController.php:306
+#: src/Admin/PostControlsController.php:306
+#: assets/editor/post-controls.js:325
+msgid "Media"
+msgstr ""
+
+#: src/Admin/BatchController.php:306
+msgid "Reason"
+msgstr ""
+
+#: src/Admin/BatchController.php:323
+#: src/Admin/BatchController.php:330
+#: src/Admin/BatchController.php:331
+msgid "Restricted post"
+msgstr ""
+
+#: src/Admin/BatchController.php:335
+msgid "Decision"
+msgstr ""
+
+#: src/Admin/BatchController.php:336
+#: src/Admin/DeliveryDetailController.php:80
+msgid "Delivery key"
+msgstr ""
+
+#: src/Admin/BatchController.php:337
+#: src/Admin/DeliveryDetailController.php:93
+msgid "Payload hash"
+msgstr ""
+
+#: src/Admin/BatchController.php:351
+msgid "Duplicate"
+msgstr ""
+
+#: src/Admin/BatchController.php:405
+msgid "Batch cancelled."
+msgstr ""
+
+#: src/Admin/BatchController.php:406
+msgid "Batch confirmed for local handoff."
+msgstr ""
+
+#: src/Admin/BatchController.php:407
+msgid "Batch action failed."
+msgstr ""
+
+#: src/Admin/BatchController.php:408
+msgid "Batch preview is ready."
+msgstr ""
+
+#: src/Admin/BatchController.php:409
+msgid "Batch queue action recovered."
+msgstr ""
+
+#: src/Admin/ChannelController.php:41
+msgid "Disable Channel"
+msgstr ""
+
+#: src/Admin/ChannelController.php:41
+msgid "Enable Channel"
+msgstr ""
+
+#: src/Admin/ChannelController.php:89
+msgid "You are not allowed to manage PressQueue channels."
+msgstr ""
+
+#: src/Admin/ConditionBuilderController.php:71
+#: assets/admin/condition-builder.js:156
+msgid "Group mode"
+msgstr ""
+
+#: src/Admin/ConditionBuilderController.php:71
+#: assets/admin/condition-builder.js:269
+msgid "ALL"
+msgstr ""
+
+#: src/Admin/ConditionBuilderController.php:71
+#: assets/admin/condition-builder.js:270
+msgid "ANY"
+msgstr ""
+
+#: src/Admin/ConditionBuilderController.php:73
+msgid "PressQueue conditions"
+msgstr ""
+
+#: src/Admin/ConditionBuilderController.php:85
 msgid "Add Condition"
 msgstr ""
 
-#: assets/admin/condition-builder.js
-msgid "Remove"
+#: src/Admin/ConditionBuilderController.php:86
+msgid "Add Group"
 msgstr ""
 
-#: assets/admin/condition-builder.js
-msgid "Field"
+#: src/Admin/ConditionBuilderController.php:87
+msgid "Delete"
 msgstr ""
 
-#: assets/admin/condition-builder.js
-msgid "Operator"
+#: src/Admin/ConditionBuilderController.php:88
+msgid "Move Up"
 msgstr ""
 
-#: assets/admin/condition-builder.js
-msgid "Value"
+#: src/Admin/ConditionBuilderController.php:89
+msgid "Move Down"
 msgstr ""
 
-#: assets/editor/post-controls.js
-msgid "Preview unavailable."
+#: src/Admin/ConditionBuilderController.php:90
+msgid "Indent"
 msgstr ""
 
-#: assets/editor/post-controls.js
-msgid "Refresh Preview"
+#: src/Admin/ConditionBuilderController.php:91
+msgid "Outdent"
 msgstr ""
 
-#: assets/editor/post-controls.js
-msgid "Preview reflects the current editor state and does not create delivery records."
+#: src/Admin/ConnectionController.php:64
+#: src/Admin/ConnectionController.php:90
+msgid "PressQueue Connections"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:65
+#: src/Admin/ConnectionController.php:284
+msgid "Connections"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:108
+msgid "Buffer connection"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:265
+msgid "Add Buffer Connection"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:270
+msgid "Label"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:271
+msgid "Buffer API key"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:273
+msgid "Save Disabled Connection"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:286
+msgid "Connection"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:286
+msgid "Account"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:286
+msgid "Organization"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:292
+msgid "No connections have been created."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:319
+msgid "Test Credential"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:324
+msgid "Disable Connection"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:326
+msgid "Enable Connection"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:329
+msgid "Disconnect Credential"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:357
+msgid "Sync Channels"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:376
+msgid "New Buffer API key"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:377
+msgid "Rotate Credential"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:405
+msgid "No channels have been synchronized."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:410
+msgid "Channel"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:410
+#: src/Admin/DeliveryDetailController.php:86
+msgid "Service"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:410
+msgid "Availability"
+msgstr ""
+
+#: src/Admin/ConnectionController.php:532
+#: src/Admin/ConnectionController.php:540
+msgid "You are not allowed to manage PressQueue connections."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:600
+msgid "Channel disabled."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:601
+msgid "Channel enabled."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:602
+msgid "Channels synchronized."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:603
+msgid "Connection saved disabled."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:604
+msgid "Connection disabled."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:605
+msgid "Credential disconnected."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:606
+msgid "Connection enabled."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:607
+msgid "Connection change failed."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:608
+msgid "Credential rotated."
+msgstr ""
+
+#: src/Admin/ConnectionController.php:609
+msgid "Credential verified."
+msgstr ""
+
+#: src/Admin/DeliveryActionController.php:120
+msgid "Delivery reconciliation outcome is not supported."
+msgstr ""
+
+#: src/Admin/DeliveryActionController.php:123
+#: src/Admin/DeliveryActionController.php:148
+#: src/Admin/DeliveryActionController.php:156
+msgid "You are not allowed to operate PressQueue deliveries."
+msgstr ""
+
+#: src/Admin/DeliveryActionController.php:180
+msgid "Delivery action confirmation is required."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:35
+#: src/Admin/DeliveryDetailController.php:60
+msgid "PressQueue Delivery Detail"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:36
+msgid "Delivery Detail"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:52
+msgid "PressQueue delivery could not be loaded."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:62
+msgid "Back to Delivery Log"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:79
+msgid "Delivery public ID"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:81
+msgid "Decision public ID"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:82
+msgid "Event key"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:83
+msgid "Post identity"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:84
+msgid "Rule identity"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:85
+msgid "Channel label"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:87
+msgid "Connection label"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:88
+msgid "Remote channel ID"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:89
+msgid "Delivery mode"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:90
+msgid "Schedule slot"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:91
+msgid "Scheduled for UTC"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:92
+msgid "Schedule timezone"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:94
+msgid "Payload schema version"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:95
+msgid "Adapter encoding version"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:96
+msgid "Submission compatibility"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:97
+msgid "Bound provider identity"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:98
+msgid "Bound capability hash"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:99
+msgid "Bound capability catalog"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:100
+msgid "Media identity hash"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:101
+#: src/Admin/DeliveryDetailController.php:225
+#: src/Admin/DeliveryListController.php:79
+msgid "State"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:102
+msgid "State changed at"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:103
+msgid "Attempt count"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:104
+msgid "Automatic attempt count"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:105
+msgid "Queued at"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:106
+msgid "Last attempt at"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:107
+msgid "Next attempt at"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:108
+msgid "Lease status"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:109
+msgid "Action Scheduler action ID"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:110
+msgid "Provider result"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:111
+msgid "Retry safety"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:112
+#: src/Admin/DeliveryListController.php:111
+msgid "Remote ID"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:113
+msgid "Remote receipt key"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:114
+msgid "Reconciliation status"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:115
+msgid "Reconciled at"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:116
+msgid "Reconciled actor"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:117
+#: src/Admin/DeliveryDetailController.php:285
+msgid "Evidence note"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:118
+msgid "Last error class"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:121
+msgid "Current Projection"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:139
+msgid "Operator Actions"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:145
+msgid "Cancel Delivery"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:152
+msgid "Resume Delivery"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:156
+msgid "Retry Delivery"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:170
+msgid "Payload Summary"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:174
+msgid "Message and media details are hidden because you cannot edit the source post."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:176
+msgid "Receipt and Error Summary"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:195
+msgid "Decision Summary"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:198
+msgid "The referenced decision record is unavailable."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:203
+msgid "Decision key"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:206
+msgid "Snapshot hash"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:212
+msgid "Open Decisions"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:223
+msgid "Event History"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:224
+msgid "PressQueue delivery events"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:225
+msgid "Time"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:225
+msgid "Event"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:225
+msgid "Attempt"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:225
+msgid "Actor"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:225
+msgid "Provider Result"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:225
+msgid "Retry Safety"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:225
+msgid "Detail"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:231
+msgid "No delivery events have been recorded."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:256
+msgid "Ambiguity Reconciliation"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:258
+msgid "Buffer returned a post that was not confirmed as an unscheduled draft. The kill switch has been enabled. Check the returned remote ID in Buffer immediately; this post may be scheduled or published. PressQueue cannot remove it remotely."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:260
+msgid "Confirm Remote ID"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:262
+msgid "Confirm Not Accepted"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:264
+msgid "Cancel Ambiguous Delivery"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:283
+msgid "Buffer remote ID"
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:318
+msgid "Cancel only this local delivery record. PressQueue will not contact Buffer and will not remove any remote post."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:327
+msgid "Record local evidence only. PressQueue will not contact Buffer and will not remove any remote post."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:377
+#: src/Admin/DeliveryListController.php:233
+msgid "Delivery cancelled locally."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:378
+#: src/Admin/DeliveryListController.php:234
+msgid "Delivery resumed."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:379
+#: src/Admin/DeliveryListController.php:235
+msgid "Delivery queued for manual retry."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:380
+#: src/Admin/DeliveryListController.php:236
+msgid "Delivery action failed."
+msgstr ""
+
+#: src/Admin/DeliveryDetailController.php:381
+#: src/Admin/DeliveryListController.php:237
+msgid "Delivery reconciliation saved."
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:35
+#: src/Admin/DeliveryListController.php:54
+msgid "PressQueue Delivery Log"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:36
+msgid "Delivery Log"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:63
+msgid "PressQueue deliveries could not be loaded."
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:81
+msgid "Any state"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:86
+msgid "Connection or channel public ID"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:88
+msgid "State changed"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:89
+msgid "Due retry"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:90
+msgid "Any"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:91
+msgid "Due now"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:92
+msgid "Not due"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:94
+msgid "Exact identifier"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:95
+msgid "Page size"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:97
+msgid "Filter Deliveries"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:110
+msgid "PressQueue delivery log results"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:111
+msgid "State Changed"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:111
+msgid "Attempts"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:111
+msgid "Retry"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:111
+msgid "Next Attempt"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:111
+msgid "Last Error"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:111
+msgid "Signal"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:117
+msgid "No deliveries matched."
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:136
+msgid "automatic"
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:295
+msgid "You are not allowed to view PressQueue deliveries."
+msgstr ""
+
+#: src/Admin/PostControlsController.php:164
+msgid "You are not allowed to read PressQueue controls for this post."
+msgstr ""
+
+#: src/Admin/PostControlsController.php:202
+#: src/Admin/PostControlsController.php:369
+msgid "PressQueue controls could not be saved."
+msgstr ""
+
+#: src/Admin/PostControlsController.php:239
+msgid "PressQueue controls are unavailable for this user."
+msgstr ""
+
+#: src/Admin/PostControlsController.php:252
+#: assets/editor/post-controls.js:229
+msgid "Policy"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:262
+#: src/Admin/PostControlsController.php:281
+#: assets/editor/post-controls.js:232
+#: assets/editor/post-controls.js:243
+#: assets/editor/post-controls.js:264
+#: assets/editor/post-controls.js:280
+#: assets/editor/post-controls.js:328
+msgid "Inherit"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:263
+#: assets/editor/post-controls.js:244
+msgid "Restrict channels"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:266
+msgid "Channel restrictions"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:268
+msgid "No local destinations are available."
+msgstr ""
+
+#: src/Admin/PostControlsController.php:282
+#: assets/editor/post-controls.js:265
+msgid "Override"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:294
+#: assets/editor/post-controls.js:291
+msgid "Local date"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:295
+#: assets/editor/post-controls.js:300
+msgid "Local time"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:296
+#: assets/editor/post-controls.js:309
+msgid "Timezone"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:297
+#: assets/editor/post-controls.js:317
+msgid "UTC offset"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:312
+#: assets/editor/post-controls.js:338
+msgid "Attachment IDs"
+msgstr ""
+
+#: src/Admin/PostPreviewController.php:112
+msgid "PressQueue preview could not be created."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:50
+#: src/Admin/PrivacyController.php:74
+msgid "PressQueue Privacy"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:51
+msgid "Privacy"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:62
+#: src/Admin/PrivacyController.php:90
+msgid "You are not allowed to manage PressQueue privacy settings."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:70
+msgid "Stored PressQueue privacy state is invalid. Runtime delivery remains disabled until it is repaired."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:126
+msgid "You are not allowed to export PressQueue data."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:138
+msgid "PressQueue data export failed."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:149
+msgid "You are not allowed to run PressQueue retention."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:164
+msgid "Runtime State"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:213
+msgid "Retention and Uninstall"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:218
+msgid "Retention"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:218
+msgid "Delete or redact eligible resolved local records after the retention period."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:219
+msgid "Retention days"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:220
+msgid "Uninstall deletion"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:220
+msgid "Delete local plugin data when PressQueue is uninstalled."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:221
+msgid "Retention confirmation"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:222
+msgid "Uninstall confirmation"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:224
+msgid "Save Privacy Settings"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:232
+msgid "Export"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:237
+msgid "Cursor"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:238
+msgid "Rendered payloads"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:238
+msgid "Include rendered social text and media URLs."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:239
+msgid "Export confirmation"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:241
+msgid "Download Export"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:251
+msgid "Retention Run"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:256
+msgid "Run Retention Chunk"
+msgstr ""
+
+#: src/Admin/PrivacyController.php:266
+msgid "Privacy operation failed."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:267
+msgid "Privacy settings saved."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:268
+msgid "Retention is already running."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:269
+msgid "Retention completed."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:270
+msgid "Retention processed one chunk."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:271
+msgid "Retention is disabled."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:272
+msgid "Retention did not run because runtime delivery is disabled."
+msgstr ""
+
+#: src/Admin/PrivacyController.php:273
+msgid "Retention did not run because storage is not ready."
+msgstr ""
+
+#: src/Admin/TemplateController.php:50
+msgid "Reusable Templates"
+msgstr ""
+
+#: src/Admin/TemplateController.php:51
+msgid "Reusable PressQueue templates"
+msgstr ""
+
+#: src/Admin/TemplateController.php:58
+msgid "No reusable templates have been created."
+msgstr ""
+
+#: src/Admin/TemplateController.php:102
+msgid "Adopt Latest Template"
+msgstr ""
+
+#: src/Admin/TemplateController.php:110
+#: src/Admin/TemplateController.php:155
+#: src/Admin/TemplateController.php:169
+#: src/Admin/TemplateController.php:190
+msgid "You are not allowed to manage PressQueue reusable templates."
+msgstr ""
+
+#: src/Admin/TemplateController.php:207
+msgid "Disable Template"
+msgstr ""
+
+#: src/Admin/TemplateController.php:209
+msgid "Enable For Selection"
+msgstr ""
+
+#: src/Admin/TemplateController.php:212
+msgid "Remove From Selection"
+msgstr ""
+
+#: src/Admin/TemplateController.php:243
+msgid "Edit Template"
+msgstr ""
+
+#: src/Admin/TemplateController.php:243
+msgid "Add Template"
+msgstr ""
+
+#: src/Admin/TemplateController.php:255
+msgid "Save Template"
+msgstr ""
+
+#: src/Admin/TemplateController.php:255
+msgid "Save Disabled Template"
+msgstr ""
+
+#: src/Admin/TemplateController.php:342
+msgid "You are not allowed to manage PressQueue templates."
+msgstr ""
+
+#: src/Plugin.php:158
+msgid "PressQueue could not finish its database upgrade. Delivery remains disabled. Check the migration status in PressQueue settings."
+msgstr ""
+
+#. translators: %d: WordPress post ID.
+#: src/Plugin.php:191
+#, php-format
+msgid "PressQueue could not finish planning post #%d. Open that post and preview it before sending a manual batch. Temporary failures are retried up to five times."
+msgstr ""
+
+#: src/Plugin.php:202
+msgid "Stored PressQueue runtime or privacy state is invalid. Runtime delivery remains disabled until the stored option is repaired."
+msgstr ""
+
+#: src/Privacy/PersonalDataEraser.php:105
+msgid "PressQueue retained required local audit references such as post author IDs and batch creator IDs."
+msgstr ""
+
+#: src/Privacy/PersonalDataExporter.php:189
+msgid "PressQueue publishing decisions"
+msgstr ""
+
+#: src/Privacy/PersonalDataExporter.php:189
+msgid "PressQueue decision"
+msgstr ""
+
+#: src/Privacy/PersonalDataExporter.php:214
+msgid "PressQueue delivery history"
+msgstr ""
+
+#: src/Privacy/PersonalDataExporter.php:214
+msgid "PressQueue delivery"
+msgstr ""
+
+#: src/Privacy/PersonalDataExporter.php:237
+msgid "PressQueue batch history"
+msgstr ""
+
+#: src/Privacy/PersonalDataExporter.php:237
+msgid "PressQueue batch"
+msgstr ""
+
+#: src/Storage/SchemaMigrator.php:129
+msgid "You are not allowed to recover PressQueue migrations."
+msgstr ""
+
+#: assets/admin/condition-builder.js:44
+msgid "Condition JSON must be an object with a group root."
+msgstr ""
+
+#: assets/admin/condition-builder.js:57
+msgid "Condition JSON is invalid:"
+msgstr ""
+
+#: assets/admin/condition-builder.js:244
+msgid "Condition field"
+msgstr ""
+
+#: assets/admin/condition-builder.js:247
+msgid "Condition operator"
+msgstr ""
+
+#: assets/admin/condition-builder.js:250
+msgid "Condition value"
+msgstr ""
+
+#: assets/admin/condition-builder.js:271
+msgid "Author"
+msgstr ""
+
+#: assets/admin/condition-builder.js:272
+msgid "Equals"
+msgstr ""
+
+#: assets/admin/condition-builder.js:273
+msgid "Exists"
+msgstr ""
+
+#: assets/admin/condition-builder.js:274
+msgid "Has all"
+msgstr ""
+
+#: assets/admin/condition-builder.js:275
+msgid "Has any"
+msgstr ""
+
+#: assets/admin/condition-builder.js:276
+msgid "Has none"
+msgstr ""
+
+#: assets/admin/condition-builder.js:277
+msgid "In"
+msgstr ""
+
+#: assets/admin/condition-builder.js:278
+msgid "Metadata"
+msgstr ""
+
+#: assets/admin/condition-builder.js:279
+msgid "Does not equal"
+msgstr ""
+
+#: assets/admin/condition-builder.js:280
+msgid "Does not exist"
+msgstr ""
+
+#: assets/admin/condition-builder.js:281
+msgid "Post policy"
+msgstr ""
+
+#: assets/admin/condition-builder.js:282
+msgid "Post status"
+msgstr ""
+
+#: assets/admin/condition-builder.js:283
+msgid "Post type"
+msgstr ""
+
+#: assets/admin/condition-builder.js:284
+msgid "Taxonomy"
+msgstr ""
+
+#: assets/editor/post-controls.js:226
+msgid "Save PressQueue controls before publishing or updating this post."
+msgstr ""
+
+#: assets/editor/post-controls.js:271
+msgid "Message text"
+msgstr ""
+
+#: assets/editor/post-controls.js:281
+msgid "Immediate"
+msgstr ""
+
+#: assets/editor/post-controls.js:282
+msgid "Queue next"
+msgstr ""
+
+#: assets/editor/post-controls.js:283
+msgid "Queue end"
+msgstr ""
+
+#: assets/editor/post-controls.js:284
+msgid "Save as Buffer draft"
+msgstr ""
+
+#: assets/editor/post-controls.js:285
+msgid "Explicit time"
+msgstr ""
+
+#: assets/editor/post-controls.js:329
+msgid "None"
+msgstr ""
+
+#: assets/editor/post-controls.js:330
+msgid "Featured image"
+msgstr ""
+
+#: assets/editor/post-controls.js:331
+msgid "Featured image if available"
+msgstr ""
+
+#: assets/editor/post-controls.js:332
+msgid "Post media"
+msgstr ""
+
+#: assets/editor/post-controls.js:344
+msgid "Save Controls"
+msgstr ""
+
+#: assets/editor/post-controls.js:487
+msgid "Controls saved."
+msgstr ""
+
+#: assets/editor/post-controls.js:489
+msgid "Controls could not be saved."
+msgstr ""
+
+#: assets/editor/post-controls.js:497
+msgid "Preview ready."
+msgstr ""
+
+#: assets/editor/post-controls.js:500
+msgid "Preview could not be created."
 msgstr ""

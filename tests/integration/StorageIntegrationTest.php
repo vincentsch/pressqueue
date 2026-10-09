@@ -28,7 +28,7 @@ use PressQueue\Storage\SettingsRepository;
 use PressQueue\Storage\StaleRecordException;
 use PressQueue\Storage\StorageException;
 use PressQueue\Storage\ValidationException;
-use WP_UnitTestCase;
+use PressQueue\Tests\Support\PressQueueIntegrationTestCase as WP_UnitTestCase;
 
 /**
  * @covers \PressQueue\Security\Capabilities
@@ -45,6 +45,144 @@ use WP_UnitTestCase;
  * @covers \PressQueue\Storage\SettingsRepository
  */
 final class StorageIntegrationTest extends WP_UnitTestCase {
+	public function test_unicode_reads_and_writes_use_plugin_table_text_charset(): void {
+		$db = Database::from_globals();
+		( new SchemaMigrator( $db ) )->migrate();
+		$label = 'Café 日本語 🐈';
+		$connection = ( new ConnectionRepository() )->create_with_credential( 'buffer', $label, '{}', hash( 'sha256', '{}' ) );
+		self::assertSame( $connection->public_id, $db->get_var( 'SELECT public_id FROM `' . $db->table( Schema::CONNECTIONS ) . '` WHERE label = %s', array( $label ) ) );
+	}
+
+	public function test_personal_data_export_and_post_filtered_cli_delivery_query_use_valid_sql(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+		$user_id     = self::factory()->user->create( array( 'user_email' => 'export@example.test' ) );
+		$post_id     = self::factory()->post->create( array( 'post_author' => $user_id ) );
+		$destination = $this->enabledDestination();
+		$rule        = ( new RuleRepository() )->create( $this->ruleInput( $destination['channel']->public_id ) );
+		( new DecisionRepository() )->create( $this->decisionInput( $rule->id, $rule->public_id, $rule->version, $destination['channel']->public_id, $post_id, $user_id ) );
+		$export = \PressQueue\Privacy\PersonalDataExporter::export( 'export@example.test' );
+		self::assertTrue( $export['done'] );
+		self::assertCount( 1, $export['data'] );
+		self::assertSame( 'pressqueue-decisions', $export['data'][0]['group_id'] );
+		$result = ( new \PressQueue\WpCli\Query\DeliveryQueryService() )->list_deliveries( array( 'post-id' => $post_id ), 1, 20 );
+		self::assertIsArray( $result['data'] );
+	}
+	public function test_opted_in_uninstall_removes_runtime_metadata_and_delegated_capabilities(): void {
+		pressqueue_activate( false );
+		$post_id = self::factory()->post->create();
+		$keys    = array(
+			\PressQueue\Planning\EventNormalizer::META_FIRST_PUBLISH_SEEN_AT,
+			\PressQueue\Planning\EventNormalizer::META_LAST_RUNTIME_FINGERPRINT,
+			\PressQueue\Planning\EventNormalizer::META_LAST_TRIGGER_FINGERPRINT,
+			\PressQueue\Planning\EventNormalizer::META_LAST_DELIVERY_REVISION_FINGERPRINT,
+		);
+		foreach ( $keys as $key ) {
+			update_post_meta( $post_id, $key, 'fixture' );
+		}
+		update_post_meta( $post_id, '_unrelated_setting', 'keep' );
+		$role = get_role( 'editor' );
+		self::assertNotNull( $role );
+		$role->add_cap( \PressQueue\Security\Capabilities::EDIT_POST_CONTROLS );
+		$settings                             = \PressQueue\Privacy\PrivacySettings::defaults();
+		$settings['delete_data_on_uninstall'] = true;
+		update_option( \PressQueue\Privacy\PrivacySettings::OPTION, $settings, false );
+
+		\PressQueue\Privacy\UninstallPolicy::uninstall();
+
+		wp_cache_delete( $post_id, 'post_meta' );
+		foreach ( $keys as $key ) {
+			self::assertFalse( metadata_exists( 'post', $post_id, $key ) );
+		}
+		self::assertSame( 'keep', get_post_meta( $post_id, '_unrelated_setting', true ) );
+		self::assertFalse( $role->has_cap( \PressQueue\Security\Capabilities::EDIT_POST_CONTROLS ) );
+		pressqueue_activate( false );
+	}
+
+	/**
+	 * Failed reads must never look like empty rule sets or duplicate history.
+	 *
+	 * @dataProvider failed_read_methods
+	 * @param string $method Database read method.
+	 */
+	public function test_database_read_errors_stop_processing( string $method ): void {
+		global $wpdb;
+
+		$previous = $wpdb->suppress_errors( false );
+		ob_start();
+		try {
+			$this->expectException( StorageException::class );
+			$this->expectExceptionMessage( 'PressQueue could not read its stored data.' );
+			Database::from_globals()->$method( 'SELECT * FROM `' . $wpdb->prefix . 'pressqueue_missing_table`' );
+		} finally {
+			self::assertSame( '', ob_get_clean() );
+			self::assertFalse( $wpdb->suppress_errors );
+			$wpdb->suppress_errors( $previous );
+		}
+	}
+
+	/**
+	 * Read methods that must distinguish an SQL failure from an empty result.
+	 *
+	 * @return array<string,array{string}>
+	 */
+	public static function failed_read_methods(): array {
+		return array(
+			'row'        => array( 'get_row' ),
+			'value'      => array( 'get_var' ),
+			'objects'    => array( 'get_results' ),
+			'associated' => array( 'get_results_array' ),
+		);
+	}
+
+	public function test_rule_form_choices_save_and_empty_selection_removes_destinations(): void {
+		( new SchemaMigrator( Database::from_globals() ) )->migrate();
+		$destination = $this->enabledDestination();
+		$channel_id  = $destination['channel']->public_id;
+		$input       = $this->ruleInput( $channel_id );
+		$previous    = $_POST;
+		$_POST       = array(
+			'name'                         => 'Draft rule',
+			'effect'                       => 'include',
+			'priority'                     => '100',
+			'triggers'                     => array( 'first_publish' ),
+			'condition_tree_json'          => wp_slash( wp_json_encode( $input['condition_tree'] ) ),
+			'template_set_json'            => wp_slash(
+				wp_json_encode(
+					array(
+						'schema_version'  => 1,
+						'default_message' => '{{ title }}',
+					)
+				)
+			),
+			'custom_field_allowlist_json'  => '[]',
+			'destination_controls_present' => '1',
+			'destination_channel_ids'      => array( $channel_id ),
+			'schedule_policy_mode'         => 'draft',
+			'media_policy_mode'            => 'featured_image_optional',
+		);
+
+		try {
+			$method = new \ReflectionMethod( \PressQueue\Admin\AdminScreens::class, 'rule_input_from_request' );
+			$method->setAccessible( true );
+			$rules = new RuleRepository();
+			$rule  = $rules->create( $method->invoke( null ) );
+
+			self::assertFalse( $rule->enabled );
+			self::assertSame( 'draft', $rule->schedule_policy );
+			self::assertSame( 'featured_image_optional', $rule->media_policy['mode'] );
+			self::assertSame( array( $channel_id ), array_column( $rule->destination_set['destinations'], 'channel_public_id' ) );
+
+			$_POST['effect'] = 'exclude';
+			unset( $_POST['destination_channel_ids'] );
+			$exclusion = $rules->create( $method->invoke( null ) );
+			self::assertSame( 'all', $exclusion->destination_set['scope'] );
+			self::assertSame( 'exclude', $exclusion->effect );
+			self::assertFalse( $exclusion->enabled );
+		} finally {
+			$_POST = $previous;
+		}
+	}
+
 	protected function setUp(): void {
 		parent::setUp();
 
@@ -233,7 +371,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 
 		$connections = $this->columns( $database->table( Schema::CONNECTIONS ) );
 		self::assertSame( 'NO', $connections['id']->Null );
-		self::assertStringStartsWith( 'bigint unsigned', strtolower( $connections['id']->Type ) );
+		self::assertStringStartsWith( 'bigint unsigned', preg_replace( '/bigint\([0-9]+\)/', 'bigint', strtolower( $connections['id']->Type ) ) );
 		self::assertSame( 'auto_increment', strtolower( $connections['id']->Extra ) );
 		self::assertSame( '0', (string) $connections['enabled']->Default );
 
@@ -836,11 +974,18 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 
 		self::assertSame( $decision->decision_key, $decisions->find_by_decision_key( $decision->decision_key )->decision_key );
 
+		self::assertSame( $decision->public_id, $decisions->create( $decision_input )->public_id );
+		$other_input              = $decision_input;
+		$other_input['event_key'] = str_repeat( 'c', 64 );
+		$other_decision           = $decisions->create( $other_input );
+		global $wpdb;
+		$table           = Database::from_globals()->table( Schema::DECISIONS );
+		$previous_errors = $wpdb->suppress_errors( true );
 		try {
-			$decisions->create( $decision_input );
-			self::fail( 'Duplicate decision keys must be rejected.' );
-		} catch ( StorageException $exception ) {
-			self::assertStringContainsStringIgnoringCase( 'duplicate', $exception->getMessage() );
+			self::assertFalse( $wpdb->query( $wpdb->prepare( "UPDATE `$table` SET decision_key = %s WHERE public_id = %s", $decision->decision_key, $other_decision->public_id ) ) );
+			self::assertStringContainsStringIgnoringCase( 'duplicate', $wpdb->last_error );
+		} finally {
+			$wpdb->suppress_errors( $previous_errors );
 		}
 
 		$delivery_input = array(
@@ -1307,6 +1452,16 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 		global $wpdb;
 
 		return $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+	}
+
+	/**
+	 * Count rows in an owned plugin fixture table.
+	 *
+	 * @param string $suffix Table suffix.
+	 * @return int
+	 */
+	private function rowCount( string $suffix ): int {
+		return (int) Database::from_globals()->get_var( 'SELECT COUNT(*) FROM `' . Database::from_globals()->table( $suffix ) . '`' );
 	}
 
 	/**

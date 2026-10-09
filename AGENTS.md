@@ -8,9 +8,11 @@ Buffer is the only possible provider.
 
 ## Current state
 
-The repository is planning-only. Do not implement, install, release, publish,
-or connect it to a live WordPress or social account unless Vincent explicitly
-authorizes that exact action in the current conversation.
+The repository contains a private development build being prepared for release.
+Keep it private until Vincent approves publication. Do not install it on a live
+WordPress site, connect a real account, or send social posts without current
+approval for that action. Site-specific settings and operating receipts belong
+outside this repository.
 
 ## Planning
 
@@ -53,5 +55,5 @@ decided, testable, and free of research-only tasks.
 - Public-code owner: `vincentsch`
 - Repository: `vincentsch/pressqueue`
 - The origin remains private until Vincent approves a public release.
-- `.vroni/` is excluded from the public-code repository and backed up in its
-  own private `vronibot` repository.
+- `.vroni/` is excluded from the public-code repository and kept in a separate
+  private backup.

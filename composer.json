@@ -1,6 +1,6 @@
 {
   "name": "vincentsch/pressqueue",
-  "description": "Conditional social publishing control plane for WordPress.",
+  "description": "Send WordPress posts to Buffer using rules, previews, and a delivery log.",
   "type": "wordpress-plugin",
   "license": "MIT",
   "authors": [
@@ -37,11 +37,14 @@
   },
   "scripts": {
     "test:unit": "phpunit --configuration phpunit.unit.xml.dist",
-    "test:integration": "phpunit --configuration phpunit.integration.xml.dist",
+    "test:integration": [
+      "Composer\\Config::disableProcessTimeout",
+      "phpunit --configuration phpunit.integration.xml.dist"
+    ],
     "lint:phpcs": "phpcs --standard=phpcs.xml.dist",
-    "analyse": "phpstan analyse --configuration=phpstan.neon.dist",
+    "analyse": "phpstan analyse --configuration=phpstan.neon.dist --memory-limit=512M",
     "plugin-check": "php tools/run-plugin-check.php",
-    "audit": "composer audit --locked",
+    "audit:dependencies": "composer audit --locked",
     "matrix:local": "php tools/local-matrix.php",
     "smoke:runtime": "php tools/runtime-guard-smoke.php wordpress && php tools/runtime-guard-smoke.php network && php tools/runtime-guard-smoke.php package",
     "package:smoke": "php tools/package-smoke.php",
@@ -50,7 +53,7 @@
       "@test:integration",
       "@lint:phpcs",
       "@analyse",
-      "@audit",
+      "@audit:dependencies",
       "@smoke:runtime",
       "@package:smoke",
       "@plugin-check"

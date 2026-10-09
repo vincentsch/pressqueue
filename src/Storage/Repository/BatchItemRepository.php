@@ -364,6 +364,42 @@ final class BatchItemRepository extends AbstractRepository {
 	}
 
 	/**
+	 * Find confirmed work whose asynchronous handoff has not finished.
+	 *
+	 * @param int         $post_id Post ID.
+	 * @param string      $channel_public_id Channel public ID.
+	 * @param string|null $exclude_batch_public_id Current batch to ignore.
+	 * @param string|null $delivery_mode Optional reviewed delivery mode.
+	 * @param bool        $for_update Whether to read current rows under the destination lock.
+	 * @return BatchItemRecord|null
+	 */
+	public function find_reserved_item( int $post_id, string $channel_public_id, ?string $exclude_batch_public_id = null, ?string $delivery_mode = null, bool $for_update = false ): ?BatchItemRecord {
+		StorageValidator::assert_unsigned_id( 'Post ID', $post_id );
+		PublicIds::assert( $channel_public_id );
+		$where = 'i.post_id = %d AND i.channel_public_id = %s AND i.state = %s AND b.status IN (%s, %s)';
+		$args  = array( $post_id, $channel_public_id, 'reserved', 'confirming', 'queueing' );
+		if ( null !== $exclude_batch_public_id ) {
+			PublicIds::assert( $exclude_batch_public_id );
+			$where .= ' AND i.batch_public_id <> %s';
+			$args[] = $exclude_batch_public_id;
+		}
+		if ( null !== $delivery_mode ) {
+			StorageEnums::assert_delivery_mode( $delivery_mode );
+			$where .= ' AND JSON_UNQUOTE(JSON_EXTRACT(i.preview_item_json, %s)) = %s';
+			$args[] = '$.delivery.delivery_mode';
+			$args[] = $delivery_mode;
+		}
+		$sql = 'SELECT i.* FROM `' . $this->batch_items_table() . '` i INNER JOIN `' . $this->batches_table() . '` b ON b.public_id = i.batch_public_id WHERE ' . $where . ' ORDER BY i.id ASC LIMIT 1' . ( $for_update ? ' FOR UPDATE' : '' );
+		// query() distinguishes an empty reservation set from a failed lock read.
+		$count = $for_update ? $this->database->query( $sql, $args ) : null;
+		$row   = 0 === $count ? null : $this->database->get_row( $sql, $args );
+		if ( 1 === $count && null === $row ) {
+			throw new StorageException( 'Locked batch reservation could not be loaded.' );
+		}
+		return $row ? $this->hydrate( $row ) : null;
+	}
+
+	/**
 	 * Transition one item.
 	 *
 	 * @param BatchItemRecord     $item Item.

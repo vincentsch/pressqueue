@@ -16,14 +16,14 @@ if ( PHP_SAPI !== 'cli' ) {
 	exit( 1 );
 }
 
-$pressqueue_matrix_options = getopt( '', array( 'dry-run', 'unit-only', 'php:', 'wordpress:', 'evidence-dir:' ) );
+$pressqueue_matrix_options = getopt( '', array( 'dry-run', 'unit-only', 'skip-plugin-check', 'php:', 'wordpress:', 'evidence-dir:', 'network-subnet:', 'database:' ) );
 if ( ! is_array( $pressqueue_matrix_options ) ) {
 	$pressqueue_matrix_options = array();
 }
 
 $pressqueue_matrix_root               = dirname( __DIR__ );
 $pressqueue_matrix_php_versions       = pressqueue_matrix_parse_csv_option( $pressqueue_matrix_options['php'] ?? getenv( 'PRESSQUEUE_MATRIX_PHP' ), array( '8.1', '8.2', '8.3', '8.4' ) );
-$pressqueue_matrix_wordpress_versions = pressqueue_matrix_parse_csv_option( $pressqueue_matrix_options['wordpress'] ?? getenv( 'PRESSQUEUE_MATRIX_WORDPRESS' ), array( '6.8.8', '7.1' ) );
+$pressqueue_matrix_wordpress_versions = pressqueue_matrix_parse_csv_option( $pressqueue_matrix_options['wordpress'] ?? getenv( 'PRESSQUEUE_MATRIX_WORDPRESS' ), array( '6.8.11', '7.1.3' ) );
 $pressqueue_matrix_dry_run            = array_key_exists( 'dry-run', $pressqueue_matrix_options );
 $pressqueue_matrix_unit_only          = array_key_exists( 'unit-only', $pressqueue_matrix_options );
 $pressqueue_matrix_scratch            = pressqueue_matrix_scratch_dir();
@@ -36,6 +36,22 @@ if ( ! $pressqueue_matrix_dry_run ) {
 }
 
 foreach ( $pressqueue_matrix_php_versions as $pressqueue_matrix_php_version ) {
+	$pressqueue_matrix_image = 'pressqueue-matrix-php:' . pressqueue_matrix_sanitize_label( $pressqueue_matrix_php_version );
+	pressqueue_matrix_run_or_print(
+		array(
+			'docker',
+			'build',
+			'--file',
+			$pressqueue_matrix_root . '/tools/matrix.Dockerfile',
+			'--build-arg',
+			'PHP_VERSION=' . $pressqueue_matrix_php_version,
+			'--tag',
+			$pressqueue_matrix_image,
+			$pressqueue_matrix_root . '/tools',
+		),
+		$pressqueue_matrix_dry_run,
+		$pressqueue_matrix_root
+	);
 	foreach ( $pressqueue_matrix_wordpress_versions as $pressqueue_matrix_wordpress_version ) {
 		$pressqueue_matrix_label      = 'php-' . pressqueue_matrix_sanitize_label( $pressqueue_matrix_php_version ) . '-wp-' . pressqueue_matrix_sanitize_label( $pressqueue_matrix_wordpress_version );
 		$pressqueue_matrix_stage_root = $pressqueue_matrix_scratch . '/' . $pressqueue_matrix_label;
@@ -46,27 +62,31 @@ foreach ( $pressqueue_matrix_php_versions as $pressqueue_matrix_php_version ) {
 		pressqueue_matrix_stage_source_tree( $pressqueue_matrix_root, $pressqueue_matrix_stage_root, $pressqueue_matrix_dry_run );
 
 		$pressqueue_matrix_commands = pressqueue_matrix_commands( $pressqueue_matrix_wordpress_version, $pressqueue_matrix_unit_only );
+		if ( array_key_exists( 'skip-plugin-check', $pressqueue_matrix_options ) ) {
+			$pressqueue_matrix_commands = array_values( array_filter( $pressqueue_matrix_commands, static fn ( string $command ): bool => false === strpos( $command, 'composer run plugin-check' ) ) );
+		}
 		$pressqueue_matrix_script   = implode( ' && ', array_map( 'pressqueue_matrix_shell_step', $pressqueue_matrix_commands ) );
-
-		$pressqueue_matrix_setup = 'apt-get update && apt-get install -y --no-install-recommends bash default-mysql-client git less libcurl4-openssl-dev libicu-dev libonig-dev libxml2-dev libzip-dev mariadb-client unzip zip zlib1g-dev && docker-php-ext-install bcmath curl dom intl mbstring mysqli zip && php -r "copy(\'https://getcomposer.org/installer\', \'/tmp/composer-setup.php\');" && php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer --quiet';
-		$pressqueue_matrix_body  = $pressqueue_matrix_setup . ' && ' . $pressqueue_matrix_script;
 
 		$pressqueue_matrix_run_command = array(
 			'docker',
 			'run',
 			'--rm',
+			'--user',
+			(string) getmyuid() . ':' . (string) getmygid(),
+			'-e',
+			'COMPOSER_HOME=/tmp/pressqueue-composer',
 			'--network',
-			$pressqueue_matrix_network,
+			$pressqueue_matrix_unit_only ? 'bridge' : $pressqueue_matrix_network,
 			'-v',
 			$pressqueue_matrix_stage_root . ':/workspace',
 			'-w',
 			'/workspace',
 			'-e',
 			'WP_TESTS_DIR=/tmp/wordpress-tests-lib',
-			'php:' . $pressqueue_matrix_php_version . '-cli-bookworm',
+			$pressqueue_matrix_image,
 			'bash',
 			'-lc',
-			$pressqueue_matrix_body,
+			$pressqueue_matrix_script,
 		);
 
 		pressqueue_matrix_record_result(
@@ -95,8 +115,16 @@ foreach ( $pressqueue_matrix_php_versions as $pressqueue_matrix_php_version ) {
 			continue;
 		}
 
-		pressqueue_matrix_run_or_print( array( 'docker', 'network', 'create', $pressqueue_matrix_network ), $pressqueue_matrix_dry_run, $pressqueue_matrix_stage_root );
+		$pressqueue_matrix_network_command = array( 'docker', 'network', 'create' );
+		if ( isset( $pressqueue_matrix_options['network-subnet'] ) && is_string( $pressqueue_matrix_options['network-subnet'] ) ) {
+			$pressqueue_matrix_network_command[] = '--subnet';
+			$pressqueue_matrix_network_command[] = $pressqueue_matrix_options['network-subnet'];
+		}
+		$pressqueue_matrix_network_command[] = $pressqueue_matrix_network;
+		$pressqueue_matrix_network_created = false;
 		try {
+			pressqueue_matrix_run_or_print( $pressqueue_matrix_network_command, $pressqueue_matrix_dry_run, $pressqueue_matrix_stage_root );
+			$pressqueue_matrix_network_created = true;
 			pressqueue_matrix_run_or_print(
 				array(
 					'docker',
@@ -109,11 +137,13 @@ foreach ( $pressqueue_matrix_php_versions as $pressqueue_matrix_php_version ) {
 					$pressqueue_matrix_network,
 					'--network-alias',
 					'db',
+					'--tmpfs',
+					'/var/lib/mysql:rw,size=512m',
 					'-e',
 					'MYSQL_ALLOW_EMPTY_PASSWORD=yes',
 					'-e',
 					'MYSQL_DATABASE=pressqueue_tests',
-					'mysql:8.4',
+					$pressqueue_matrix_options['database'] ?? 'mysql:8.4',
 				),
 				$pressqueue_matrix_dry_run,
 				$pressqueue_matrix_stage_root
@@ -129,9 +159,23 @@ foreach ( $pressqueue_matrix_php_versions as $pressqueue_matrix_php_version ) {
 					'wordpress' => $pressqueue_matrix_wordpress_version,
 				)
 			);
+		} catch ( Throwable $pressqueue_matrix_error ) {
+			pressqueue_matrix_record_result(
+				$pressqueue_matrix_evidence_dir,
+				$pressqueue_matrix_label,
+				'failed',
+				array(
+					'php'       => $pressqueue_matrix_php_version,
+					'wordpress' => $pressqueue_matrix_wordpress_version,
+					'error'     => $pressqueue_matrix_error->getMessage(),
+				)
+			);
+			throw $pressqueue_matrix_error;
 		} finally {
-			pressqueue_matrix_run_or_print( array( 'docker', 'rm', '-f', $pressqueue_matrix_db_name ), $pressqueue_matrix_dry_run, $pressqueue_matrix_stage_root, true );
-			pressqueue_matrix_run_or_print( array( 'docker', 'network', 'rm', $pressqueue_matrix_network ), $pressqueue_matrix_dry_run, $pressqueue_matrix_stage_root, true );
+			if ( $pressqueue_matrix_network_created ) {
+				pressqueue_matrix_run_or_print( array( 'docker', 'rm', '-f', $pressqueue_matrix_db_name ), $pressqueue_matrix_dry_run, $pressqueue_matrix_stage_root, true );
+				pressqueue_matrix_run_or_print( array( 'docker', 'network', 'rm', $pressqueue_matrix_network ), $pressqueue_matrix_dry_run, $pressqueue_matrix_stage_root, true );
+			}
 		}
 	}
 }
@@ -200,7 +244,7 @@ function pressqueue_matrix_evidence_dir( string $root, $override ): string {
 		return rtrim( (string) $override, '/\\' );
 	}
 
-	return $root . '/.vroni/wip/qa/p04-private-rc';
+	return $root . '/build/qa';
 }
 
 /**
@@ -249,7 +293,6 @@ function pressqueue_matrix_commands( string $pressqueue_matrix_wordpress_version
 		'composer run analyse',
 		'composer audit --format=plain',
 		'composer run smoke:runtime',
-		'php tools/runtime-guard-smoke.php php',
 	);
 
 	if ( $pressqueue_matrix_unit_only ) {
@@ -291,7 +334,7 @@ function pressqueue_matrix_run_php_boundary_cell( string $root, string $scratch,
 		$stage_root . ':/workspace',
 		'-w',
 		'/workspace',
-		'php:8.0-cli-bookworm',
+		'php:8.0-cli-bullseye',
 		'php',
 		'tools/runtime-guard-smoke.php',
 		'php',
