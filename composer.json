@@ -42,7 +42,7 @@
       "phpunit --configuration phpunit.integration.xml.dist"
     ],
     "lint:phpcs": "phpcs --standard=phpcs.xml.dist",
-    "analyse": "phpstan analyse --configuration=phpstan.neon.dist --memory-limit=512M",
+    "analyse": "phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G",
     "plugin-check": "php tools/run-plugin-check.php",
     "audit:dependencies": "composer audit --locked",
     "matrix:local": "php tools/local-matrix.php",
