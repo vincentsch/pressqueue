@@ -1,6 +1,6 @@
 === PressQueue ===
 Contributors: vincentsch
-Tags: social publishing, buffer, scheduling
+Tags: social media, buffer, auto post, share, scheduling
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.1
@@ -8,123 +8,170 @@ Stable tag: 0.1.0
 License: MIT
 License URI: https://opensource.org/license/mit
 
-Send WordPress posts to Buffer using rules, previews, and a delivery log.
+Share your posts on LinkedIn, X, Bluesky, Mastodon, Threads and Facebook through Buffer, with rules you control.
 
 == Description ==
 
-PressQueue sends WordPress posts to Buffer using rules you set. Choose which
-posts qualify, preview their messages, and send them to selected social
-channels. You can save unscheduled Buffer drafts for review, publish immediately,
-use Buffer's queue, or choose a time in the post editor.
+PressQueue shares your WordPress posts through your Buffer account. You decide
+which posts go where and what the message says. When you publish, PressQueue
+checks the post against your rules and hands it to Buffer in the background,
+where it joins your queue, goes out right away or waits as a draft.
 
-Rules can match post types, authors, categories, tags, and allowed custom
-fields. Exclusions take precedence. Reusable templates provide the message,
-and editors with permission can change it or exclude an individual post.
+Nothing is sent until you say so. PressQueue starts in test mode, shows what
+it would share, and keeps a record of every share.
 
-The delivery log shows queued work, Buffer receipts, failures, and retries.
-If Buffer may have accepted a request but the result is unclear, PressQueue
-stops for an operator to check before retrying. A receipt confirms Buffer
-accepted the request; it does not confirm publication on the social network.
+**Set up in a few minutes**
 
-New connections, channels, and rules start disabled. Dry run is enabled on
-installation and records local results without submitting posts to Buffer.
-The kill switch holds live deliveries until you resume or cancel them.
+* Paste a Buffer API key and your channels appear. Switch on the ones you want.
+* Create a rule with one click: "Share every new post to all my channels".
+* Test it against your recent posts, then turn it on and go live.
 
-Manual batches let you preview and confirm selected existing posts or reposts.
-PressQueue does not run recurring repost campaigns. OAuth and video uploads
-are not supported. Network activation is refused; activate separately per site.
+**Rules in plain words**
 
-The Buffer adapter supports Bluesky, Facebook, LinkedIn, Mastodon, Threads,
-and X. It uses a conservative 280-character limit, including the WordPress
-post URL, and supports one image up to 5 MB and 4096 pixels per side. A lower
-Mastodon server limit takes precedence. Other channels cannot deliver.
+* Pick posts by post type, category, tag, author or custom field.
+* Write the message with the title, excerpt, author, categories or tags, and
+  see a live preview with a character count. The link is added for you.
+* Choose the timing: the end of your Buffer queue, the next free slot, right
+  away, or a Buffer draft to review first.
+* Add the featured image when there is one.
+
+**Stay in control**
+
+* "Never share" rules keep a category, tag or author off social media. They
+  win over every sharing rule.
+* Each post has a "Share this post" switch in the editor, plus options to
+  change the message, channels or timing for that post.
+* Make sharing opt-in, so new posts start switched off.
+* Pause everything with one switch. Waiting shares are held until you resume.
+
+**Share older posts**
+
+Pick older posts, review the list and share them spread across your Buffer
+queue. PressQueue never shares the same post to the same channel twice by
+accident.
+
+**See what happened**
+
+The Activity page shows what was sent, what is waiting and what needs a look,
+with a plain explanation for each share. If Buffer's reply is unclear,
+PressQueue stops and asks you to check Buffer instead of risking a double post.
+A column in your post list shows where each post went.
+
+**For developers**
+
+WP-CLI commands with JSON output, hooks for observing decisions and
+deliveries, and a provider interface for services other than Buffer.
+
+PressQueue has no hosted service and no tracking. It talks to Buffer from
+your own server.
+
+PressQueue's code is MIT licensed. The plugin package bundles Action
+Scheduler (GPL-3.0-or-later), so the package as a whole is distributed under
+GPL-3.0-or-later.
 
 == Installation ==
 
-1. Upload the packaged PressQueue ZIP in Plugins > Add New > Upload Plugin.
-2. Activate PressQueue. The package includes its PHP dependencies.
-3. Open PressQueue > Settings and leave Dry run checked while setting up.
-4. In Connections, add a Buffer personal API key, test it, select an organization,
-   and sync its channels. Enable the connection and your selected channels.
-5. Create a rule, preview it against a post, and enable it after checking the result.
-6. To send reviewed posts to Buffer, turn off Dry run. Choose the draft schedule
-   on the rule if you want unscheduled Buffer drafts.
+1. Install PressQueue from Plugins > Add New, or upload the ZIP under
+   Plugins > Add New > Upload Plugin, and activate it.
+2. Open PressQueue in the admin menu and follow the checklist on the Overview.
+3. Under Channels, create an API key in Buffer (Settings > API > New API key),
+   paste it and click Connect. Switch on the channels you want to use.
+4. Under Rules, create a rule, test it and turn it on.
+5. When the test runs in Activity look right, click Go live.
 
-PHP's Sodium extension is required for credential encryption. The database
-must support InnoDB and JSON functions, as provided by MySQL 5.7.8 or
-MariaDB 10.2.3 and newer. Image media needs public HTTPS URLs without a query string.
+PressQueue needs PHP's Sodium extension, which is standard in PHP 8.1, and
+MySQL 5.7.8 or MariaDB 10.2.3 or newer.
 
 == Frequently Asked Questions ==
 
 = Do I need a Buffer account? =
 
-Yes, for delivery through the included provider. You also need a personal API
-key from Buffer. Buffer's plans and API access requirements apply separately.
-There is no PressQueue hosted service.
+Yes. Free Buffer plans work. Buffer's own plan limits apply, for example how
+many posts a free plan can keep in its queue.
 
-= Does preview create a Buffer post? =
+= Why an API key instead of logging in with Buffer? =
 
-No. Preview evaluates the rules and renders messages locally. Selecting image
-media may contact the image host to check its URL and file properties.
+Buffer's login flow needs every website's address registered with Buffer in
+advance, which does not work for a plugin people install on their own sites.
+A personal API key is what Buffer recommends for tools you run yourself. It
+takes about a minute to create, and PressQueue stores it encrypted.
 
-= What is the difference between dry run and a Buffer draft? =
+= Which networks are supported? =
 
-Dry run stays in WordPress and never submits a post to Buffer. A draft schedule
-creates a real, unscheduled draft in Buffer when live delivery is enabled.
+LinkedIn, X, Bluesky, Mastodon, Threads and Facebook, with text, a link and
+one image. Instagram, TikTok, YouTube, Pinterest and video posts are not
+supported yet.
 
-= Can an editor change the destinations? =
+= Will my old posts suddenly get shared? =
 
-Post controls require a separate PressQueue capability, granted to administrators
-by default. An authorized editor can restrict the channels chosen by matching
-rules. Post controls cannot add a destination outside those rules.
+No. Rules share a post when you publish it, and only when you update it if
+you ask for that. Posts dated more than a day in the past are skipped. To
+share older posts, use Share old posts, where you review the list before
+anything happens.
 
-= When are block editor controls saved? =
+= What is the difference between test mode and a Buffer draft? =
 
-Use Save Controls in the PressQueue panel before publishing the WordPress post.
-The Classic Editor saves PressQueue controls with the post.
+Test mode stays inside WordPress and sends nothing to Buffer. A rule with the
+Buffer draft timing creates a real draft in Buffer, which you review and
+schedule there.
 
-= How do I stop sending? =
+= How do I stop a post from being shared? =
 
-Enable the kill switch in Settings. It holds pending live work locally. Cancelling
-a local delivery cannot remove a post already accepted by Buffer.
+Switch off "Share this post" in the post's Social sharing panel. To keep a
+whole category or tag off social media, create a "never share" rule.
+
+= How do I stop everything? =
+
+Choose Paused under PressQueue > Settings. Waiting shares are held until you
+resume them. Removing a share from PressQueue does not delete a post Buffer
+already published.
 
 = What happens when I uninstall? =
 
-PressQueue preserves settings and history by default. Enable deletion on the
-Privacy screen before uninstalling if you want its local data removed.
-Deactivation stops background work and preserves data.
+Deactivating keeps your data. Uninstalling keeps it too, unless you switch on
+deletion under Settings > Data and privacy first.
 
 == External Services ==
 
-PressQueue uses Buffer's API at https://api.buffer.com after you configure a
-connection. Test Credential and Sync Channels make read requests to Buffer.
-Background delivery submits the messages allowed by your enabled rules when
-dry run is off and the kill switch is off.
+PressQueue connects to Buffer's API at https://api.buffer.com after you add
+a Buffer API key. It is needed to list your Buffer channels and to send the
+posts your rules allow.
 
-Requests send a Buffer API key in the Authorization header, account and channel
-identifiers, message text, schedule information, and selected image URLs and
-alt text. Credentials stay on your WordPress server and are never exported.
-They are encrypted using the site's WordPress keys and salts. Changing those
-keys requires entering the Buffer key again.
+* When you connect or refresh channels, PressQueue sends your API key and
+  reads your Buffer account name, organizations and channels.
+* When a share goes out (only in Live mode), PressQueue sends the message
+  text, the post link, the channel, the timing and, if the rule uses images,
+  the image address and alt text.
 
-When you select image media, PressQueue may contact its public HTTPS host to
-check file type, size, and dimensions. It sends the image URL to Buffer for
-retrieval. PressQueue does not add analytics or tracking requests.
+The API key stays on your server, encrypted with your site's security keys,
+and is never included in exports.
 
-Buffer terms and privacy information: https://buffer.com/legal#terms and https://buffer.com/legal#privacy-policy
+When a rule uses images, PressQueue may contact the image's own host to check
+the file type, size and dimensions before sending the address to Buffer.
+
+PressQueue sends no analytics or tracking requests.
+
+Buffer terms of service: https://buffer.com/legal#terms
+Buffer privacy policy: https://buffer.com/legal#privacy-policy
 
 == Screenshots ==
 
-1. Dry-run and kill-switch settings.
-2. Rule conditions and destination choices.
-3. Post controls in the WordPress editor.
-4. Export, retention, and uninstall settings.
+1. The overview with the setup checklist and recent activity.
+2. Connecting Buffer and switching channels on.
+3. A rule in the rule editor, with the message preview.
+4. The Social sharing panel in the post editor.
+5. Activity, with a plain explanation for each share.
 
 == Changelog ==
 
 = 0.1.0 =
 
-* Rules, exclusions, message templates, previews, and post editor controls.
-* Buffer connections, draft and scheduled delivery, and supported image media.
-* Background queue, delivery history, safe retry controls, and manual batches.
-* WP-CLI commands, provider extension hooks, privacy export, and optional cleanup.
+First public release.
+
+* Rules with conditions, message templates, timing and images.
+* "Never share" rules and a "Share this post" switch for each post.
+* One-step Buffer connection and channel switches.
+* Test mode, Live and Paused.
+* Share old posts with a review step.
+* Activity log with plain explanations and safe retries.
+* WP-CLI commands, observation hooks and a provider interface.

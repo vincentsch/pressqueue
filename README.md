@@ -1,65 +1,102 @@
 # PressQueue
 
-PressQueue sends WordPress posts to Buffer using rules you set. You can choose
-which posts qualify, preview the message, and save it as a Buffer draft or
-send it to a social channel. The delivery log records what happened.
+PressQueue shares your WordPress posts on LinkedIn, X, Bluesky, Mastodon,
+Threads and Facebook through your Buffer account. You decide which posts go
+where and what the message says. PressQueue checks every post when you
+publish it and hands the right ones to Buffer in the background.
 
-This repository is private. The local release candidate is `0.1.0`.
+It is built for people who want automatic sharing without surprises. Nothing
+is sent until you say so, you can see what would happen before it happens,
+and every share leaves a record.
 
-## What it does
+![The PressQueue overview in the WordPress admin](docs/images/overview.png)
 
-- Match posts by type, author, category, tag, or allowed custom fields.
-- Reuse message templates and set different messages for different services.
-- Exclude a post, restrict its channels, or change its message in the editor.
-- Save Buffer drafts, publish immediately, use the Buffer queue, or set a time.
-- Preview and confirm batches of existing posts or selected reposts.
+## How it works
 
-Deliveries run in the background through bundled Action Scheduler. Repeated
-WordPress hooks reuse the same local delivery identity. If a response is
-uncertain, PressQueue stops and asks an operator to check Buffer before retrying.
-An accepted delivery means Buffer accepted the request. It does not prove that
-the social network has published it.
+1. **Connect Buffer.** Create an API key in Buffer, paste it into PressQueue,
+   and your Buffer channels show up. Switch on the ones you want to use.
+2. **Make a rule.** A rule says which posts to share, where to send them,
+   what the message says and when it goes out. "Share every new post to all
+   my channels" is one click.
+3. **Test it.** PressQueue starts in test mode. It records what it would
+   share and sends nothing, so you can check the results first.
+4. **Go live.** From then on, publishing a matching post adds it to your
+   Buffer queue, posts it right away, or saves it as a Buffer draft, as the
+   rule says.
+
+## What you get
+
+- **Rules in plain words.** Pick posts by type, category, tag, author or
+  custom field. Write the message with placeholders like the title or
+  excerpt, and see a live preview with a character count.
+- **"Never share" rules.** Keep a category, tag or author off social media
+  for good. These rules win over every sharing rule, and if one cannot be
+  checked, the post is not shared.
+- **A switch in the editor.** Each post has a "Share this post" toggle and
+  a short summary of where it will go. You can change the message, channels
+  or timing for one post. You can also make sharing opt-in, so new posts
+  start switched off.
+- **Share old posts.** Pick older posts, review the list and share them
+  spread across your Buffer queue. PressQueue will not share the same post
+  to the same channel twice by accident.
+- **An activity log.** See what was sent, what is waiting and what needs a
+  look. When Buffer's answer is unclear, PressQueue stops and asks you to
+  check Buffer instead of risking a double post.
+- **Test mode, Live and Paused.** One switch for the whole plugin. Pausing
+  holds everything that is waiting until you resume.
+
+PressQueue has no hosted service, account or tracking. It talks to Buffer
+from your own server.
 
 ## Requirements
 
-WordPress 6.8 or newer, PHP 8.1 or newer, and MySQL 5.7.8 or MariaDB 10.2.3 or newer, with InnoDB support.
-Buffer connections need a personal Buffer API key and PHP's Sodium extension.
-Image URLs must be public HTTPS URLs. OAuth, videos, network activation, and
-automatic recurring reposts are not supported.
+- WordPress 6.8 or newer and PHP 8.1 or newer, with the Sodium extension
+  (standard in PHP since 7.2).
+- MySQL 5.7.8 or MariaDB 10.2.3 or newer.
+- A Buffer account. Free plans work. Buffer's own limits apply, for example
+  how many posts a free plan can queue.
+- Images must be public HTTPS URLs. Video posts, Instagram, TikTok, YouTube
+  and Pinterest are not supported yet.
 
-The Buffer adapter supports Bluesky, Facebook, LinkedIn, Mastodon, Threads,
-and X. It uses conservative limits of 280 characters including the post URL,
-one image, 5 MB per image, and 4096 pixels per side. A lower Mastodon server
-limit takes precedence. Other channels stay unavailable for delivery.
+## Install
 
-## Installation and setup
+Download the plugin ZIP from the releases page and upload it under
+**Plugins > Add New > Upload Plugin**, then activate it. Open **PressQueue**
+in the admin menu and follow the checklist.
 
-A packaged plugin includes its dependencies. Upload the ZIP through
-**Plugins > Add New > Upload Plugin** and activate it. When working from source,
-run `composer install` before activation.
+To run it from a Git checkout, run `composer install --no-dev` in the plugin
+folder before activating.
 
-New connections, channels, and rules start disabled. Dry run starts enabled.
-See [Getting started](docs/getting-started.md) for setup instructions, a first
-rule, draft delivery, and exclusions.
+The [getting started guide](docs/getting-started.md) walks through the setup
+step by step.
 
-The block editor has a separate **Save Controls** button in its PressQueue
-panel. Save those controls before publishing the WordPress post. The Classic
-Editor saves the controls with the post.
+## Why an API key and not "Log in with Buffer"?
 
-Publishing and updating are blocked while the panel has unsaved control changes.
-If a control save fails, fix the reported problem and save again.
+Buffer's login flow needs every website's address registered with Buffer in
+advance, which does not work for a plugin that anyone can install on their
+own site. A personal API key is what Buffer recommends for tools you run
+yourself. It takes about a minute to create, and PressQueue stores it
+encrypted with your site's security keys.
 
-## Data and privacy
+## Privacy
 
-Provider credentials are encrypted using your WordPress keys and salts. If
-those keys change, enter the Buffer credential again. Store backups securely.
+PressQueue keeps its rules and history in your WordPress database and only
+talks to Buffer and, when a rule uses images, to the image's host to check
+the file. Deactivating keeps your data. Uninstalling keeps it too, unless
+you switch on deletion under **Settings > Data and privacy**. See
+[Privacy and data](docs/privacy.md) for the details.
 
-Deactivation stops PressQueue work and preserves its data. Uninstall also
-preserves data unless you enable deletion on the Privacy screen. Exports omit
-credentials and hide message text and media URLs by default. See
-[Privacy and data](docs/privacy.md).
+## For developers
 
-## Development
+PressQueue has WP-CLI commands with JSON output, hooks for observing
+decisions and deliveries, and a provider interface for adding services
+other than Buffer:
+
+- [WP-CLI commands](docs/developer/wp-cli.md)
+- [Observation hooks](docs/developer/observation-hooks.md)
+- [Provider adapters](docs/developer/provider-extensions.md)
+
+### Running the checks
 
 ```bash
 composer install
@@ -67,41 +104,26 @@ composer run test:unit
 node --test tests/editor/*.test.cjs
 composer run lint:phpcs
 composer run analyse
-composer run audit:dependencies
-composer run smoke:runtime
 ```
 
-Integration tests need the WordPress test suite and a disposable database named
-`pressqueue_tests`. The tests create and drop tables. Never use a production
-database.
+Integration tests need the WordPress test suite and a throwaway database.
+They create and drop tables, so never point them at a real database:
 
 ```bash
 bash tools/install-wp-tests.sh pressqueue_tests root '' 127.0.0.1 7.1.3
 WP_TESTS_DIR=/tmp/wordpress-tests-lib-7.1.3 composer run test:integration
 ```
 
-The full gate, `composer run ci`, also needs a disposable WordPress installation.
-Set `WP_PATH` and `PACKAGE_SMOKE_WP_PATH` to its directory. The Plugin Check
-tool installs its pinned version there if it is missing. Package smoke installs,
-activates, deactivates, and uninstalls PressQueue on that site.
-Set `PLUGIN_CHECK_TARGET=/tmp/pressqueue-package-smoke/pressqueue.zip` to check
-the package; the checker reinstalls it on the disposable site without activating it.
+`composer run matrix:local` runs every supported PHP and WordPress version in
+Docker. [Building and checking a package](docs/packaging.md) covers the full
+release checks, and [CONTRIBUTING.md](CONTRIBUTING.md) explains how to
+contribute.
 
-`composer run matrix:local` runs the PHP 8.1 through 8.4 matrix against
-WordPress 6.8.11 and 7.1.3 in disposable Docker containers. Use `-- --dry-run`
-to inspect its commands. See [Contributing](CONTRIBUTING.md) and
-[local package checks](docs/private-release.md).
+## License
 
-Developer references cover [WP-CLI](docs/developer/wp-cli.md),
-[observation hooks](docs/developer/observation-hooks.md), and
-[provider adapters](docs/developer/provider-extensions.md).
+PressQueue's code is MIT licensed. The installable ZIP bundles Action
+Scheduler, which is GPL-3.0-or-later, so the ZIP as a whole is distributed
+under GPL-3.0-or-later. See [third-party notices](THIRD_PARTY_NOTICES.md).
 
-## License and release
-
-PressQueue source uses the [MIT license](LICENSE). Bundled Action Scheduler
-uses GPL-3.0-or-later. Its license is included in the package. See
-[third-party notices](THIRD_PARTY_NOTICES.md) and the
-[release checklist](docs/public-release-checklist.md).
-
-PressQueue is an independent implementation. It is not affiliated with Buffer
-or other social publishing plugins. See [clean-room notes](docs/clean-room.md).
+PressQueue is an independent project. It is not affiliated with Buffer or
+any other social publishing plugin.

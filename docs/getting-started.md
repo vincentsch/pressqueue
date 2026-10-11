@@ -1,183 +1,148 @@
 # Getting started
 
-PressQueue sends qualifying WordPress posts to selected Buffer channels. Start
-with dry run to check the rules. For a first remote delivery, choose the draft
-schedule so the message becomes an unscheduled Buffer draft.
+This guide takes you from a fresh install to your first post on social media.
+It takes about ten minutes. Nothing is sent to Buffer until the last step.
 
-## Connect Buffer
+## 1. Connect Buffer
 
-In **PressQueue > Settings**, leave **Dry run** checked. Add a personal Buffer
-API key in **Connections**, then use **Test Credential**. Select the organization
-shown by that test and click **Sync Channels**.
+Open **PressQueue > Channels**.
 
-Enable the connection and the channels you want to use. These settings make
-channels available to rules. Dry run still prevents submissions to Buffer.
-Your PHP installation needs Sodium, and your WordPress keys and salts must be
-configured. If you change those keys, enter the Buffer credential again.
+1. Click **Open Buffer API settings**. Buffer opens in a new tab.
+2. In Buffer, click **New API key**, name it "PressQueue" and copy the key.
+3. Back in WordPress, paste the key and click **Connect**.
 
-## Create a first rule
+PressQueue checks the key, finds your Buffer organization and lists its
+channels. If your Buffer account has more than one organization, pick the
+one PressQueue should use.
 
-Open **PressQueue > Rules** and give the rule a name. Choose **Include** and
-**first_publish**. The default condition matches the `post` post type.
-Use the condition builder to add author, taxonomy, or custom field conditions.
+Your channels start switched off. Switch on the ones PressQueue may post to.
+A channel that PressQueue cannot post to, such as Instagram, says why.
 
-Check the destination channels and choose a schedule. **Save an unscheduled
-Buffer draft** is the draft schedule. It only creates a Buffer draft when dry
-run is off. **Publish immediately** can publish to the social channel as soon
-as the background worker runs.
+The key is stored encrypted with your site's security keys. If you ever
+change those keys, paste the Buffer key again under **More > Replace API key**.
 
-The **Template Set JSON** field holds the message. This example uses the post's
-title. PressQueue adds the canonical post URL after the message.
+## 2. Create a rule
 
-```json
-{
-  "schema_version": 1,
-  "default_message": "{{ title }}"
-}
-```
+Open **PressQueue > Rules**. A rule says which posts to share, where they go,
+what the message says and when it goes out.
 
-Leave **Custom Field Allowlist JSON** as `[]` unless your conditions or template
-use custom fields. Choose **No image** for the first check. Save the disabled rule,
-enter a post ID in its preview form, and click **Preview Rule**. Read the message,
-destination, schedule, and reasons before clicking **Enable After Preview**.
-Changing the rule's behavior disables it again until a fresh preview.
+The quickest start is **Share every new post to all my channels**. It creates
+a rule that shares every new post to the channels you switched on, adds it to
+the end of your Buffer queue and uses the featured image when there is one.
 
-Rule previews check the selected rule. **PressQueue > Preview** evaluates the
-post against the enabled rules together, including exclusions. Use it to check
-the full result before turning off dry run.
+To build your own, click **Add sharing rule**:
 
-## Exclude posts
+- **When**: usually "A post is published". Scheduled posts count when they go live.
+- **Which posts**: leave it as is to share every post, or add conditions such
+  as a category, tag, author or post type.
+- **Where**: the channels this rule posts to.
+- **Message**: the text before the link. Use the buttons to insert the title,
+  excerpt, author, categories or tags. The link to the post is added at the
+  end automatically. The preview counts characters against the channel's limit.
+- **Timing**: add it to the end of the Buffer queue, use the next free queue
+  slot, post right away, or save it as a Buffer draft for review.
+- **Image**: the featured image when there is one, only posts that have one,
+  no image, or images chosen in each post.
 
-Choose **Exclude** in the post's PressQueue controls to stop that post from
-qualifying. In the block editor, click **Save Controls** before publishing.
-WordPress publishing and updating stay blocked while these changes are unsaved.
-The Classic Editor saves the controls with the post. Controls require
-`edit_pressqueue_post_controls` and permission to edit that post. Administrators
-have the PressQueue capability by default.
+Click **Save and test**. New and changed rules start switched off.
 
-An exclusion rule can cover many posts. Choose **Exclude** as its effect.
-It applies to all destinations and publishing triggers. Matching
-exclusions take precedence over inclusion. Errors in an exclusion also stop
-planning. **Include** in post controls cannot bypass an exclusion.
+## 3. Test it
 
-For example, the following condition tree excludes a category and its children.
-Replace `12` with the site's category ID. Exclusion rules also protect manual batches.
+The test view runs the rule against your most recent posts without sharing
+anything. Each post shows the channels it would go to or, if it would not be
+shared, why. Open **Show messages** to see the exact text.
 
-```json
-{
-  "schema_version": 1,
-  "type": "group",
-  "mode": "ALL",
-  "children": [
-    {
-      "type": "condition",
-      "condition": "taxonomy",
-      "operator": "has_any",
-      "value": {
-        "taxonomy": "category",
-        "terms": [12],
-        "include_ancestors": true
-      }
-    }
-  ]
-}
-```
+When the result looks right, click **Turn on this rule**.
 
-## Messages and images
+PressQueue starts in **test mode**. Test mode checks every post you publish
+and records what it would share, but sends nothing to Buffer. Publish a post
+or two and look at **PressQueue > Activity** to see the test runs. On the
+**Overview**, **Check a post** shows what would happen to any post.
 
-Template tags include `{{ title }}`, `{{ excerpt }}`, `{{ content }}`,
-`{{ author }}`, `{{ published_at }}`, and `{{ terms:category }}`.
-`{{ excerpt | truncate:120 }}` limits an excerpt to 120 characters. A tag such as
-`{{ meta:campaign }}` needs `campaign` in the custom field allowlist.
-Messages are converted to plain text. The final message and post URL must fit
-the channel's configured limit, which is at most 280 characters in the Buffer
-adapter. PressQueue refuses messages that exceed that limit.
+## 4. Go live
 
-A template can give each service its own message:
+When the test runs look right, click **Go live** on the Overview, or choose
+**Live** under **Settings > Sharing mode**. From then on, publishing a post
+that matches a rule sends it to Buffer. Test runs from before are never sent.
 
-```json
-{
-  "schema_version": 1,
-  "default_message": "{{ title }}",
-  "service_messages": {
-    "linkedin": "{{ title }} {{ excerpt | truncate:80 }}"
-  }
-}
-```
+Make sure no other plugin or service already shares the same posts, or they
+will appear twice.
 
-Reusable templates are on the Rules screen. Adopting one copies its current
-version into the rule. Editing the reusable template does not silently change
-saved rules.
+## Keeping posts off social media
 
-The image selector can require a featured image, use one when available, or
-use attachments selected in the post controls. Supported images are JPEG, PNG,
-or GIF, up to 5 MB and 4096 pixels per side. The Buffer adapter allows one image.
-The URL must be public HTTPS without credentials or a query string. Image
-checks may contact the image host. A required image that fails its checks stops
-delivery. The optional featured-image mode sends text alone when the image is
-missing.
+Each post has a **Social sharing** panel in the editor with a **Share this
+post** switch. Switch it off and the post is never shared. The panel saves
+with the post. If that save fails, the post is not saved either, so an
+unsaved "off" can never be published by accident.
 
-## Turn on delivery
+To keep a whole category, tag or author off social media, click
+**Add "never share" rule** on the Rules screen. These rules win over every
+sharing rule, and if one cannot be checked, the post is not shared.
 
-Check that other plugins will not send the same posts automatically. Preview
-the full result, then turn off **Dry run** in Settings. Only future qualifying
-work uses live delivery. Existing dry-run rows cannot be converted into deliveries.
+If only some of your posts belong on social media, choose **Only share posts
+where "Share this post" is switched on** under **Settings > New posts**. New
+posts then start switched off.
 
-A rule's draft schedule creates an unscheduled Buffer draft. Queue schedules
-allow Buffer to choose a posting time. A post or batch can set an explicit time,
-using an IANA timezone such as `Europe/Berlin`. Choose a time at least 15 minutes
-ahead to leave time for background processing. Ambiguous daylight-saving times
-and times more than 365 days ahead are refused. A draft-only rule
-refuses overrides that would schedule or publish publicly.
+## Changing one post
 
-Background work depends on WordPress cron and Action Scheduler. A site with
-little traffic may need a server cron job to run WordPress cron. PressQueue's
-queue sweep runs every five minutes. Inspect the Delivery Log for the result.
+Open **Customize for this post** in the editor panel to change the message,
+leave out channels, pick a date and time, or choose images for that post.
+A picked time must be at least 15 minutes ahead and no more than a year out.
 
-## Retry or stop a delivery
+## Sharing older posts
 
-An **accepted** result means Buffer returned a receipt. Check Buffer for the
-remote draft or publication status. A rate limit can be retried automatically.
-A failed delivery may offer a manual retry depending on the recorded error.
+**PressQueue > Share old posts** shares posts that are already published:
 
-An **ambiguous** result means Buffer may have accepted the request. Check the
-remote channel before reconciling it. Attach the confirmed remote ID, confirm
-that Buffer did not accept it, or cancel local work. Do not create a new delivery
-to work around an uncertain result.
+1. **Pick posts**: "Never shared before" or "Share again", then narrow it down
+   by category, date, tag or title. Up to 100 posts at a time.
+2. **Review**: each post shows its channels, or why it will be skipped.
+3. **Timing**: spread the shares across your Buffer queue, send one at a time
+   from a start time, or save them all as Buffer drafts.
 
-The kill switch holds live work. After turning it off, use the log to resume
-selected held deliveries. Cancellation affects local work. It cannot remove a
-remote post already accepted by Buffer.
+Only rules that include "I pick old posts" (or "I pick shared posts to share
+again") take part. Your "never share" rules still apply. With "Never shared
+before", PressQueue skips any channel a post was already shared to.
 
-## Existing posts and reposts
+Followers see old posts as new ones. A small batch spread across the queue
+looks natural; fifty posts in one morning does not.
 
-Use **Batches** to preview selected existing posts. Rules need the `bulk` trigger
-for a bulk batch or the `repost` trigger for a selected repost batch. A repost
-requires a previous accepted delivery for that post and channel.
+## When something goes wrong
 
-Confirm the preview before local handoff. Changed posts or rules require a new
-preview, and duplicate reservations are blocked. These batches are manual;
-PressQueue does not start a recurring repost campaign.
+**PressQueue > Activity** lists every share. Anything that needs you shows up
+under **Needs attention**, and the WordPress dashboard shows a notice.
 
-See [Privacy and data](privacy.md) for export, retention, and uninstall options.
+- **Failed**: Buffer did not accept the share. The row says why, for example
+  an expired key or a message that is too long. Fix the cause and click
+  **Retry** where it is offered.
+- **Check Buffer**: Buffer may have received the share, but its reply was cut
+  off. PressQueue does not retry on its own, because that could post twice.
+  Look for the post in Buffer, then open the share and tell PressQueue what
+  you found.
+- **On hold**: PressQueue was paused, or the post or rule changed before the
+  share went out. Resume it from Activity once things look right.
 
-## Background delivery
+To stop everything at once, choose **Paused** under **Settings > Sharing mode**.
+Waiting shares stay on hold until you resume them.
 
-Delivery checks the post again before contacting Buffer. It holds work when the
-post becomes private, gains a password, or is excluded. Disabling or changing the
-rule also holds its older queued work. Review the current rule before resuming.
-Turning dry run back on stops existing live work from being sent.
+## Background tasks
 
-Failed hook planning retries up to five times. A persistent failure appears as an
-admin notice. Preview the affected post and check its decision log before making
-a manual batch.
+PressQueue sends shares in the background using WordPress's scheduled tasks,
+which run when someone visits your site. On a quiet site, or a server that
+blocks these requests, shares can wait. The Overview warns you when that
+happens and shows how to add a server cron job.
 
-Image checks respect WordPress's external HTTP block list. HTTP proxies are not
-supported by the image probe. Text delivery can still use WordPress's normal
-HTTP configuration. Optional featured images fall back to text when unavailable.
+## Good to know
 
-Automatic first publication skips posts dated more than one day in the past.
-Use a reviewed manual batch to share backdated posts or imported archives.
+- PressQueue keeps every message, including its link, within 280 characters
+  on every network. A message that is too long is refused, not cut off.
+- Images must be JPEG, PNG or GIF files of up to 5 MB and 4096 pixels per
+  side, at a public HTTPS address.
+- Posts dated more than a day in the past are not shared automatically when
+  published. Use Share old posts for those.
+- An update is shared again only when a rule includes "A published post is
+  updated" and the post's content actually changed.
+- "Sent to Buffer" means Buffer accepted the share. Buffer then publishes it
+  according to the timing you chose.
 
-Update rules compare saved post facts. Renaming an author or taxonomy term, or
-changing the site timezone or domain, does not by itself trigger another share.
+See [Privacy and data](privacy.md) for what PressQueue stores and how to
+remove it.
