@@ -49,6 +49,36 @@ what it would share. Every share leaves a record.
 PressQueue has no hosted service, account or tracking. It talks to Buffer
 from your own server.
 
+## Screenshots
+
+<details>
+<summary>Connect Buffer and switch channels on</summary>
+
+![Channels screen with a connected Buffer account and channel switches](docs/images/channels.png)
+
+</details>
+
+<details>
+<summary>Build a rule with a live message preview</summary>
+
+![Rule editor with conditions, channels and a message preview](docs/images/rule-editor.png)
+
+</details>
+
+<details>
+<summary>Decide per post in the editor</summary>
+
+![Social sharing panel in the block editor](docs/images/editor.png)
+
+</details>
+
+<details>
+<summary>See what happened to every share</summary>
+
+![Activity page listing shares sent to Buffer](docs/images/activity.png)
+
+</details>
+
 ## Requirements
 
 - WordPress 6.8 or newer and PHP 8.1 or newer, with the Sodium extension
