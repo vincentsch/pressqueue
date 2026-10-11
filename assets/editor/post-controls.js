@@ -149,6 +149,29 @@
 		return '';
 	}
 
+	function unfinishedSchedule( controls ) {
+		var schedule = controls.schedule || {};
+		return schedule.mode === 'explicit_time' && ( ! schedule.local_date || ! schedule.local_time );
+	}
+
+	// What is stored. A half-filled date and time only matters while sharing is on,
+	// so it is dropped instead of blocking the save when sharing is off.
+	function savableControls( controls ) {
+		if ( isOn( controls ) || ! unfinishedSchedule( controls ) ) {
+			return controls;
+		}
+		return withControl( controls, 'schedule', { mode: 'inherit' } );
+	}
+
+	// What the preview checks. With sharing off it still checks the post as if sharing
+	// were on, so a matching "never share" rule can be shown.
+	function previewControls( controls ) {
+		if ( isOn( controls ) ) {
+			return controls;
+		}
+		return withControl( savableControls( controls ), 'policy', 'inherit' );
+	}
+
 	// Shown when a save stops, so it says where to fix the problem.
 	function validationError( controls ) {
 		var problem = validationProblem( controls );
@@ -334,7 +357,7 @@
 				method: 'PUT',
 				data: {
 					base_control_bundle_hash: current.hash,
-					controls: current.controls
+					controls: savableControls( current.controls )
 				}
 			} ).then( function ( response ) {
 				var controls = normalizeControls( response.controls );
@@ -574,9 +597,10 @@
 		var preview = pair[ 0 ];
 		var setPreview = pair[ 1 ];
 		var sequence = useRef( 0 );
-		var key = canonical( data.controls );
+		var checked = previewControls( data.controls );
+		var key = canonical( checked );
 		var problem = validationProblem( data.controls );
-		var active = data.loaded && isOn( data.controls ) && ! post.password && post.status !== 'private' && ! problem;
+		var active = data.loaded && ! post.password && post.status !== 'private' && ! problem;
 
 		useEffect( function () {
 			if ( ! active ) {
@@ -593,7 +617,7 @@
 					path: '/pressqueue/v1/posts/' + postId + '/preview',
 					method: 'POST',
 					data: {
-						controls: data.controls,
+						controls: checked,
 						editor_snapshot: snapshot
 					}
 				} ).then( function ( response ) {
@@ -629,7 +653,8 @@
 			};
 		}, [] );
 
-		return Object.assign( {}, preview, { problem: problem } );
+		var keptOff = active && preview.display && typeof preview.display.kept_off === 'string' ? preview.display.kept_off : '';
+		return Object.assign( {}, preview, { problem: problem, keptOff: keptOff } );
 	}
 
 	function ChannelName( props ) {
@@ -733,7 +758,8 @@
 							el( Pill, { tone: item.tone, label: item.label, title: item.help } ),
 							' ',
 							el( 'span', { className: 'pq-ed-small pq-ed-muted', title: item.time_full || undefined }, item.time )
-						)
+						),
+						item.reason ? el( 'span', { className: 'pq-ed-small pq-ed-activity-reason' }, item.reason ) : null
 					);
 				} )
 			);
@@ -1067,6 +1093,25 @@
 		sharing.setControls( withControl( data.controls, 'policy', policy ) );
 	}
 
+	// The "Share this post" switch. A matching "never share" rule shows it off and locked
+	// without changing the stored choice; it returns to normal once the rule stops matching.
+	function ShareToggle( props ) {
+		var keptOff = props.keptOff;
+		return el( ToggleControl, {
+			label: __( 'Share this post', 'pressqueue' ),
+			className: keptOff ? 'pq-ed-toggle is-kept-off' : 'pq-ed-toggle',
+			checked: keptOff ? false : props.on,
+			disabled: props.disabled || !! keptOff,
+			help: keptOff || undefined,
+			onChange: function ( checked ) {
+				if ( ! keptOff ) {
+					props.onChange( checked );
+				}
+			},
+			__nextHasNoMarginBottom: true
+		} );
+	}
+
 	function ModeNote( props ) {
 		var editor = props.editor || {};
 		return editor.mode_note ? el( 'p', { className: 'pq-ed-note pq-ed-note--' + ( editor.sharing_mode || 'test' ) }, editor.mode_note ) : null;
@@ -1084,19 +1129,23 @@
 		}
 
 		var on = isOn( data.controls );
+		var keptOff = preview.keptOff;
+		var summary = null;
+		if ( ! keptOff ) {
+			summary = on ? el( Summary, { preview: preview, published: false, password: post.password, isPrivate: post.status === 'private' } ) : el( 'p', { className: 'pq-ed-muted' }, __( 'This post will not be shared.', 'pressqueue' ) );
+		}
 		return el(
 			'div',
 			{ className: 'pq-editor pq-editor--prepublish' },
-			el( ToggleControl, {
-				label: __( 'Share this post', 'pressqueue' ),
-				checked: on,
+			el( ShareToggle, {
+				on: on,
+				keptOff: keptOff,
 				disabled: data.saving || post.coreSaving,
 				onChange: function ( checked ) {
 					setSharingOn( sharing, checked );
-				},
-				__nextHasNoMarginBottom: true
+				}
 			} ),
-			on ? el( Summary, { preview: preview, published: false, password: post.password, isPrivate: post.status === 'private' } ) : el( 'p', { className: 'pq-ed-muted' }, __( 'This post will not be shared.', 'pressqueue' ) ),
+			summary,
 			el( ModeNote, { editor: data.editor } )
 		);
 	}
@@ -1111,7 +1160,10 @@
 		var controls = data.controls;
 		var on = isOn( controls );
 		var disabled = ! data.loaded || data.saving || post.coreSaving;
-		var hasActivityData = !! data.activity;
+		var keptOff = preview.keptOff;
+		var activityItems = data.activity && data.activity.items ? data.activity.items : [];
+		// When a "never share" rule matches, the switch already says why nothing was shared.
+		var showActivity = !! data.activity && ( ! keptOff || activityItems.length > 0 );
 
 		useEffect( function () {
 			if ( ! data.loaded || ! published ) {
@@ -1147,22 +1199,21 @@
 				isDismissible: false,
 				actions: data.conflict ? [ { label: __( 'Load the latest settings', 'pressqueue' ), onClick: sharing.reload } ] : []
 			}, data.saveError ) : null,
-			el( ToggleControl, {
-				label: __( 'Share this post', 'pressqueue' ),
-				checked: on,
+			el( ShareToggle, {
+				on: on,
+				keptOff: keptOff,
 				disabled: disabled,
-				onChange: setOn,
-				__nextHasNoMarginBottom: true
+				onChange: setOn
 			} ),
-			published && hasActivityData ? el( Activity, { activity: data.activity } ) : null,
-			on ? el( Summary, { preview: preview, published: published, password: post.password, isPrivate: post.status === 'private' } ) : el(
+			published && showActivity ? el( Activity, { activity: data.activity } ) : null,
+			keptOff ? null : ( on ? el( Summary, { preview: preview, published: published, password: post.password, isPrivate: post.status === 'private' } ) : el(
 				'p',
 				{ className: 'pq-ed-muted' },
 				published ? __( 'Sharing is off for this post. Updates and Share old posts leave it out.', 'pressqueue' ) : __( 'This post will not be shared. You can switch it on any time before publishing.', 'pressqueue' )
-			),
-			! published && editor.opt_in_hint ? el( 'p', { className: 'pq-ed-hint' }, editor.opt_in_hint ) : null,
+			) ),
+			! keptOff && ! published && editor.opt_in_hint ? el( 'p', { className: 'pq-ed-hint' }, editor.opt_in_hint ) : null,
 			el( ModeNote, { editor: editor } ),
-			el( Customize, {
+			keptOff ? null : el( Customize, {
 				controls: controls,
 				display: preview.display,
 				editor: editor,

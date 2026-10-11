@@ -221,7 +221,7 @@ final class PostControlsController {
 				throw new ValidationException( 'A complete PressQueue control bundle is required.' );
 			}
 
-			$controls = PostControlMetadata::normalize_bundle( $params['controls'] );
+			$controls = PostControlMetadata::normalize_bundle( self::without_unfinished_schedule( $params['controls'] ) );
 			self::assert_media_control_authority( $post_id, $controls );
 			PostControlMetadata::replace_for_post( $post_id, $controls, $params['base_control_bundle_hash'] );
 
@@ -283,41 +283,55 @@ final class PostControlsController {
 			$on_bundle['policy'] = 'inherit';
 		}
 
-		$display = '' === (string) $post->post_password ? PostSharingSummary::saved_post_preview( $post, $on_bundle ) : null;
+		$display  = '' === (string) $post->post_password && 'private' !== (string) $post->post_status ? PostSharingSummary::saved_post_preview( $post, $on_bundle ) : null;
+		$kept_off = is_array( $display ) ? (string) ( $display['kept_off'] ?? '' ) : '';
 
-		echo '<div class="pq-editor pq-editor--classic" data-pq-classic>';
+		echo '<div class="pq-editor pq-editor--classic' . ( '' === $kept_off ? '' : ' is-kept-off' ) . '" data-pq-classic>';
 		wp_nonce_field( 'pressqueue_save_post_controls_' . $post_id, 'pressqueue_controls_nonce' );
 		echo '<input type="hidden" name="pressqueue_controls_present" value="1" />';
 		echo '<input type="hidden" name="pressqueue_share_form" value="1" />';
 		echo '<input type="hidden" name="pressqueue_base_control_bundle_hash" value="' . esc_attr( PostControlMetadata::bundle_hash( $bundle ) ) . '" />';
 
-		echo '<p class="pq-ed-switch"><label for="pressqueue-share"><input type="checkbox" id="pressqueue-share" name="pressqueue_share" value="1" data-pq-share ' . checked( $is_on, true, false ) . ' /> ' . esc_html__( 'Share this post', 'pressqueue' ) . '</label></p>';
-
-		if ( $published ) {
-			self::render_classic_activity( PostSharingSummary::activity( $post_id ) );
+		if ( '' !== $kept_off ) {
+			// A "never share" rule matches: the switch shows off and cannot be changed, while the
+			// stored choice is carried through unchanged (a disabled checkbox is not submitted).
+			if ( $is_on ) {
+				echo '<input type="hidden" name="pressqueue_share" value="1" />';
+			}
+			echo '<p class="pq-ed-switch"><label for="pressqueue-share"><input type="checkbox" id="pressqueue-share" disabled aria-describedby="pressqueue-kept-off" /> ' . esc_html__( 'Share this post', 'pressqueue' ) . '</label></p>';
+			echo '<p class="pq-ed-kept-off" id="pressqueue-kept-off">' . esc_html( $kept_off ) . '</p>';
+		} else {
+			echo '<p class="pq-ed-switch"><label for="pressqueue-share"><input type="checkbox" id="pressqueue-share" name="pressqueue_share" value="1" data-pq-share ' . checked( $is_on, true, false ) . ' /> ' . esc_html__( 'Share this post', 'pressqueue' ) . '</label></p>';
 		}
 
-		echo '<div class="pq-ed-when-on" data-pq-when="on"' . ( $is_on ? '' : ' hidden' ) . '>';
-		self::render_classic_summary( $post, $display, $published );
-		echo '</div>';
+		if ( $published ) {
+			self::render_classic_activity( PostSharingSummary::activity( $post_id ), '' !== $kept_off );
+		}
 
-		echo '<p class="pq-ed-muted pq-ed-when-off" data-pq-when="off"' . ( $is_on ? ' hidden' : '' ) . '>';
-		echo esc_html(
-			$published
-				? __( 'Sharing is off for this post. Updates and Share old posts leave it out.', 'pressqueue' )
-				: __( 'This post will not be shared. You can switch it on any time before publishing.', 'pressqueue' )
-		);
-		echo '</p>';
+		if ( '' === $kept_off ) {
+			echo '<div class="pq-ed-when-on" data-pq-when="on"' . ( $is_on ? '' : ' hidden' ) . '>';
+			self::render_classic_summary( $post, $display, $published );
+			echo '</div>';
 
-		if ( ! $published && '' !== (string) $context['opt_in_hint'] ) {
-			echo '<p class="pq-ed-hint">' . esc_html( (string) $context['opt_in_hint'] ) . '</p>';
+			echo '<p class="pq-ed-muted pq-ed-when-off" data-pq-when="off"' . ( $is_on ? ' hidden' : '' ) . '>';
+			echo esc_html(
+				$published
+					? __( 'Sharing is off for this post. Updates and Share old posts leave it out.', 'pressqueue' )
+					: __( 'This post will not be shared. You can switch it on any time before publishing.', 'pressqueue' )
+			);
+			echo '</p>';
+
+			if ( ! $published && '' !== (string) $context['opt_in_hint'] ) {
+				echo '<p class="pq-ed-hint">' . esc_html( (string) $context['opt_in_hint'] ) . '</p>';
+			}
 		}
 
 		if ( '' !== (string) $context['mode_note'] ) {
 			echo '<p class="pq-ed-note pq-ed-note--' . esc_attr( (string) $context['sharing_mode'] ) . '">' . esc_html( (string) $context['mode_note'] ) . '</p>';
 		}
 
-		self::render_classic_customize( $bundle, $display, $context );
+		// The customize fields stay in the form while hidden, so stored choices are saved unchanged.
+		self::render_classic_customize( $bundle, $display, $context, '' !== $kept_off );
 		echo '</div>';
 	}
 
@@ -388,9 +402,14 @@ final class PostControlsController {
 	 * Render what happened to a published post.
 	 *
 	 * @param array<string,mixed> $activity Activity summary.
+	 * @param bool                $kept_off Whether a "never share" rule already explains why nothing is shared.
 	 */
-	private static function render_classic_activity( array $activity ): void {
+	private static function render_classic_activity( array $activity, bool $kept_off = false ): void {
 		$items = isset( $activity['items'] ) && is_array( $activity['items'] ) ? $activity['items'] : array();
+
+		if ( array() === $items && $kept_off ) {
+			return;
+		}
 
 		echo '<div class="pq-ed-activity">';
 		if ( array() !== $items ) {
@@ -403,7 +422,11 @@ final class PostControlsController {
 				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
 				echo Ui::pill( (string) $item['tone'], (string) $item['label'], (string) $item['help'] );
 				echo ' <span class="pq-ed-small pq-ed-muted" title="' . esc_attr( (string) $item['time_full'] ) . '">' . esc_html( (string) $item['time'] ) . '</span>';
-				echo '</span></li>';
+				echo '</span>';
+				if ( '' !== (string) ( $item['reason'] ?? '' ) ) {
+					echo '<span class="pq-ed-small pq-ed-activity-reason">' . esc_html( (string) $item['reason'] ) . '</span>';
+				}
+				echo '</li>';
 			}
 			echo '</ul>';
 		} elseif ( '' !== (string) $activity['not_shared_title'] ) {
@@ -424,8 +447,9 @@ final class PostControlsController {
 	 * @param array<string,mixed>      $bundle Stored controls.
 	 * @param array<string,mixed>|null $display Preview display.
 	 * @param array<string,mixed>      $context Editor context.
+	 * @param bool                     $hidden Whether to keep the section in the form but out of sight.
 	 */
-	private static function render_classic_customize( array $bundle, ?array $display, array $context ): void {
+	private static function render_classic_customize( array $bundle, ?array $display, array $context, bool $hidden = false ): void {
 		$message   = is_array( $bundle['message'] ?? null ) ? $bundle['message'] : array( 'mode' => 'inherit' );
 		$schedule  = is_array( $bundle['schedule'] ?? null ) ? $bundle['schedule'] : array( 'mode' => 'inherit' );
 		$media     = is_array( $bundle['media'] ?? null ) ? $bundle['media'] : array( 'mode' => 'inherit' );
@@ -434,7 +458,7 @@ final class PostControlsController {
 		$rule      = is_array( $display['rule'] ?? null ) ? $display['rule'] : array();
 		$info      = is_array( $display['message'] ?? null ) ? $display['message'] : array();
 
-		echo '<details class="pq-ed-more"' . ( $customize ? ' open' : '' ) . '><summary>' . esc_html__( 'Customize for this post', 'pressqueue' ) . '</summary><div class="pq-ed-more-body">';
+		echo '<details class="pq-ed-more"' . ( $customize ? ' open' : '' ) . ( $hidden ? ' hidden' : '' ) . '><summary>' . esc_html__( 'Customize for this post', 'pressqueue' ) . '</summary><div class="pq-ed-more-body">';
 
 		// Message.
 		$value = 'override' === ( $message['mode'] ?? '' ) ? (string) ( $message['value'] ?? '' ) : '';
@@ -789,7 +813,16 @@ final class PostControlsController {
 			$form['pressqueue_message_value'] = $message;
 		}
 
-		$schedule_mode                    = self::scalar_input( $input, 'pressqueue_schedule_mode', 'inherit' );
+		$schedule_mode = self::scalar_input( $input, 'pressqueue_schedule_mode', 'inherit' );
+		if (
+			'exclude' === $policy
+			&& 'explicit_time' === $schedule_mode
+			&& ( '' === self::scalar_input( $input, 'pressqueue_schedule_local_date', '' ) || '' === self::scalar_input( $input, 'pressqueue_schedule_local_time', '' ) )
+		) {
+			// A half-filled date and time cannot stop a post from being saved while sharing is off.
+			$schedule_mode = 'inherit';
+		}
+
 		$form['pressqueue_schedule_mode'] = $schedule_mode;
 		if ( 'explicit_time' === $schedule_mode ) {
 			foreach ( array( 'local_date', 'local_time', 'timezone' ) as $key ) {
@@ -828,6 +861,32 @@ final class PostControlsController {
 	 */
 	private static function scalar_input( array $input, string $key, string $fallback ): string {
 		return isset( $input[ $key ] ) && is_scalar( $input[ $key ] ) ? sanitize_text_field( (string) $input[ $key ] ) : $fallback;
+	}
+
+	/**
+	 * Drop a half-filled explicit date and time while sharing is switched off.
+	 *
+	 * The date and time only matter when the post is shared, so an unfinished one must not
+	 * block saving or publishing. Any other value is left for normal validation.
+	 *
+	 * @param array<string,mixed> $controls Raw control bundle.
+	 * @return array<string,mixed>
+	 */
+	public static function without_unfinished_schedule( array $controls ): array {
+		$schedule = $controls['schedule'] ?? null;
+
+		if ( 'exclude' !== ( $controls['policy'] ?? null ) || ! is_array( $schedule ) || 'explicit_time' !== ( $schedule['mode'] ?? null ) ) {
+			return $controls;
+		}
+
+		foreach ( array( 'local_date', 'local_time' ) as $key ) {
+			if ( ! isset( $schedule[ $key ] ) || '' === $schedule[ $key ] ) {
+				$controls['schedule'] = array( 'mode' => 'inherit' );
+				break;
+			}
+		}
+
+		return $controls;
 	}
 
 	/**

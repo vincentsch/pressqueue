@@ -26,6 +26,11 @@ final class RuleTestView {
 	private const TRANSIENT_BASE = 'pressqueue_rule_test_';
 
 	/**
+	 * Triggers tested as if the post were published today.
+	 */
+	private const PUBLICATION_TRIGGERS = array( 'first_publish', 'scheduled_publication' );
+
+	/**
 	 * Return the trigger a test uses unless the person picks another.
 	 *
 	 * @param RuleRecord $rule Rule.
@@ -318,7 +323,7 @@ final class RuleTestView {
 			if ( ( $is_exclude && 'blocked_by_rule' === $outcome ) || ( ! $is_exclude && 'share' === $outcome ) ) {
 				++$positive;
 			}
-			if ( 'old' === $outcome ) {
+			if ( 'old' === $outcome || '' !== (string) ( $row['published_at'] ?? '' ) ) {
 				++$old;
 			}
 		}
@@ -342,8 +347,9 @@ final class RuleTestView {
 		}
 		echo '</p>';
 
-		if ( $old > 0 && in_array( 'bulk', $rule->triggers['triggers'] ?? array(), true ) && 'bulk' !== $result['trigger'] ) {
-			echo '<p class="pq-callout pq-test-hint">' . esc_html__( 'Posts published more than a day ago are not shared automatically when you test as "A post is published". To see what this rule does with them, test as "Old posts are picked in Share old posts".', 'pressqueue' ) . '</p>';
+		$hint = $old > 0 && in_array( (string) $result['trigger'], self::PUBLICATION_TRIGGERS, true ) ? self::old_posts_hint( $rule ) : '';
+		if ( '' !== $hint ) {
+			echo '<p class="pq-callout pq-test-hint">' . esc_html( $hint ) . '</p>';
 		}
 
 		if ( $is_exclude ) {
@@ -432,6 +438,17 @@ final class RuleTestView {
 			) . '</div>';
 		} else {
 			echo '<div class="pq-small pq-muted">' . esc_html( (string) ( $row['reason'] ?? '' ) ) . '</div>';
+		}
+
+		$published_on = self::published_on( (string) ( $row['published_at'] ?? '' ) );
+		if ( '' !== $published_on && 'error' !== $outcome ) {
+			echo '<div class="pq-small pq-muted pq-test-published">' . esc_html(
+				sprintf(
+					/* translators: %s: short publication date such as "Oct 2". */
+					__( 'Published on %s. Tested as if it were published today.', 'pressqueue' ),
+					$published_on
+				)
+			) . '</div>';
 		}
 
 		if ( array() !== $shares || ( array() !== $blocked && in_array( $outcome, array( 'skip', 'error' ), true ) ) ) {
@@ -532,14 +549,16 @@ final class RuleTestView {
 	 * @return array<string,mixed>
 	 */
 	private static function test_post( RuleRecord $rule, array $rules, int $post_id, string $trigger, EventNormalizer $normalizer, Planner $planner, array $allowlist ): array {
-		$post = get_post( $post_id );
-		$row  = array(
-			'post_id' => $post_id,
-			'status'  => $post instanceof \WP_Post ? (string) $post->post_status : '',
-			'outcome' => 'skip',
-			'shares'  => array(),
-			'blocked' => array(),
-			'reason'  => '',
+		$post   = get_post( $post_id );
+		$as_new = in_array( $trigger, self::PUBLICATION_TRIGGERS, true );
+		$row    = array(
+			'post_id'      => $post_id,
+			'status'       => $post instanceof \WP_Post ? (string) $post->post_status : '',
+			'outcome'      => 'skip',
+			'shares'       => array(),
+			'blocked'      => array(),
+			'reason'       => '',
+			'published_at' => $as_new && $post instanceof \WP_Post && 'publish' === $post->post_status ? (string) $post->post_date : '',
 		);
 
 		try {
@@ -554,7 +573,9 @@ final class RuleTestView {
 				return $row;
 			}
 
-			$result  = $planner->preview( $event, $rules )->to_array();
+			// Already published posts are tested as if they were published today, so an older
+			// post shows what the rule does instead of the backdated-publication skip.
+			$result  = ( $as_new ? $planner->preview_as_new_publication( $event, $rules ) : $planner->preview( $event, $rules ) )->to_array();
 			$summary = PreviewPresenter::summarize( $result );
 
 			$row['shares']  = $summary['shares'];
@@ -779,6 +800,47 @@ final class RuleTestView {
 		}
 
 		return Labels::reason( 'malformed_rule' );
+	}
+
+	/**
+	 * Explain how older posts are tested and how to share them.
+	 *
+	 * @param RuleRecord $rule Rule under test.
+	 * @return string
+	 */
+	private static function old_posts_hint( RuleRecord $rule ): string {
+		$triggers = Labels::triggers();
+
+		if ( 'exclude' === $rule->effect ) {
+			return __( 'Already published posts are tested as if they were published today. A "never share" rule also keeps matching posts out of updates and Share old posts.', 'pressqueue' );
+		}
+
+		if ( in_array( 'bulk', $rule->triggers['triggers'] ?? array(), true ) ) {
+			return sprintf(
+				/* translators: %s: name of the Share old posts trigger, for example "Old posts are picked in Share old posts". */
+				__( 'Already published posts are tested as if they were published today. To see what this rule does when you pick them in Share old posts, test as "%s".', 'pressqueue' ),
+				$triggers['bulk'] ?? ''
+			);
+		}
+
+		return __( 'Already published posts are tested as if they were published today. To share older posts with this rule, tick "I pick old posts in Share old posts" when you edit it, then pick the posts in Share old posts.', 'pressqueue' );
+	}
+
+	/**
+	 * Return a short publication date, with the year only when it is not this year.
+	 *
+	 * @param string $post_date Local post date (Y-m-d H:i:s).
+	 * @return string
+	 */
+	private static function published_on( string $post_date ): string {
+		if ( 1 !== preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $post_date ) || str_starts_with( $post_date, '0000' ) ) {
+			return '';
+		}
+
+		$same_year = substr( $post_date, 0, 4 ) === current_time( 'Y' );
+		$formatted = mysql2date( $same_year ? __( 'M j', 'pressqueue' ) : __( 'M j, Y', 'pressqueue' ), $post_date );
+
+		return is_string( $formatted ) ? $formatted : '';
 	}
 
 	/**

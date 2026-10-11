@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Tests\Integration;
 
+use PressQueue\Admin\DeliveryExplainer;
 use PressQueue\Admin\PostControlsController;
 use PressQueue\Admin\PostSharingSummary;
 use PressQueue\Delivery\DeliveryQueryRepository;
@@ -215,7 +216,8 @@ final class PostSharingIntegrationTest extends WP_UnitTestCase {
 		)->get_data()['display'];
 
 		self::assertTrue( $display['will_share'] );
-		self::assertSame( 'When you publish, PressQueue sends it to:', $display['heading'] );
+		self::assertSame( 'When you publish, PressQueue would send it to:', $display['heading'] );
+		self::assertSame( '', $display['kept_off'] );
 		self::assertSame( 'Example Social', $display['channels'][0]['name'] );
 		self::assertSame( 'Mastodon', $display['channels'][0]['service_name'] );
 		self::assertSame( 'Right away · without an image', $display['details'] );
@@ -250,12 +252,154 @@ final class PostSharingIntegrationTest extends WP_UnitTestCase {
 		self::assertDoesNotMatchRegularExpression( '/id="pressqueue-share"[^>]*checked/', $html );
 		self::assertStringContainsString( 'On this site, new posts start with sharing off.', $html );
 		self::assertStringContainsString( 'This post will not be shared. You can switch it on any time before publishing.', $html );
-		self::assertStringContainsString( 'When you publish, PressQueue sends it to:', $html );
+		self::assertStringContainsString( 'When you publish, PressQueue would send it to:', $html );
 		self::assertStringContainsString( 'Example Social', $html );
 		self::assertStringContainsString( 'Customize for this post', $html );
 		self::assertStringContainsString( 'Test mode is on. Nothing is sent to Buffer yet.', $html );
 		self::assertStringNotContainsString( 'Attachment IDs', $html );
 		self::assertStringNotContainsString( 'UTC offset', $html );
+	}
+
+	public function test_heading_says_what_would_happen_in_each_sharing_mode(): void {
+		self::assertSame( 'When you publish, PressQueue sends it to:', PostSharingSummary::heading( 'first_publish', 'live' ) );
+		self::assertSame( 'When you publish, PressQueue would send it to:', PostSharingSummary::heading( 'first_publish', 'test' ) );
+		self::assertSame( 'When you update this post, PressQueue would send it to:', PostSharingSummary::heading( 'update', 'test' ) );
+		self::assertSame( 'When you publish, PressQueue holds it for these channels until sharing resumes:', PostSharingSummary::heading( 'first_publish', 'paused' ) );
+		self::assertSame( 'When the post goes live as scheduled, PressQueue holds it for these channels until sharing resumes:', PostSharingSummary::heading( 'scheduled_publication', 'paused' ) );
+
+		$destination = $this->enabledDestination();
+		$this->createEnabledRule( $this->includeRuleInput( $destination ) );
+		$post_id  = $this->post( array( 'post_status' => 'draft' ) );
+		$settings = new SettingsRepository();
+		$settings->set_dry_run_enabled( false );
+		$settings->set_kill_switch_enabled( false );
+		self::assertSame( 'When you publish, PressQueue sends it to:', $this->previewDisplay( $post_id )['heading'] );
+
+		$settings->set_kill_switch_enabled( true );
+		self::assertSame( 'paused', $settings->sharing_mode() );
+		self::assertSame( 'When you publish, PressQueue holds it for these channels until sharing resumes:', $this->previewDisplay( $post_id )['heading'] );
+	}
+
+	public function test_a_matching_never_share_rule_keeps_the_switch_off_without_changing_the_stored_choice(): void {
+		$destination = $this->enabledDestination();
+		$journal     = (int) self::factory()->category->create( array( 'name' => 'Private Journal' ) );
+		$this->createEnabledRule( $this->includeRuleInput( $destination ) );
+		$this->createEnabledRule( $this->excludeRuleInput( $journal ) );
+		$post_id           = $this->post(
+			array(
+				'post_category' => array( $journal ),
+				'post_status'   => 'draft',
+			)
+		);
+		$stored            = PostControlMetadata::default_bundle();
+		$stored['message'] = array(
+			'mode'  => 'override',
+			'value' => 'A line of my own',
+		);
+		PostControlMetadata::replace_for_post( $post_id, PostControlMetadata::normalize_bundle( $stored ), PostControlMetadata::bundle_hash( PostControlMetadata::read_for_post( $post_id ) ) );
+		$before = PostControlMetadata::read_for_post( $post_id );
+
+		$display = $this->previewDisplay( $post_id );
+		self::assertFalse( $display['will_share'] );
+		self::assertSame( 'Kept off social media by the "never share" rule "Keep the journal private".', $display['kept_off'] );
+		self::assertSame( 'The "never share" rule "Keep the journal private" matches this post.', $display['reason'] );
+
+		ob_start();
+		PostControlsController::render_meta_box( get_post( $post_id ) );
+		$html = (string) ob_get_clean();
+
+		self::assertMatchesRegularExpression( '/<input type="checkbox" id="pressqueue-share" disabled/', $html );
+		self::assertDoesNotMatchRegularExpression( '/id="pressqueue-share"[^>]*checked/', $html );
+		self::assertStringContainsString( '<input type="hidden" name="pressqueue_share" value="1" />', $html );
+		self::assertStringContainsString( 'Kept off social media by the &quot;never share&quot; rule &quot;Keep the journal private&quot;.', $html );
+		self::assertMatchesRegularExpression( '/<details class="pq-ed-more" open hidden>/', $html );
+		self::assertStringContainsString( 'A line of my own', $html );
+		self::assertStringNotContainsString( 'PressQueue would send it to', $html );
+		self::assertStringNotContainsString( 'This post will not be shared.', $html );
+		self::assertSame( $before, PostControlMetadata::read_for_post( $post_id ), 'rendering never changes what is stored' );
+
+		// Once the post leaves the category, the switch is back to normal.
+		wp_set_post_categories( $post_id, array() );
+		ob_start();
+		PostControlsController::render_meta_box( get_post( $post_id ) );
+		$html = (string) ob_get_clean();
+		self::assertMatchesRegularExpression( '/id="pressqueue-share" name="pressqueue_share" value="1" data-pq-share\s+checked/', $html );
+		self::assertStringNotContainsString( 'Kept off social media', $html );
+		self::assertMatchesRegularExpression( '/<details class="pq-ed-more" open>/', $html );
+	}
+
+	public function test_an_unfinished_date_and_time_never_blocks_saving_while_sharing_is_off(): void {
+		$post_id  = $this->post( array( 'post_status' => 'draft' ) );
+		$controls = PostControlMetadata::default_bundle();
+
+		$controls['policy']   = 'exclude';
+		$controls['schedule'] = array(
+			'local_date' => '2026-10-20',
+			'local_time' => '',
+			'mode'       => 'explicit_time',
+			'timezone'   => 'Europe/Berlin',
+		);
+		$response             = $this->rest(
+			'PUT',
+			'/pressqueue/v1/posts/' . $post_id . '/controls',
+			array(
+				'base_control_bundle_hash' => PostControlMetadata::bundle_hash( PostControlMetadata::read_for_post( $post_id ) ),
+				'controls'                 => $controls,
+			)
+		);
+		self::assertSame( 200, $response->get_status() );
+		self::assertSame( 'exclude', $response->get_data()['controls']['policy'] );
+		self::assertSame( array( 'mode' => 'inherit' ), $response->get_data()['controls']['schedule'] );
+
+		$controls['policy'] = 'inherit';
+		$rejected           = $this->rest(
+			'PUT',
+			'/pressqueue/v1/posts/' . $post_id . '/controls',
+			array(
+				'base_control_bundle_hash' => PostControlMetadata::bundle_hash( PostControlMetadata::read_for_post( $post_id ) ),
+				'controls'                 => $controls,
+			)
+		);
+		self::assertSame( 400, $rejected->get_status() );
+		self::assertSame( 'exclude', PostControlMetadata::read_for_post( $post_id )['policy'] );
+
+		$form = array(
+			'pressqueue_schedule_local_date' => '',
+			'pressqueue_schedule_local_time' => '09:00',
+			'pressqueue_schedule_mode'       => 'explicit_time',
+			'pressqueue_schedule_timezone'   => 'Europe/Berlin',
+		);
+		self::assertSame( array( 'mode' => 'inherit' ), PostControlsController::bundle_from_share_form( $form, PostControlMetadata::default_bundle() )['schedule'] );
+
+		try {
+			PostControlsController::bundle_from_share_form( array_merge( $form, array( 'pressqueue_share' => '1' ) ), PostControlMetadata::default_bundle() );
+			self::fail( 'An unfinished date and time must stop the save while sharing is on.' );
+		} catch ( \PressQueue\Storage\ValidationException $exception ) {
+			self::assertStringContainsString( 'explicit schedule', $exception->getMessage() );
+		}
+	}
+
+	public function test_a_failed_share_explains_itself_in_the_editor(): void {
+		$destination = $this->enabledDestination();
+		$this->createEnabledRule( $this->includeRuleInput( $destination ) );
+		$post_id = $this->post( array( 'post_status' => 'draft' ) );
+		wp_publish_post( $post_id );
+		EventCollector::finalize();
+
+		$database = Database::from_globals();
+		$database->query( 'UPDATE `' . $database->table( Schema::DELIVERIES ) . "` SET state = 'failed', error_class = 'invalid_credential' WHERE channel_public_id = %s", array( $destination ) );
+		$delivery = ( new DeliveryQueryRepository() )->query( array( 'post_id' => $post_id ) )['rows'][0];
+
+		$items = $this->rest( 'GET', '/pressqueue/v1/posts/' . $post_id . '/activity' )->get_data()['activity']['items'];
+		self::assertCount( 1, $items );
+		self::assertSame( 'failed', $items[0]['state'] );
+		self::assertNotSame( '', $items[0]['reason'] );
+		self::assertSame( DeliveryExplainer::problem_sentence( $delivery ), $items[0]['reason'] );
+
+		ob_start();
+		PostControlsController::render_meta_box( get_post( $post_id ) );
+		$html = (string) ob_get_clean();
+		self::assertStringContainsString( '<span class="pq-ed-small pq-ed-activity-reason">' . esc_html( $items[0]['reason'] ) . '</span>', $html );
 	}
 
 	public function test_site_time_zone_is_preselected_as_a_zone_the_schedule_accepts(): void {
@@ -279,6 +423,69 @@ final class PostSharingIntegrationTest extends WP_UnitTestCase {
 
 		update_option( 'timezone_string', $timezone );
 		update_option( 'gmt_offset', $offset );
+	}
+
+	/**
+	 * Return the editor preview display for a post's saved state.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return array<string,mixed>
+	 */
+	private function previewDisplay( int $post_id ): array {
+		$response = $this->rest(
+			'POST',
+			'/pressqueue/v1/posts/' . $post_id . '/preview',
+			array(
+				'controls'        => PostControlMetadata::default_bundle(),
+				'editor_snapshot' => PostSharingSummary::saved_post_snapshot( get_post( $post_id ) ),
+			)
+		);
+		self::assertSame( 200, $response->get_status() );
+
+		return $response->get_data()['display'];
+	}
+
+	/**
+	 * Return a "never share" rule for one category.
+	 *
+	 * @param int $term_id Category ID.
+	 * @return array<string,mixed>
+	 */
+	private function excludeRuleInput( int $term_id ): array {
+		return array(
+			'condition_tree'         => array(
+				'children'       => array(
+					array(
+						'condition' => 'taxonomy',
+						'operator'  => 'has_any',
+						'type'      => 'condition',
+						'value'     => array(
+							'include_ancestors' => false,
+							'taxonomy'          => 'category',
+							'terms'             => array( $term_id ),
+						),
+					),
+				),
+				'operator'       => 'ALL',
+				'schema_version' => 1,
+				'type'           => 'group',
+			),
+			'custom_field_allowlist' => array(),
+			'destination_set'        => array(
+				'schema_version' => 1,
+				'scope'          => 'all',
+			),
+			'effect'                 => 'exclude',
+			'inline_template'        => array(
+				'custom_field_allowlist' => array(),
+				'message'                => '{{ title }}',
+				'schema_version'         => 1,
+			),
+			'name'                   => 'Keep the journal private',
+			'priority'               => 5,
+			'schedule_policy'        => 'immediate',
+			'triggers'               => array( 'first_publish' ),
+		);
 	}
 
 	/**

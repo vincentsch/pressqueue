@@ -102,6 +102,47 @@ final class PlanningIntegrationTest extends WP_UnitTestCase {
 		self::assertNotSame( '', get_post_meta( $post_id, EventNormalizer::META_FIRST_PUBLISH_SEEN_AT, true ) );
 	}
 
+	public function test_backdated_post_previews_as_new_publication_without_changing_runtime(): void {
+		$destination = $this->enabledDestination();
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
+		$post_id     = self::factory()->post->create(
+			array(
+				'post_date'     => '2020-01-01 12:00:00',
+				'post_date_gmt' => '2020-01-01 12:00:00',
+				'post_status'   => 'publish',
+				'post_title'    => 'Older post',
+			)
+		);
+		$planner     = new Planner();
+		$event       = ( new EventNormalizer() )->from_post_id( $post_id, 'preview', 'integration', 'first_publish' );
+		self::assertNotNull( $event );
+
+		$preview = $planner->preview( $event );
+		self::assertSame( array(), $preview->deliveries );
+		self::assertSame( 'skipped', $preview->decisions[0]['result'] );
+		self::assertSame( 'backdated_publication', $preview->decisions[0]['reasons'][0]['code'] );
+
+		$as_new = $planner->preview_as_new_publication( $event );
+		self::assertFalse( $as_new->durable );
+		self::assertSame( 'included', $as_new->decisions[0]['result'] );
+		self::assertSame( $rule->public_id, $as_new->decisions[0]['rule_public_id'] );
+		self::assertCount( 1, $as_new->deliveries );
+		self::assertStringContainsString( 'Older post', $as_new->deliveries[0]['payload_preview']['message'] );
+		self::assertNotContains( 'backdated_publication', array_column( $as_new->decisions[0]['reasons'], 'code' ) );
+		self::assertSame( 0, $this->rowCount( Schema::DECISIONS ) );
+		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+
+		$runtime_event = ( new EventNormalizer() )->from_post_id( $post_id, 'runtime', 'integration', 'first_publish' );
+		self::assertNotNull( $runtime_event );
+		$runtime = $planner->plan_runtime( $runtime_event );
+		self::assertTrue( $runtime->durable );
+		self::assertSame( array(), $runtime->deliveries );
+		self::assertSame( 'skipped', $runtime->decisions[0]['result'] );
+		self::assertSame( 'backdated_publication', $runtime->decisions[0]['reasons'][0]['code'] );
+		self::assertSame( 0, $this->rowCount( Schema::DELIVERIES ) );
+		self::assertSame( 1, $this->rowCount( Schema::DECISIONS ) );
+	}
+
 	public function test_scheduled_first_publication_matches_default_rule_and_global_exclusions(): void {
 		$destination = $this->enabledDestination();
 		$rule = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );

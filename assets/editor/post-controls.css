@@ -168,6 +168,33 @@
 	gap: 6px;
 }
 
+.pq-editor .pq-ed-activity-reason {
+	flex-basis: 100%;
+	color: var(--pq-text);
+}
+
+/* A "never share" rule keeps the post off social media. */
+
+.pq-editor .pq-ed-toggle.is-kept-off .components-base-control__help,
+.pq-editor .pq-ed-kept-off {
+	margin: 8px 0 0;
+	padding: 8px 10px;
+	border-radius: 6px;
+	background: var(--pq-idle-soft);
+	color: var(--pq-text);
+	font-size: 13px;
+	font-style: normal;
+}
+
+.pq-editor .pq-ed-toggle.is-kept-off .components-toggle-control__help {
+	display: block;
+	margin: 0;
+}
+
+.pq-editor .pq-ed-kept-off {
+	margin: 0;
+}
+
 .pq-editor .pq-pill {
 	display: inline-flex;
 	align-items: center;

@@ -123,7 +123,8 @@ final class PostSharingSummary {
 		return array(
 			'channels'   => $channels,
 			'details'    => $details,
-			'heading'    => self::heading( $trigger ),
+			'heading'    => self::heading( $trigger, self::current_mode() ),
+			'kept_off'   => $will_share ? '' : self::kept_off_sentence( $decisions, $summary ),
 			'left_out'   => $will_share ? self::left_out_channels( $decisions, $shared_ids, $summary ) : array(),
 			'message'    => $message,
 			'reason'     => $will_share ? '' : self::not_shared_reason( $decisions, $summary ),
@@ -340,6 +341,7 @@ final class PostSharingSummary {
 					array(
 						'help'      => $state['help'],
 						'label'     => $state['label'],
+						'reason'    => in_array( $delivery->state, array( 'failed', 'ambiguous' ), true ) ? DeliveryExplainer::row_note( $delivery )['text'] : '',
 						'state'     => $delivery->state,
 						'time'      => Ui::relative_time( $time ),
 						'time_full' => Ui::local_datetime( $time ),
@@ -442,10 +444,38 @@ final class PostSharingSummary {
 	/**
 	 * Return the heading shown above the channels.
 	 *
+	 * In test mode nothing reaches Buffer and while sharing is paused shares wait, so the
+	 * heading says what would happen instead of promising a send.
+	 *
 	 * @param string $trigger Simulated trigger.
+	 * @param string $mode Sharing mode: live, test or paused.
 	 * @return string
 	 */
-	public static function heading( string $trigger ): string {
+	public static function heading( string $trigger, string $mode = 'live' ): string {
+		if ( 'test' === $mode ) {
+			if ( 'scheduled_publication' === $trigger ) {
+				return __( 'When the post goes live as scheduled, PressQueue would send it to:', 'pressqueue' );
+			}
+
+			if ( 'update' === $trigger ) {
+				return __( 'When you update this post, PressQueue would send it to:', 'pressqueue' );
+			}
+
+			return __( 'When you publish, PressQueue would send it to:', 'pressqueue' );
+		}
+
+		if ( 'paused' === $mode ) {
+			if ( 'scheduled_publication' === $trigger ) {
+				return __( 'When the post goes live as scheduled, PressQueue holds it for these channels until sharing resumes:', 'pressqueue' );
+			}
+
+			if ( 'update' === $trigger ) {
+				return __( 'When you update this post, PressQueue holds it for these channels until sharing resumes:', 'pressqueue' );
+			}
+
+			return __( 'When you publish, PressQueue holds it for these channels until sharing resumes:', 'pressqueue' );
+		}
+
 		if ( 'scheduled_publication' === $trigger ) {
 			return __( 'When the post goes live as scheduled, PressQueue sends it to:', 'pressqueue' );
 		}
@@ -455,6 +485,31 @@ final class PostSharingSummary {
 		}
 
 		return __( 'When you publish, PressQueue sends it to:', 'pressqueue' );
+	}
+
+	/**
+	 * Return the sentence shown when a "never share" rule keeps the post off social media.
+	 *
+	 * @param array<int,mixed>     $decisions Decision arrays from a preview.
+	 * @param ActivitySummary|null $summary Lookup helper.
+	 * @return string Empty when no "never share" rule matches.
+	 */
+	public static function kept_off_sentence( array $decisions, ?ActivitySummary $summary = null ): string {
+		foreach ( $decisions as $decision ) {
+			if ( ! is_array( $decision ) || 'excluded' !== ( $decision['result'] ?? '' ) || ! is_string( $decision['rule_public_id'] ?? null ) || '' === $decision['rule_public_id'] ) {
+				continue;
+			}
+
+			$name = null === $summary ? '' : $summary->rule_name( $decision['rule_public_id'] );
+			if ( '' === $name ) {
+				return __( 'Kept off social media by a "never share" rule.', 'pressqueue' );
+			}
+
+			/* translators: %s: rule name. */
+			return sprintf( __( 'Kept off social media by the "never share" rule "%s".', 'pressqueue' ), $name );
+		}
+
+		return '';
 	}
 
 	/**
@@ -484,11 +539,11 @@ final class PostSharingSummary {
 			if ( 'excluded' === ( $decision['result'] ?? '' ) && '' !== $rule_id ) {
 				$name = null === $summary ? '' : $summary->rule_name( $rule_id );
 				if ( '' === $name ) {
-					return __( 'A never-share rule matches this post.', 'pressqueue' );
+					return __( 'A "never share" rule matches this post.', 'pressqueue' );
 				}
 
 				/* translators: %s: rule name. */
-				return sprintf( __( 'The never-share rule "%s" matches this post.', 'pressqueue' ), $name );
+				return sprintf( __( 'The "never share" rule "%s" matches this post.', 'pressqueue' ), $name );
 			}
 
 			$reasons = isset( $decision['reasons'] ) && is_array( $decision['reasons'] ) ? $decision['reasons'] : array();
@@ -775,6 +830,20 @@ final class PostSharingSummary {
 	 */
 	private static function length( string $text ): int {
 		return function_exists( 'mb_strlen' ) ? (int) mb_strlen( $text, 'UTF-8' ) : strlen( $text );
+	}
+
+	/**
+	 * Return the current sharing mode, assuming test mode when it cannot be read.
+	 *
+	 * @return string
+	 */
+	private static function current_mode(): string {
+		try {
+			return ( new SettingsRepository() )->sharing_mode();
+		} catch ( \Throwable $throwable ) {
+			unset( $throwable );
+			return 'test';
+		}
 	}
 
 	/**

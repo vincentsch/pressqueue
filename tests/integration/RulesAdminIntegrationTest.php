@@ -375,6 +375,49 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 		self::assertSame( array( 'blocked_by_rule', 'not_affected' ), array_column( $exclusion_result['rows'], 'outcome' ) );
 	}
 
+	public function test_rule_test_treats_older_posts_as_published_today(): void {
+		$channel = $this->channel( 'linkedin', 'Larkfield Bakery' );
+		$older   = self::factory()->post->create(
+			array(
+				'post_date'     => '2020-10-02 09:00:00',
+				'post_date_gmt' => '2020-10-02 09:00:00',
+				'post_status'   => 'publish',
+				'post_title'    => 'Older loaf notes',
+			)
+		);
+		$draft   = self::factory()->post->create(
+			array(
+				'post_status' => 'draft',
+				'post_title'  => 'Draft loaf notes',
+			)
+		);
+		$rule    = ( new RuleRepository() )->create( $this->baseInput( $channel ) );
+
+		$result = RuleTestView::run( $rule, array( $older, $draft ), 'first_publish', 2, false );
+		$rows   = array_column( $result['rows'], null, 'post_id' );
+
+		self::assertSame( 'share', $rows[ $older ]['outcome'] );
+		self::assertSame( '2020-10-02 09:00:00', $rows[ $older ]['published_at'] );
+		self::assertSame( 'share', $rows[ $draft ]['outcome'] );
+		self::assertSame( '', $rows[ $draft ]['published_at'] );
+
+		$_GET = array(
+			'page' => RulesController::SLUG,
+			'view' => 'test',
+			'rule' => $rule->public_id,
+		);
+		$html = $this->render();
+		self::assertStringContainsString( '2 of 2 posts would be shared.', $html );
+		self::assertStringContainsString( 'Published on Oct 2, 2020. Tested as if it were published today.', $html );
+		self::assertStringContainsString( 'tick &quot;I pick old posts in Share old posts&quot; when you edit it', $html );
+		self::assertStringNotContainsString( 'more than a day in the past', $html );
+
+		$rule = ( new RuleRepository() )->find_by_public_id( $rule->public_id );
+		self::assertInstanceOf( RuleRecord::class, $rule );
+		$update = RuleTestView::run( $rule, array( $older ), 'update', 1, false );
+		self::assertSame( '', $update['rows'][0]['published_at'] );
+	}
+
 	public function test_only_disabled_rules_without_waiting_deliveries_can_be_deleted(): void {
 		$channel = $this->channel( 'linkedin' );
 		$rules   = new RuleRepository();

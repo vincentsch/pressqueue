@@ -170,7 +170,9 @@ function previewResponse( channels = [ 'Larkfield Bakery' ] ) {
 function harness( options = {} ) {
 	const renderer = createRenderer();
 	const pending = [];
-	const timers = [];
+	// Pending timers by a unique ID, like real timer handles.
+	const timers = new Map();
+	let nextTimer = 0;
 	const filters = {};
 	const actions = {};
 	const locks = new Set();
@@ -261,12 +263,12 @@ function harness( options = {} ) {
 	vm.runInNewContext( SOURCE, {
 		window: { wp, pressqueuePostControls: Object.assign( { canAccess: true, canViewLog: true, schedules: { inherit: 'Use the rule', queue_end: 'Add to the end of the Buffer queue', explicit_time: 'Pick a date and time' }, images: { inherit: 'Use the rule', none: 'No image', post_media: 'Choose images' } }, options.config || {} ) },
 		setTimeout: ( callback ) => {
-			timers.push( callback );
-			return timers.length;
+			timers.set( ++nextTimer, callback );
+			return nextTimer;
 		},
 		clearTimeout: ( id ) => {
 			if ( id ) {
-				timers[ id - 1 ] = null;
+				timers.delete( id );
 			}
 		},
 		Promise,
@@ -353,7 +355,8 @@ function harness( options = {} ) {
 		find: ( type, label ) => walk( tree, node => node.type === type && ( label === undefined || node.props.label === label || text( node ).includes( label ) ) )[ 0 ],
 		findAll: type => walk( tree, node => node.type === type ),
 		flushTimers: () => {
-			const run = timers.splice( 0 ).filter( Boolean );
+			const run = Array.from( timers.values() );
+			timers.clear();
 			run.forEach( callback => callback() );
 		},
 		request: predicate => pending.find( item => predicate( item.request ) ),
@@ -404,7 +407,104 @@ test( 'a stored exclusion starts switched off and opt-in sites explain the defau
 	assert.ok( h.text().includes( 'This post will not be shared. You can switch it on any time before publishing.' ) );
 	assert.ok( h.text().includes( 'On this site, new posts start with sharing off.' ) );
 	h.flushTimers();
-	assert.equal( h.request( request => request.path.endsWith( '/preview' ) ), undefined, 'no preview while sharing is off' );
+	const preview = h.request( request => request.path.endsWith( '/preview' ) );
+	assert.ok( preview, 'the post is still checked for "never share" rules while sharing is off' );
+	assert.equal( preview.request.data.controls.policy, 'inherit', 'the check runs as if sharing were on' );
+	preview.resolve( previewResponse() );
+	await h.settle();
+	assert.equal( h.find( 'ToggleControl', 'Share this post' ).props.checked, false );
+	assert.equal( h.find( 'ToggleControl', 'Share this post' ).props.disabled, false );
+	assert.ok( h.text().includes( 'This post will not be shared. You can switch it on any time before publishing.' ) );
+	assert.equal( h.text().includes( 'PressQueue sends it to' ), false, 'no channel summary while sharing is off' );
+	h.unmount();
+} );
+
+function keptOffResponse() {
+	const response = previewResponse( [] );
+	response.display.reason = 'The "never share" rule "Keep the private journal private" matches this post.';
+	response.display.kept_off = 'Kept off social media by the "never share" rule "Keep the private journal private".';
+	return response;
+}
+
+test( 'a matching "never share" rule locks the switch off without changing the stored choice', async () => {
+	const h = await loaded( { prePublish: true } );
+	h.flushTimers();
+	// The panel and the pre-publish sidebar each check the post.
+	const previews = h.pending.filter( item => item.request.path.endsWith( '/preview' ) );
+	assert.equal( previews.length, 2 );
+	previews.forEach( item => item.resolve( keptOffResponse() ) );
+	await h.settle();
+
+	const toggles = h.findAll( 'ToggleControl' );
+	assert.equal( toggles.length, 2 );
+	toggles.forEach( toggle => {
+		assert.equal( toggle.props.checked, false );
+		assert.equal( toggle.props.disabled, true );
+		assert.equal( toggle.props.help, 'Kept off social media by the "never share" rule "Keep the private journal private".' );
+	} );
+	assert.equal( h.find( 'Button', 'Customize for this post' ), undefined, 'nothing to customize' );
+	assert.equal( h.text().includes( 'Not shared when you publish.' ), false );
+	assert.ok( h.text().includes( 'Test mode is on. Nothing is sent to Buffer yet.' ) );
+
+	toggles[ 0 ].props.onChange( true );
+	h.render();
+	assert.equal( MARKER in h.post.edits, false, 'the stored choice is untouched' );
+	assert.equal( ( await h.savePost( {} ) ).saved, true );
+	assert.equal( h.pending.filter( isPut ).length, 0, 'nothing is stored' );
+
+	// The post changes so the rule no longer matches.
+	h.post.record = { content: '<p>Moved out of the journal</p>' };
+	h.render();
+	h.flushTimers();
+	const next = h.pending.filter( item => item.request.path.endsWith( '/preview' ) ).slice( 2 );
+	assert.equal( next.length, 2 );
+	next.forEach( item => item.resolve( previewResponse() ) );
+	await h.settle();
+	h.findAll( 'ToggleControl' ).forEach( toggle => {
+		assert.equal( toggle.props.checked, true );
+		assert.equal( toggle.props.disabled, false );
+		assert.equal( toggle.props.help, undefined );
+	} );
+	assert.ok( h.find( 'Button', 'Customize for this post' ) );
+	assert.ok( h.text().includes( 'When you publish, PressQueue sends it to:' ) );
+	h.unmount();
+} );
+
+test( 'a stored exclusion that a "never share" rule also covers stays stored as it is', async () => {
+	const h = await loaded( {}, controlsResponse( 'exclude' ) );
+	h.flushTimers();
+	const preview = h.request( request => request.path.endsWith( '/preview' ) );
+	assert.equal( preview.request.data.controls.policy, 'inherit' );
+	preview.resolve( keptOffResponse() );
+	await h.settle();
+	const toggle = h.find( 'ToggleControl', 'Share this post' );
+	assert.equal( toggle.props.checked, false );
+	assert.equal( toggle.props.disabled, true );
+	assert.equal( h.text().includes( 'This post will not be shared.' ), false );
+	assert.equal( MARKER in h.post.edits, false );
+	h.unmount();
+} );
+
+test( 'a half-filled date and time does not block saving while sharing is off', async () => {
+	const h = await loaded();
+	h.find( 'Button', 'Customize for this post' ).props.onClick();
+	h.render();
+	h.find( 'SelectControl', 'Timing' ).props.onChange( 'explicit_time' );
+	h.render();
+	h.find( 'TextControl', 'Date' ).props.onChange( '2026-10-20' );
+	h.render();
+	h.find( 'ToggleControl', 'Share this post' ).props.onChange( false );
+	h.render();
+
+	const saving = h.savePost( {} );
+	await new Promise( resolve => setImmediate( resolve ) );
+	const put = h.pending.find( isPut );
+	assert.ok( put, 'the settings are saved' );
+	assert.equal( put.request.data.controls.policy, 'exclude' );
+	assert.deepEqual( plain( put.request.data.controls.schedule ), { mode: 'inherit' } );
+	put.resolve( controlsResponse( 'exclude' ) );
+	assert.equal( ( await saving ).saved, true );
+	assert.equal( h.postRequests.length, 1 );
 	h.unmount();
 } );
 
@@ -589,6 +689,19 @@ test( 'published posts show what happened per channel with a link to Activity', 
 	assert.ok( h.text().includes( 'Sent to Buffer' ) );
 	assert.ok( h.text().includes( '5 mins ago' ) );
 	assert.equal( h.find( 'a', 'See in Activity' ).props.href, 'admin.php?page=pressqueue-deliveries&post_id=1' );
+	h.unmount();
+} );
+
+test( 'a failed share shows its reason under the status', async () => {
+	const h = await loaded( { post: { status: 'publish', savedStatus: 'publish' } } );
+	h.request( request => request.path === '/pressqueue/v1/posts/1/activity' ).resolve( { activity: { url: '', not_shared: '', not_shared_title: '', items: [
+		{ public_id: 'CH1', service: 'linkedin', service_name: 'LinkedIn', monogram: 'in', name: 'Larkfield Bakery', state: 'failed', label: 'Failed', tone: 'bad', help: '', reason: 'Buffer said the API key is no longer valid.', time: '5 mins ago', time_full: '' },
+		{ public_id: 'CH2', service: 'twitter', service_name: 'X', monogram: 'X', name: '@larkfieldbakes', state: 'accepted', label: 'Sent to Buffer', tone: 'ok', help: '', reason: '', time: '5 mins ago', time_full: '' }
+	] } } );
+	await h.settle();
+	const reasons = h.findAll( 'span' ).filter( node => node.props.className === 'pq-ed-small pq-ed-activity-reason' );
+	assert.equal( reasons.length, 1 );
+	assert.equal( h.textOf( reasons[ 0 ] ), 'Buffer said the API key is no longer valid.' );
 	h.unmount();
 } );
 
