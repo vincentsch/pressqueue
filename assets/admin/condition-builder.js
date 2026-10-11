@@ -328,14 +328,14 @@
 			return __( 'Pick at least one author.', 'pressqueue' );
 		}
 		if ( row.field.indexOf( 'tax:' ) === 0 && ! row.values.length ) {
-			return sprintf( __( 'Pick at least one %s.', 'pressqueue' ), taxonomyFor( state, row.field ).label.toLowerCase() );
+			return sprintf( /* translators: %s: taxonomy name, for example category. */ __( 'Pick at least one %s.', 'pressqueue' ), taxonomyFor( state, row.field ).label.toLowerCase() );
 		}
 		if ( row.field === 'meta' ) {
 			if ( ! row.key ) {
 				return __( 'Choose a custom field. Add its name under Advanced first.', 'pressqueue' );
 			}
 			if ( customFields( state ).indexOf( row.key ) === -1 ) {
-				return sprintf( __( 'Add "%s" to the custom fields under Advanced, or choose another field.', 'pressqueue' ), row.key );
+				return sprintf( /* translators: %s: custom field name. */ __( 'Add "%s" to the custom fields under Advanced, or choose another field.', 'pressqueue' ), row.key );
 			}
 		}
 		return '';
@@ -482,7 +482,7 @@
 		var fieldId = nextControlId( state, path, 'condition' );
 		var operatorId = nextControlId( state, path, 'operator' );
 
-		item.appendChild( controlLabel( fieldId, sprintf( __( 'Condition %d: field', 'pressqueue' ), index + 1 ) ) );
+		item.appendChild( controlLabel( fieldId, sprintf( /* translators: %d: condition number. */ __( 'Condition %d: field', 'pressqueue' ), index + 1 ) ) );
 		var field = select( fieldId, fieldChoices( state, row ), row.field );
 		field.setAttribute( 'data-pq-focus', 'field-' + index );
 		field.addEventListener( 'change', function () {
@@ -495,7 +495,7 @@
 		if ( operators.length === 1 ) {
 			item.appendChild( el( 'span', 'pq-cond-op', operators[ 0 ].label ) );
 		} else {
-			item.appendChild( controlLabel( operatorId, sprintf( __( 'Condition %d: comparison', 'pressqueue' ), index + 1 ) ) );
+			item.appendChild( controlLabel( operatorId, sprintf( /* translators: %d: condition number. */ __( 'Condition %d: comparison', 'pressqueue' ), index + 1 ) ) );
 			var operator = select( operatorId, operators, row.operator );
 			operator.setAttribute( 'data-pq-focus', 'operator-' + index );
 			operator.addEventListener( 'change', function () {
@@ -531,7 +531,7 @@
 
 		var remove = el( 'button', 'button-link pq-cond-remove', __( 'Remove', 'pressqueue' ) );
 		remove.type = 'button';
-		remove.setAttribute( 'aria-label', sprintf( __( 'Remove condition %d', 'pressqueue' ), index + 1 ) );
+		remove.setAttribute( 'aria-label', sprintf( /* translators: %d: condition number. */ __( 'Remove condition %d', 'pressqueue' ), index + 1 ) );
 		remove.setAttribute( 'data-pq-focus', 'remove-' + index );
 		if ( state.rows.length === 1 ) {
 			remove.disabled = true;
@@ -560,12 +560,12 @@
 			return { value: key, label: key };
 		} );
 		if ( row.key && fields.indexOf( row.key ) === -1 ) {
-			choices.unshift( { value: row.key, label: sprintf( __( '%s (not listed under Advanced)', 'pressqueue' ), row.key ) } );
+			choices.unshift( { value: row.key, label: sprintf( /* translators: %s: custom field name. */ __( '%s (not listed under Advanced)', 'pressqueue' ), row.key ) } );
 		}
 		if ( ! choices.length ) {
 			choices.push( { value: '', label: __( 'Add a custom field under Advanced', 'pressqueue' ) } );
 		}
-		wrap.appendChild( controlLabel( keyId, sprintf( __( 'Condition %d: custom field name', 'pressqueue' ), index + 1 ) ) );
+		wrap.appendChild( controlLabel( keyId, sprintf( /* translators: %d: condition number. */ __( 'Condition %d: custom field name', 'pressqueue' ), index + 1 ) ) );
 		var key = select( keyId, choices, row.key );
 		key.setAttribute( 'data-pq-focus', 'key-' + index );
 		key.addEventListener( 'change', function () {
@@ -576,7 +576,7 @@
 
 		if ( row.operator === 'equals' || row.operator === 'not_equals' ) {
 			var valueId = nextControlId( state, [ index ], 'value' );
-			wrap.appendChild( controlLabel( valueId, sprintf( __( 'Condition %d: value', 'pressqueue' ), index + 1 ) ) );
+			wrap.appendChild( controlLabel( valueId, sprintf( /* translators: %d: condition number. */ __( 'Condition %d: value', 'pressqueue' ), index + 1 ) ) );
 			var input = document.createElement( 'input' );
 			input.type = 'text';
 			input.id = valueId;
@@ -611,7 +611,7 @@
 					return items[ i ];
 				}
 			}
-			return { value: value, label: row.field === 'author' ? sprintf( __( 'User #%s', 'pressqueue' ), value ) : String( value ), path: '' };
+			return { value: value, label: row.field === 'author' ? sprintf( /* translators: %s: user ID. */ __( 'User #%s', 'pressqueue' ), value ) : String( value ), path: '' };
 		}
 
 		row.values.forEach( function ( value ) {
@@ -625,7 +625,7 @@
 			chip.appendChild( text );
 			var remove = el( 'button', '', '×' );
 			remove.type = 'button';
-			remove.setAttribute( 'aria-label', sprintf( __( 'Remove %s', 'pressqueue' ), item.label ) );
+			remove.setAttribute( 'aria-label', sprintf( /* translators: %s: name of the item to remove. */ __( 'Remove %s', 'pressqueue' ), item.label ) );
 			remove.addEventListener( 'click', function ( event ) {
 				event.stopPropagation();
 				row.values = row.values.filter( function ( other ) {
@@ -781,7 +781,7 @@
 			input.focus();
 		} );
 
-		wrap.appendChild( controlLabel( inputId, sprintf( __( 'Condition %d: values', 'pressqueue' ), index + 1 ) ) );
+		wrap.appendChild( controlLabel( inputId, sprintf( /* translators: %d: condition number. */ __( 'Condition %d: values', 'pressqueue' ), index + 1 ) ) );
 		wrap.appendChild( box );
 		wrap.appendChild( list );
 		return wrap;
@@ -795,7 +795,7 @@
 			return row.values.length ? __( 'Add an author…', 'pressqueue' ) : __( 'Type an author name…', 'pressqueue' );
 		}
 		var taxonomy = taxonomyFor( state, row.field );
-		return sprintf( row.values.length ? __( 'Add a %s…', 'pressqueue' ) : __( 'Type a %s name…', 'pressqueue' ), taxonomy.label.toLowerCase() );
+		return sprintf( row.values.length ? /* translators: %s: taxonomy or field name. */ __( 'Add a %s…', 'pressqueue' ) : /* translators: %s: taxonomy or field name. */ __( 'Type a %s name…', 'pressqueue' ), taxonomy.label.toLowerCase() );
 	}
 
 	/* ---------- State changes ---------- */

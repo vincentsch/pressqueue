@@ -607,8 +607,11 @@
 								display: current.display,
 								loading: false,
 								error: error && error.message
-									/* translators: %s: reason from the server. */
-									? sprintf( __( 'PressQueue could not check where this post goes: %s', 'pressqueue' ), error.message )
+									? sprintf(
+										/* translators: %s: reason from the server. */
+										__( 'PressQueue could not check where this post goes: %s', 'pressqueue' ),
+										error.message
+									)
 									: __( 'PressQueue could not check where this post goes. Check your connection.', 'pressqueue' )
 							};
 						} );

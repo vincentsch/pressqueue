@@ -334,18 +334,18 @@
 			placeholder = true;
 			value = '[' + key + ']';
 			if ( allowed !== null && allowed.indexOf( key ) === -1 ) {
-				problems.push( sprintf( __( 'Add "%s" to the custom fields under Advanced, or the rule cannot be saved.', 'pressqueue' ), key ) );
+				problems.push( sprintf( /* translators: %s: custom field name. */ __( 'Add "%s" to the custom fields under Advanced, or the rule cannot be saved.', 'pressqueue' ), key ) );
 			}
 		} else {
 			known = false;
-			problems.push( sprintf( __( 'PressQueue does not know {{ %s }}. Posts would be stopped until you fix it.', 'pressqueue' ), tag ) );
+			problems.push( sprintf( /* translators: %s: placeholder name. */ __( 'PressQueue does not know {{ %s }}. Posts would be stopped until you fix it.', 'pressqueue' ), tag ) );
 		}
 
 		pieces.forEach( function ( modifier ) {
 			var found = /^truncate:([1-9][0-9]*)$/.exec( modifier );
 			if ( ! found ) {
 				known = false;
-				problems.push( sprintf( __( 'The modifier "%s" is not supported. Use truncate:120, for example.', 'pressqueue' ), modifier ) );
+				problems.push( sprintf( /* translators: %s: modifier text. */ __( 'The modifier "%s" is not supported. Use truncate:120, for example.', 'pressqueue' ), modifier ) );
 				return;
 			}
 			if ( ! placeholder ) {
@@ -418,9 +418,9 @@
 		meter.classList.toggle( 'is-warn', count <= limit && count > limit * 0.9 );
 		bar.style.width = Math.min( 100, ( count / limit ) * 100 ) + '%';
 		label.textContent = count > limit
-			? sprintf( __( '%d characters too long. Shorten the message.', 'pressqueue' ), count - limit )
-			: sprintf( __( '%d characters used, including the link', 'pressqueue' ), count );
-		this.preview.querySelector( '[data-pq-meter-limit]' ).textContent = sprintf( __( 'Limit %d', 'pressqueue' ), limit );
+			? sprintf( /* translators: %d: number of characters. */ __( '%d characters too long. Shorten the message.', 'pressqueue' ), count - limit )
+			: sprintf( /* translators: %d: number of characters. */ __( '%d characters used, including the link', 'pressqueue' ), count );
+		this.preview.querySelector( '[data-pq-meter-limit]' ).textContent = sprintf( /* translators: %d: character limit. */ __( 'Limit %d', 'pressqueue' ), limit );
 
 		var title = this.preview.querySelector( '[data-pq-preview-post]' );
 		if ( title ) {
@@ -481,7 +481,11 @@
 			}
 			composer.applyTemplate( set );
 			adopted.value = option.value;
-			status.textContent = sprintf( __( 'Copied "%s" into the message. Save the rule to keep it.', 'pressqueue' ), option.textContent );
+			status.textContent = sprintf(
+				/* translators: %s: template name. */
+				__( 'Copied "%s" into the message. Save the rule to keep it.', 'pressqueue' ),
+				option.textContent
+			);
 			composer.main.focus();
 		} );
 	}
