@@ -8,7 +8,7 @@ First public release.
 
 - Share posts to LinkedIn, X, Bluesky, Mastodon, Threads and Facebook through
   Buffer, with text, a link and one image.
-- Rules choose posts by post type, category, tag, author or custom field, and
+- Rules pick posts by post type, category, tag, author or custom field, and
   set the channels, message, timing and image.
 - "Never share" rules keep posts off social media and win over every sharing
   rule. If one cannot be checked, the post is not shared.
@@ -16,18 +16,18 @@ First public release.
   network, and can start from saved templates.
 - Timing can be the end of the Buffer queue, the next free slot, right away,
   a Buffer draft, or a date and time picked for one post.
-- Share old posts in reviewed batches, either for the first time or again.
+- Share old posts in reviewed batches, for the first time or again.
 
 ### Admin
 
 - An overview with a setup checklist, recent activity, a post check and a
   warning when background tasks are not running.
-- Connect Buffer by pasting an API key; channels appear with on/off switches.
-- A rule editor with normal controls, a live message preview and a test
+- Connect Buffer by pasting an API key. Channels appear with on/off switches.
+- A rule editor with ordinary form fields, a live message preview and a test
   against recent posts before a rule is switched on.
 - Test mode, Live and Paused as one switch.
 - An Activity page that explains every share, groups what needs attention and
-  walks through checking Buffer when a reply was unclear.
+  walks you through checking Buffer when a reply was unclear.
 - A "Share this post" switch in the block and classic editors that saves with
   the post, and an optional opt-in mode for new posts.
 - A Social sharing column in post lists and a dashboard notice for shares
@@ -39,7 +39,7 @@ First public release.
 - Every share has a stable identity, so repeated WordPress events never create
   duplicate posts.
 - Uncertain Buffer replies are never retried automatically.
-- Posts are checked again right before they are sent; changes to the post,
+- Posts are checked again right before they are sent. Changes to the post,
   rule or settings hold the share.
 - The Buffer key is stored encrypted and never exported.
 

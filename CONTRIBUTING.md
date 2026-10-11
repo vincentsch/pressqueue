@@ -1,38 +1,44 @@
 # Contributing to PressQueue
 
-PressQueue is a WordPress plugin for conditional social publishing. Buffer is
-the first provider. Provider adapters handle remote requests; the shared code
-owns rules, exclusions, credentials, queue state, and retries.
+PressQueue is a WordPress plugin that shares posts to social networks through
+Buffer, following rules the site owner sets. Buffer is the first provider.
+Provider adapters handle requests to the outside service. The shared code owns
+rules, exclusions ("never share" rules), credentials, queue state and retries.
 
 ## Local development
 
-Use PHP 8.1 or newer and Composer 2. The test tools need `bcmath`, `curl`, `dom`,
-`intl`, `mbstring`, `mysqli`, `sodium`, and `zip`. Install dependencies with
-`composer install`, then run the checks described in [README.md](README.md).
-Editor tests use Node.js 20 or newer and need no npm dependencies.
+You need PHP 8.1 or newer and Composer 2. The test tools need the PHP
+extensions `bcmath`, `curl`, `dom`, `intl`, `mbstring`, `mysqli`, `sodium`
+and `zip`. Run `composer install`, then the checks listed in
+[README.md](README.md). The editor tests need Node.js 20 or newer and no npm
+packages.
 
-Integration tests require a disposable `pressqueue_tests` database. They create
-and drop plugin tables. Package smoke requires a disposable WordPress site and
-installs and removes the plugin there. The Docker matrix creates its own sites.
+The integration tests need a throwaway `pressqueue_tests` database. They
+create and drop the plugin's tables. The package smoke test needs a throwaway
+WordPress site, where it installs and removes the plugin. The Docker matrix
+creates its own sites.
 
-## Changes
+## Making a change
 
-Explain the problem and the behavior your change produces. Include a regression
-test for a bug that could affect delivery, permissions, or stored data. Use
-WordPress Coding Standards and run the relevant checks before submitting.
+Explain the problem and what your change does about it. Add a regression test
+for any bug that could affect sending, permissions or stored data. Follow the
+WordPress Coding Standards and run the relevant checks before you submit.
 
-New connections, channels, and rules must start disabled. Exclusions and policy
-errors must stop delivery. Keep each delivery's identity stable across retries.
-An uncertain provider response must not trigger an automatic retry.
+These rules hold in every change:
 
-Use HTTP fakes for provider tests. Never include real API keys, private site
-settings, database exports, or provider transcripts in code, issues, or test
-fixtures. Do not copy proprietary plugin code or assets.
+- New connections, channels and rules start switched off.
+- Exclusions and policy errors stop delivery.
+- Each delivery keeps the same identity across retries.
+- An uncertain reply from the provider is never retried automatically.
 
-Keep documentation factual and use everyday words. Describe what a user needs
-to do and what happens. Avoid internal project names and implementation history
-in setup instructions.
+Use HTTP fakes for provider tests. Never put real API keys, private site
+settings, database exports or provider transcripts in code, issues or test
+fixtures. Do not copy code or assets from proprietary plugins.
 
-See the references for [provider extensions](docs/developer/provider-extensions.md),
-[WP-CLI](docs/developer/wp-cli.md), and [observation hooks](docs/developer/observation-hooks.md).
-For security reports, read [SECURITY.md](SECURITY.md).
+Write documentation in everyday words and keep it factual. Say what the user
+needs to do and what happens. Keep internal project names and implementation
+history out of setup instructions.
+
+The developer docs cover [provider extensions](docs/developer/provider-extensions.md),
+[WP-CLI](docs/developer/wp-cli.md) and [observation hooks](docs/developer/observation-hooks.md).
+To report a security issue, read [SECURITY.md](SECURITY.md).

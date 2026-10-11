@@ -1,75 +1,85 @@
 # Privacy and data
 
-PressQueue stores its settings and delivery history in your WordPress database.
-This includes post and user IDs, channel details, rendered messages, image URLs,
-and Buffer receipts. These records help explain a delivery and avoid duplicates.
+PressQueue keeps its settings and sharing history in your WordPress database.
+The history includes post and user IDs, channel details, the message text it
+prepared, image URLs and Buffer's receipts. These records explain what
+happened to a share and stop it from being shared twice.
 
-## Credentials and remote requests
+## Your Buffer key
 
-Buffer credentials are encrypted using the site's WordPress keys and salts.
-They stay on the server and never appear in exports. Changing the keys and salts
-makes saved credentials unreadable. Enter the Buffer key again afterward.
+PressQueue encrypts the Buffer key with your site's WordPress keys and salts.
+The key stays on your server and never appears in an export. If you change
+the keys and salts, the saved key becomes unreadable. Paste it again
+afterwards.
 
-Connecting Buffer and refreshing channels contact Buffer. Live delivery sends
-message text, schedule details, channel identifiers, and selected image URLs.
-Image selection may also contact the image host to check the file. See
+## What leaves your server
+
+PressQueue contacts Buffer when you connect it and when you refresh channels.
+In Live mode, each share sends Buffer the message text, the timing, the
+channel IDs and the URLs of any images you chose. Choosing an image may also
+contact the image's host to check the file. See
 [Buffer's terms](https://buffer.com/legal#terms) and
 [privacy policy](https://buffer.com/legal#privacy-policy).
 
-PressQueue does not add analytics or tracking requests.
+PressQueue sends no analytics or tracking requests.
 
 ## Export
 
-An administrator with `export_pressqueue_data` can download a JSON file under
-**PressQueue > Settings > Data and privacy**. Credentials are always omitted.
-Message text and image URLs are left out unless the administrator ticks
-**Include message text and image URLs** and confirms it.
+An administrator with the `export_pressqueue_data` capability can download a
+JSON file under **PressQueue > Settings > Data and privacy**. The Buffer key is
+never included. Message text and image URLs are left out unless you tick
+**Include message text and image URLs** and confirm it.
 
-Each export file holds at most 10,000 records and 50 MB. For a larger site,
-enter the cursor from the previous file under **Very large sites** to continue. Treat exports containing message text as
-private site data.
+One file holds at most 10,000 records and 50 MB. On a larger site, enter the
+cursor from the previous file under **Very large sites** to continue. Treat an
+export that contains message text as private site data.
 
-WordPress's personal data export and erasure tools also include PressQueue.
-They find records linked to the WordPress user whose email was requested.
-Erasure clears optional operator references. It retains audit references such
-as post author and batch creator IDs, and reports this in the erasure result.
+WordPress's own personal data export and erasure tools cover PressQueue too.
+They find records linked to the WordPress user with the requested email
+address. Erasure clears the optional fields that say which user carried out
+an action. It keeps references the history needs, such as post author and
+batch creator IDs, and says so in the erasure result.
 
-## Retention
+## Removing old history
 
-Retention starts disabled. If you enable it, PressQueue removes or redacts old,
-resolved work after the selected period, between 30 and 3650 days. Unresolved
-work, including shares that still need a check in Buffer, is preserved.
-Turning retention on asks you to confirm, because cleanup deletes history.
+Automatic cleanup starts switched off. Switched on, it removes or blanks
+finished records older than the period you choose, between 30 and 3650 days.
+Unfinished work stays, including shares that still need a check in Buffer.
+Switching cleanup on asks you to confirm, because it deletes history.
 
-Accepted deliveries keep their identity, state, receipt identifier, and linked
-decision IDs to prevent duplicate sending. Retention clears their copied message,
-image snapshot, and detailed receipt. It also clears the linked decision content.
-These small identity records remain until you delete plugin data on uninstall.
+A share that Buffer accepted keeps a small record: its identity, state,
+Buffer's receipt ID and the linked decision IDs. That record stops the same
+post from being sent twice. Cleanup clears the copied message, the image
+snapshot, the detailed receipt and the linked decision content. The small
+records stay until you delete the plugin's data on uninstall.
 
-## Deactivation and uninstall
+## Deactivating and uninstalling
 
-Deactivation stops new capture and background work and keeps the data.
-Uninstall also preserves data by default. PressQueue removes its capabilities
-from roles. It unschedules its background actions when Action Scheduler is available.
+Deactivating stops PressQueue from picking up new posts and from running
+background work. Your data stays. Uninstalling keeps the data too, by default.
+It removes PressQueue's capabilities from user roles and, when Action
+Scheduler is available, cancels its scheduled background actions.
 
-If you tick **Delete all PressQueue data when the plugin is deleted** (and
-confirm it) before removing the plugin, it also
-deletes its tables, settings, preview transients, and post metadata, including
-runtime fingerprints. Each site in a multisite network uses its own deletion
-setting. Removing local data does not delete posts already accepted by Buffer.
+If you tick **Delete all PressQueue data when the plugin is deleted** and
+confirm it before you delete the plugin, uninstalling also drops PressQueue's
+tables and deletes its settings, preview transients and post metadata,
+including runtime fingerprints. Each site in a multisite network has its own
+deletion setting. Deleting local data does not remove posts Buffer has already
+accepted.
 
-On multisite, PressQueue can remove a deleted site's tables only when the plugin
-is loaded in the deletion request. Network administrators should check for leftover
-`*_pressqueue_*` tables when deleting sites. These tables may contain encrypted
-credentials and delivery history.
+On multisite, PressQueue can remove a deleted site's tables only if the plugin
+is loaded during the deletion request. If you run a network, check for leftover
+`*_pressqueue_*` tables after deleting a site. They can contain the encrypted
+Buffer key and sharing history.
 
-## Runtime recovery
+## When sharing stops itself
 
-PressQueue stops delivery if its stored privacy or runtime state is invalid.
-The **Data and privacy** tab says whether background sharing is running and,
+PressQueue stops sending if its stored privacy or runtime settings are invalid.
+The **Data and privacy** tab shows whether background sharing is running and,
 if not, why and what to do.
 
-For developers, `pressqueue_runtime_disabled` accepts `1` for stopped and `0`
-for active. Missing or malformed values stop delivery. Activation opens it after
-setup succeeds; deactivation closes it before unscheduling work. Read operations,
-exports, local cancellation, and reconciliation remain available while stopped.
+For developers: the `pressqueue_runtime_disabled` option holds `1` for stopped
+and `0` for running. A missing or malformed value also stops sending.
+Activation sets it to running once setup has succeeded. Deactivation sets it to
+stopped before it cancels scheduled work. Reading, exports, local cancellation
+and settling shares that wait on a Buffer check still work while stopped.

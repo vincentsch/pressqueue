@@ -2,27 +2,28 @@
 
 PressQueue shares your WordPress posts on LinkedIn, X, Bluesky, Mastodon,
 Threads and Facebook through your Buffer account. You decide which posts go
-where and what the message says. PressQueue checks every post when you
-publish it and hands the right ones to Buffer in the background.
+where and what the message says. When you publish a post, PressQueue checks
+it against your rules. If a rule matches, it hands the post to Buffer in the
+background.
 
-It is built for people who want automatic sharing without surprises. Nothing
-is sent until you say so, you can see what would happen before it happens,
-and every share leaves a record.
+Nothing is sent until you say so. PressQueue starts in test mode and shows
+what it would share. Every share leaves a record.
 
 ![The PressQueue overview in the WordPress admin](docs/images/overview.png)
 
 ## How it works
 
-1. **Connect Buffer.** Create an API key in Buffer, paste it into PressQueue,
-   and your Buffer channels show up. Switch on the ones you want to use.
+1. **Connect Buffer.** Create an API key in Buffer and paste it into
+   PressQueue. Your Buffer channels show up. Switch on the ones you want to
+   use.
 2. **Make a rule.** A rule says which posts to share, where to send them,
    what the message says and when it goes out. "Share every new post to all
    my channels" is one click.
 3. **Test it.** PressQueue starts in test mode. It records what it would
    share and sends nothing, so you can check the results first.
 4. **Go live.** From then on, publishing a matching post adds it to your
-   Buffer queue, posts it right away, or saves it as a Buffer draft, as the
-   rule says.
+   Buffer queue, posts it right away or saves it as a Buffer draft, whichever
+   the rule says.
 
 ## What you get
 
@@ -30,12 +31,12 @@ and every share leaves a record.
   custom field. Write the message with placeholders like the title or
   excerpt, and see a live preview with a character count.
 - **"Never share" rules.** Keep a category, tag or author off social media
-  for good. These rules win over every sharing rule, and if one cannot be
+  for good. These rules win over every sharing rule. If one cannot be
   checked, the post is not shared.
-- **A switch in the editor.** Each post has a "Share this post" toggle and
-  a short summary of where it will go. You can change the message, channels
-  or timing for one post. You can also make sharing opt-in, so new posts
-  start switched off.
+- **A switch in the editor.** Each post has a "Share this post" switch and a
+  short summary of where it will go. You can change the message, channels or
+  timing for one post. You can also make sharing opt-in, so new posts start
+  switched off.
 - **Share old posts.** Pick older posts, review the list and share them
   spread across your Buffer queue. PressQueue will not share the same post
   to the same channel twice by accident.
@@ -67,20 +68,20 @@ in the admin menu and follow the checklist.
 To run it from a Git checkout, run `composer install --no-dev` in the plugin
 folder before activating.
 
-The [getting started guide](docs/getting-started.md) walks through the setup
-step by step.
+The [getting started guide](docs/getting-started.md) takes you through the
+setup.
 
 ## Why an API key and not "Log in with Buffer"?
 
 Buffer's login flow needs every website's address registered with Buffer in
-advance, which does not work for a plugin that anyone can install on their
-own site. A personal API key is what Buffer recommends for tools you run
+advance. That does not work for a plugin anyone can install on their own
+site. A personal API key is what Buffer recommends for tools you run
 yourself. It takes about a minute to create, and PressQueue stores it
 encrypted with your site's security keys.
 
 ## Privacy
 
-PressQueue keeps its rules and history in your WordPress database and only
+PressQueue keeps its rules and history in your WordPress database. It only
 talks to Buffer and, when a rule uses images, to the image's host to check
 the file. Deactivating keeps your data. Uninstalling keeps it too, unless
 you switch on deletion under **Settings > Data and privacy**. See

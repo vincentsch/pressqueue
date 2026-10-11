@@ -1,7 +1,7 @@
 # Getting started
 
 This guide takes you from a fresh install to your first post on social media.
-It takes about ten minutes. Nothing is sent to Buffer until the last step.
+Set aside about ten minutes. Nothing is sent to Buffer until the last step.
 
 ## 1. Connect Buffer
 
@@ -41,16 +41,17 @@ To build your own, click **Add sharing rule**:
   end automatically. The preview counts characters against the channel's limit.
 - **Timing**: add it to the end of the Buffer queue, use the next free queue
   slot, post right away, or save it as a Buffer draft for review.
-- **Image**: the featured image when there is one, only posts that have one,
-  no image, or images chosen in each post.
+- **Image**: the featured image when there is one, only posts that have a
+  featured image, no image, or images chosen in each post.
 
 Click **Save and test**. New and changed rules start switched off.
 
 ## 3. Test it
 
 The test view runs the rule against your most recent posts without sharing
-anything. Each post shows the channels it would go to or, if it would not be
-shared, why. Open **Show messages** to see the exact text.
+anything. Posts you published earlier are tested as if they were new. Each
+post shows the channels it would go to or, if it would not be shared, why.
+Open **Show messages** to see the exact text.
 
 When the result looks right, click **Turn on this rule**.
 
@@ -77,7 +78,7 @@ unsaved "off" can never be published by accident.
 
 To keep a whole category, tag or author off social media, click
 **Add "never share" rule** on the Rules screen. These rules win over every
-sharing rule, and if one cannot be checked, the post is not shared.
+sharing rule. If one cannot be checked, the post is not shared.
 
 If only some of your posts belong on social media, choose **Only share posts
 where "Share this post" is switched on** under **Settings > New posts**. New

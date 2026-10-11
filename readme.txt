@@ -13,14 +13,14 @@ Share your posts on LinkedIn, X, Bluesky, Mastodon, Threads and Facebook through
 == Description ==
 
 PressQueue shares your WordPress posts through your Buffer account. You decide
-which posts go where and what the message says. When you publish, PressQueue
-checks the post against your rules and hands it to Buffer in the background,
-where it joins your queue, goes out right away or waits as a draft.
+which posts go where and what the message says. When you publish a post,
+PressQueue checks it against your rules and hands it to Buffer in the
+background. There it joins your queue, goes out right away or waits as a draft.
 
 Nothing is sent until you say so. PressQueue starts in test mode, shows what
-it would share, and keeps a record of every share.
+it would share and keeps a record of every share.
 
-**Set up in a few minutes**
+**Getting started**
 
 * Paste a Buffer API key and your channels appear. Switch on the ones you want.
 * Create a rule with one click: "Share every new post to all my channels".
@@ -35,7 +35,7 @@ it would share, and keeps a record of every share.
   away, or a Buffer draft to review first.
 * Add the featured image when there is one.
 
-**Stay in control**
+**Decide what goes out**
 
 * "Never share" rules keep a category, tag or author off social media. They
   win over every sharing rule.
@@ -59,8 +59,8 @@ A column in your post list shows where each post went.
 
 **For developers**
 
-WP-CLI commands with JSON output, hooks for observing decisions and
-deliveries, and a provider interface for services other than Buffer.
+PressQueue has WP-CLI commands with JSON output, hooks for observing decisions
+and deliveries, and a provider interface for services other than Buffer.
 
 PressQueue has no hosted service and no tracking. It talks to Buffer from
 your own server.
@@ -92,7 +92,7 @@ many posts a free plan can keep in its queue.
 = Why an API key instead of logging in with Buffer? =
 
 Buffer's login flow needs every website's address registered with Buffer in
-advance, which does not work for a plugin people install on their own sites.
+advance. That does not work for a plugin people install on their own sites.
 A personal API key is what Buffer recommends for tools you run yourself. It
 takes about a minute to create, and PressQueue stores it encrypted.
 
@@ -104,10 +104,10 @@ supported yet.
 
 = Will my old posts suddenly get shared? =
 
-No. Rules share a post when you publish it, and only when you update it if
-you ask for that. Posts dated more than a day in the past are skipped. To
-share older posts, use Share old posts, where you review the list before
-anything happens.
+No. Rules share a post when you publish it. They share an update only if you
+ask for that. Posts dated more than a day in the past are skipped. To share
+older posts, use Share old posts, where you review the list before anything
+happens.
 
 = What is the difference between test mode and a Buffer draft? =
 
