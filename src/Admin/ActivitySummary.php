@@ -127,7 +127,10 @@ final class ActivitySummary {
 				continue;
 			}
 
-			$key = $decision->event_key;
+			// Batches plan each channel as its own event; show one row per post and batch hour.
+			$key = in_array( $decision->trigger, array( 'bulk', 'repost' ), true )
+				? $decision->trigger . '|' . $decision->post_id . '|' . $decision->created_at->format( 'YmdH' )
+				: $decision->event_key;
 			if ( ! isset( $events[ $key ] ) ) {
 				if ( count( $events ) >= $limit ) {
 					continue;
@@ -138,17 +141,22 @@ final class ActivitySummary {
 					'trigger'    => $decision->trigger,
 					'created_at' => $decision->created_at,
 					'decisions'  => array(),
+					'event_keys' => array(),
 				);
 			}
 
-			$events[ $key ]['decisions'][] = $decision;
+			$events[ $key ]['decisions'][]                        = $decision;
+			$events[ $key ]['event_keys'][ $decision->event_key ] = true;
 		}
 
 		$deliveries = new DeliveryRepository( $this->database );
 		$feed       = array();
 
-		foreach ( $events as $event_key => $event ) {
-			$rows      = $deliveries->find_by_event_key( (string) $event_key );
+		foreach ( $events as $event ) {
+			$rows = array();
+			foreach ( array_keys( $event['event_keys'] ) as $event_key ) {
+				$rows = array_merge( $rows, $deliveries->find_by_event_key( (string) $event_key ) );
+			}
 			$shares    = array();
 			$rule_name = '';
 			foreach ( $rows as $delivery ) {
@@ -159,6 +167,7 @@ final class ActivitySummary {
 					'service'            => null === $channel ? $delivery->provider : $channel->service,
 					'channel_name'       => null === $channel ? $delivery->channel_public_id : self::channel_display_name( $channel ),
 					'schedule_slot'      => $delivery->schedule_slot,
+					'scheduled_for_utc'  => $delivery->scheduled_for_utc,
 				);
 			}
 

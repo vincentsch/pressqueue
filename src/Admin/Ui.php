@@ -355,7 +355,21 @@ final class Ui {
 			return sprintf( __( 'in %s', 'pressqueue' ), human_time_diff( time(), $timestamp ) );
 		}
 
-		$date = wp_date( get_option( 'date_format', 'M j, Y' ), $timestamp );
+		return self::short_datetime( $time );
+	}
+
+	/**
+	 * Return a short local date and time, without the year when it is this year.
+	 *
+	 * @param \DateTimeInterface $time UTC time.
+	 * @return string
+	 */
+	public static function short_datetime( \DateTimeInterface $time ): string {
+		$timestamp = $time->getTimestamp();
+		$same_year = wp_date( 'Y', $timestamp ) === wp_date( 'Y' );
+		/* translators: short date format for dates in the current year, see https://www.php.net/manual/datetime.format.php */
+		$date_format = $same_year ? __( 'M j', 'pressqueue' ) : (string) get_option( 'date_format', 'M j, Y' );
+		$date        = wp_date( $date_format . ', ' . (string) get_option( 'time_format', 'g:i a' ), $timestamp );
 
 		return is_string( $date ) ? $date : '';
 	}

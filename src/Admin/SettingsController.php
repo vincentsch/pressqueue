@@ -52,7 +52,7 @@ final class SettingsController {
 		echo '<div class="pq-stack">';
 
 		echo '<div class="pq-card"><div class="pq-section">';
-		echo '<h3 id="pq-mode-title">' . esc_html__( 'Sharing mode', 'pressqueue' ) . '</h3>';
+		echo '<h2 id="pq-mode-title">' . esc_html__( 'Sharing mode', 'pressqueue' ) . '</h2>';
 		echo '<div class="pq-choices" role="radiogroup" aria-labelledby="pq-mode-title">';
 		foreach ( array( 'test', 'live', 'paused' ) as $value ) {
 			$help = $modes[ $value ]['help'];
@@ -67,15 +67,31 @@ final class SettingsController {
 		echo '</div></div>';
 
 		echo '<div class="pq-card"><div class="pq-section">';
-		echo '<h3>' . esc_html__( 'New posts', 'pressqueue' ) . '</h3>';
+		echo '<h2>' . esc_html__( 'New posts', 'pressqueue' ) . '</h2>';
 		echo '<div class="pq-checks">';
 		echo '<label><input type="radio" name="new_post_sharing" value="automatic" ' . checked( $new_posts, 'automatic', false ) . ' /><span><span class="pq-check-title">' . esc_html__( 'Share automatically when a rule matches', 'pressqueue' ) . '</span><span class="pq-muted">' . esc_html__( 'Writers can switch sharing off for a single post in the editor.', 'pressqueue' ) . '</span></span></label>';
 		echo '<label><input type="radio" name="new_post_sharing" value="opt_in" ' . checked( $new_posts, 'opt_in', false ) . ' /><span><span class="pq-check-title">' . esc_html__( 'Only share posts where "Share this post" is switched on', 'pressqueue' ) . '</span><span class="pq-muted">' . esc_html__( 'New posts start with sharing switched off. Good for sites where only some posts belong on social media. Existing posts are not changed.', 'pressqueue' ) . '</span></span></label>';
 		echo '</div></div></div>';
 
 		echo '<div class="pq-card"><div class="pq-section">';
-		echo '<h3>' . esc_html__( 'Who can use PressQueue', 'pressqueue' ) . '</h3>';
-		echo '<p class="pq-muted" style="margin:0">' . esc_html__( 'Administrators can use everything. Other roles need PressQueue capabilities, which a role editor plugin or WP-CLI can grant. Writers who can edit a post but lack the post controls capability do not see the sharing panel.', 'pressqueue' ) . '</p>';
+		echo '<h2>' . esc_html__( 'Who can use PressQueue', 'pressqueue' ) . '</h2>';
+		echo '<p class="pq-muted" style="margin:0">' . esc_html__( "Administrators can use everything. Editors and authors see the Social sharing panel only when their role has PressQueue's post sharing permission, which a role plugin can add.", 'pressqueue' ) . '</p>';
+		echo '<details class="pq-more"><summary>' . esc_html__( 'Technical details', 'pressqueue' ) . '</summary><div class="pq-more-body"><ul class="pq-small" style="margin:0;padding-left:18px">';
+		$capabilities = array(
+			Capabilities::EDIT_POST_CONTROLS => __( 'Social sharing panel in the editor', 'pressqueue' ),
+			Capabilities::MANAGE_RULES       => __( 'Rules and message templates', 'pressqueue' ),
+			Capabilities::MANAGE_CONNECTIONS => __( 'Channels and the Buffer connection', 'pressqueue' ),
+			Capabilities::VIEW_DELIVERIES    => __( 'Activity', 'pressqueue' ),
+			Capabilities::OPERATE_DELIVERIES => __( 'Resume, retry and cancel shares', 'pressqueue' ),
+			Capabilities::VIEW_DECISIONS     => __( 'Why posts were shared or skipped', 'pressqueue' ),
+			Capabilities::OPERATE_BATCHES    => __( 'Share old posts', 'pressqueue' ),
+			Capabilities::MANAGE_SETTINGS    => __( 'Settings', 'pressqueue' ),
+			Capabilities::EXPORT_DATA        => __( 'Download data', 'pressqueue' ),
+		);
+		foreach ( $capabilities as $capability => $label ) {
+			echo '<li><code class="pq-code">' . esc_html( $capability ) . '</code> ' . esc_html( $label ) . '</li>';
+		}
+		echo '</ul></div></details>';
 		echo '</div></div>';
 
 		echo '<div><button type="submit" class="button button-primary">' . esc_html__( 'Save settings', 'pressqueue' ) . '</button></div>';

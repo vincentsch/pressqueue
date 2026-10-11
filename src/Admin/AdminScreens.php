@@ -9,19 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Admin;
 
-use PressQueue\Planning\EventNormalizer;
-use PressQueue\Planning\Planner;
-use PressQueue\Planning\PlanningResult;
 use PressQueue\Security\Capabilities;
-use PressQueue\Security\SafeOperatorError;
-use PressQueue\Storage\CanonicalJson;
-use PressQueue\Storage\Database;
-use PressQueue\Storage\Record\DecisionRecord;
-use PressQueue\Storage\Repository\DecisionRepository;
-use PressQueue\Storage\Repository\DeliveryRepository;
-use PressQueue\Storage\Repository\RuleRepository;
-use PressQueue\Storage\SettingsRepository;
-use PressQueue\Storage\ValidationException;
 
 /**
  * Registers and renders the compact administration experience.
@@ -32,7 +20,6 @@ final class AdminScreens {
 	private const SLUG_SETTINGS  = 'pressqueue-settings';
 	private const SLUG_PREVIEW   = 'pressqueue-preview';
 	private const SLUG_DECISIONS = 'pressqueue-decisions';
-	private const TRANSIENT_BASE = 'pressqueue_admin_preview_';
 
 	/**
 	 * Register hooks.
@@ -198,7 +185,7 @@ final class AdminScreens {
 		}
 
 		if ( current_user_can( Capabilities::VIEW_DECISIONS ) ) {
-			self::render_decisions_page();
+			DecisionsController::render_page();
 			return;
 		}
 
@@ -217,61 +204,15 @@ final class AdminScreens {
 	 * Render post preview page.
 	 */
 	public static function render_preview_page(): void {
-		self::require_capability( Capabilities::VIEW_DECISIONS );
-
-		echo '<div class="wrap">';
-		echo '<h1>' . esc_html__( 'PressQueue Preview', 'pressqueue' ) . '</h1>';
-		self::render_notice();
-		self::render_preview_result();
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
-		wp_nonce_field( 'pressqueue_preview_post' );
-		echo '<input type="hidden" name="action" value="pressqueue_preview_post" />';
-		echo '<table class="form-table" role="presentation"><tbody>';
-		echo '<tr><th scope="row"><label for="pressqueue-post-id">' . esc_html__( 'Post ID', 'pressqueue' ) . '</label></th><td><input id="pressqueue-post-id" name="post_id" type="number" min="1" class="regular-text" /></td></tr>';
-		echo '<tr><th scope="row"><label for="pressqueue-trigger">' . esc_html__( 'Trigger', 'pressqueue' ) . '</label></th><td>';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- trigger_select returns escaped markup.
-		echo self::trigger_select( 'trigger', 'first_publish' );
-		echo '</td></tr>';
-		echo '</tbody></table>';
-		submit_button( __( 'Preview Post', 'pressqueue' ) );
-		echo '</form>';
-		echo '</div>';
+		// The old post preview page now lives on the overview as "Check a post".
+		OverviewController::render_page();
 	}
 
 	/**
 	 * Render recent decisions.
 	 */
 	public static function render_decisions_page(): void {
-		self::require_capability( Capabilities::VIEW_DECISIONS );
-
-		$limit      = self::bounded_int_query( 'limit', 50, 1, 100 );
-		$page       = self::bounded_int_query( 'paged', 1, 1, 999999 );
-		$offset     = ( $page - 1 ) * $limit;
-		$repository = new DecisionRepository();
-		$decisions  = $repository->find_recent( $limit, $offset );
-		$total      = $repository->count_all();
-		$deliveries = new DeliveryRepository();
-
-		echo '<div class="wrap">';
-		echo '<h1>' . esc_html__( 'PressQueue Decisions', 'pressqueue' ) . '</h1>';
-		self::render_notice();
-		echo '<table class="widefat striped"><caption class="screen-reader-text">' . esc_html__( 'Recent PressQueue decisions', 'pressqueue' ) . '</caption><thead><tr>';
-		foreach ( array( __( 'Created', 'pressqueue' ), __( 'Result', 'pressqueue' ), __( 'Post', 'pressqueue' ), __( 'Rule', 'pressqueue' ), __( 'Scope', 'pressqueue' ), __( 'Reasons', 'pressqueue' ), __( 'Delivery', 'pressqueue' ) ) as $heading ) {
-			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
-		}
-		echo '</tr></thead><tbody>';
-
-		if ( array() === $decisions ) {
-			echo '<tr><td colspan="7">' . esc_html__( 'No decisions have been recorded.', 'pressqueue' ) . '</td></tr>';
-		}
-
-		foreach ( $decisions as $decision ) {
-			self::render_decision_row( $decision, $deliveries->find_by_event_key( $decision->event_key ) );
-		}
-
-		echo '</tbody></table>';
-		self::render_pagination( $page, $limit, $total );
-		echo '</div>';
+		DecisionsController::render_page();
 	}
 
 	/**
@@ -315,281 +256,8 @@ final class AdminScreens {
 	public static function handle_post_preview(): void {
 		AdminPostBoundary::check( 'pressqueue_preview_post', Capabilities::VIEW_DECISIONS, __( 'You are not allowed to view PressQueue decisions.', 'pressqueue' ) );
 
-		try {
-			$post_id = self::post_int( 'post_id', 0 );
-			$trigger = self::post_text( 'trigger', 'first_publish' );
-
-			if ( ! self::can_preview_post( $post_id ) ) {
-				throw new ValidationException( 'You are not allowed to preview this post.' );
-			}
-
-			$rules      = ( new RuleRepository() )->find_enabled_for_trigger( $trigger );
-			$normalizer = new EventNormalizer();
-			$event      = $normalizer->from_post_id( $post_id, 'preview', 'admin_post_preview', $trigger, $normalizer->metadata_allowlist_for_rules( $rules ) );
-
-			if ( null === $event ) {
-				throw new ValidationException( 'Post cannot be previewed for this trigger.' );
-			}
-
-			self::store_preview_result( ( new Planner() )->preview( $event, $rules ) );
-			self::redirect( self::SLUG_PREVIEW, 'preview_ready' );
-		} catch ( \Throwable $throwable ) {
-			self::redirect( self::SLUG_PREVIEW, 'preview_error', SafeOperatorError::redirect_detail( $throwable ) );
-		}
-	}
-
-
-
-
-
-
-
-
-
-	/**
-	 * Render a decision row.
-	 *
-	 * @param DecisionRecord                                       $decision Decision.
-	 * @param array<int,\PressQueue\Storage\Record\DeliveryRecord> $deliveries Deliveries.
-	 */
-	private static function render_decision_row( DecisionRecord $decision, array $deliveries ): void {
-		$delivery_text = array();
-
-		foreach ( $deliveries as $delivery ) {
-			if ( $delivery->decision_public_id !== $decision->public_id ) {
-				continue;
-			}
-
-			$delivery_text[] = implode(
-				' ',
-				array(
-					$delivery->delivery_key,
-					$delivery->delivery_mode,
-					$delivery->state,
-					$delivery->payload_hash,
-				)
-			);
-		}
-
-		echo '<tr>';
-		echo '<td>' . esc_html( $decision->created_at->format( 'Y-m-d H:i:s' ) ) . '<br /><code>' . esc_html( $decision->decision_key ) . '</code><br /><code>' . esc_html( $decision->event_key ) . '</code></td>';
-		echo '<td>' . esc_html( $decision->result ) . '</td>';
-		echo '<td>' . esc_html( (string) $decision->post_id ) . '<br />' . esc_html( $decision->post_type . ' ' . $decision->post_status ) . '<br />' . esc_html( $decision->trigger ) . '</td>';
-		echo '<td>' . esc_html( null === $decision->rule_id ? '' : (string) $decision->rule_id ) . '<br />' . esc_html( null === $decision->rule_public_id ? '' : $decision->rule_public_id ) . '<br />' . esc_html( null === $decision->rule_version ? '' : (string) $decision->rule_version ) . '</td>';
-		echo '<td>' . esc_html( $decision->scope_type ) . '<br />' . esc_html( null === $decision->scope_public_id ? '' : $decision->scope_public_id ) . '</td>';
-		echo '<td><pre>' . esc_html( self::pretty_json( current_user_can( 'edit_post', $decision->post_id ) ? $decision->reasons : array( array( 'code' => 'post_facts_redacted' ) ) ) ) . '</pre></td>';
-		echo '<td><pre>' . esc_html( implode( "\n\n", $delivery_text ) ) . '</pre></td>';
-		echo '</tr>';
-	}
-
-	/**
-	 * Render a preview result from transient storage.
-	 */
-	private static function render_preview_result(): void {
-		$result = self::take_preview_array();
-
-		if ( null === $result ) {
-			return;
-		}
-
-		echo '<h2>' . esc_html__( 'Preview Result', 'pressqueue' ) . '</h2>';
-		echo '<pre>' . esc_html( self::pretty_json( $result ) ) . '</pre>';
-	}
-
-	/**
-	 * Render notice from request.
-	 */
-	private static function render_notice(): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Notice query args are display-only.
-		$message = isset( $_GET['pressqueue_message'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_message'] ) ) : '';
-
-		if ( '' === $message ) {
-			return;
-		}
-
-		$messages = array(
-			'preview_error'     => __( 'Preview failed.', 'pressqueue' ),
-			'preview_ready'     => __( 'Preview is ready.', 'pressqueue' ),
-			'rule_disabled'     => __( 'Rule disabled.', 'pressqueue' ),
-			'rule_enabled'      => __( 'Rule enabled.', 'pressqueue' ),
-			'rule_error'        => __( 'Rule change failed.', 'pressqueue' ),
-			'rule_saved'        => __( 'Rule saved disabled.', 'pressqueue' ),
-			'settings_saved'    => __( 'Settings saved.', 'pressqueue' ),
-			'template_adopted'  => __( 'Template snapshot adopted. Preview the rule before re-enabling it.', 'pressqueue' ),
-			'template_deleted'  => __( 'Template removed from selection.', 'pressqueue' ),
-			'template_disabled' => __( 'Template disabled.', 'pressqueue' ),
-			'template_enabled'  => __( 'Template enabled for selection.', 'pressqueue' ),
-			'template_error'    => __( 'Template change failed.', 'pressqueue' ),
-			'template_saved'    => __( 'Template saved disabled.', 'pressqueue' ),
-		);
-
-		$text = $messages[ $message ] ?? '';
-
-		if ( '' === $text ) {
-			return;
-		}
-
-		$type = str_contains( $message, 'error' ) ? 'error' : 'success';
-		echo '<div class="notice notice-' . esc_attr( $type ) . '"><p>' . esc_html( $text );
-
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Error text is sanitized for display only.
-		if ( isset( $_GET['pressqueue_detail'] ) ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Error text is sanitized for display only.
-			echo ' ' . esc_html( SafeOperatorError::notice_detail( sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) ) );
-		}
-
-		echo '</p></div>';
-	}
-
-
-
-
-
-	/**
-	 * Check post preview authorization.
-	 *
-	 * @param int $post_id Post ID.
-	 * @return bool
-	 */
-	private static function can_preview_post( int $post_id ): bool {
-		$post = get_post( $post_id );
-
-		if ( ! $post instanceof \WP_Post ) {
-			return false;
-		}
-
-		return current_user_can( 'edit_post', $post_id );
-	}
-
-
-	/**
-	 * Render decision pagination.
-	 *
-	 * @param int $page Current page.
-	 * @param int $limit Page size.
-	 * @param int $total Total rows.
-	 */
-	private static function render_pagination( int $page, int $limit, int $total ): void {
-		$total_pages = max( 1, (int) ceil( $total / $limit ) );
-
-		if ( $total_pages <= 1 ) {
-			return;
-		}
-
-		echo '<p class="tablenav-pages">';
-		if ( $page > 1 ) {
-			echo '<a class="button" href="' . esc_url(
-				add_query_arg(
-					array(
-						'limit' => $limit,
-						'page'  => self::SLUG_DECISIONS,
-						'paged' => $page - 1,
-					),
-					admin_url( 'admin.php' )
-				)
-			) . '">' . esc_html__( 'Previous', 'pressqueue' ) . '</a> ';
-		}
-
-		/* translators: 1: current page number, 2: total page count. */
-		echo esc_html( sprintf( __( 'Page %1$d of %2$d', 'pressqueue' ), $page, $total_pages ) );
-
-		if ( $page < $total_pages ) {
-			echo ' <a class="button" href="' . esc_url(
-				add_query_arg(
-					array(
-						'limit' => $limit,
-						'page'  => self::SLUG_DECISIONS,
-						'paged' => $page + 1,
-					),
-					admin_url( 'admin.php' )
-				)
-			) . '">' . esc_html__( 'Next', 'pressqueue' ) . '</a>';
-		}
-		echo '</p>';
-	}
-
-
-
-
-	/**
-	 * Return trigger select markup.
-	 *
-	 * @param string $name Field name.
-	 * @param string $selected Selected value.
-	 * @return string
-	 */
-	private static function trigger_select( string $name, string $selected ): string {
-		$html = '<select name="' . esc_attr( $name ) . '">';
-
-		foreach ( array( 'first_publish', 'update', 'scheduled_publication', 'bulk', 'repost' ) as $trigger ) {
-			$html .= '<option value="' . esc_attr( $trigger ) . '" ' . selected( $selected, $trigger, false ) . '>' . esc_html( $trigger ) . '</option>';
-		}
-
-		return $html . '</select>';
-	}
-
-	/**
-	 * Store a preview result.
-	 *
-	 * @param PlanningResult $result Result.
-	 */
-	private static function store_preview_result( PlanningResult $result ): void {
-		self::store_preview_array( $result->to_array() );
-	}
-
-	/**
-	 * Store preview array.
-	 *
-	 * @param array<string,mixed> $result Result.
-	 */
-	private static function store_preview_array( array $result ): void {
-		set_transient( self::preview_transient_key(), $result, 10 * MINUTE_IN_SECONDS );
-	}
-
-	/**
-	 * Take preview result.
-	 *
-	 * @return array<string,mixed>|null
-	 */
-	private static function take_preview_array(): ?array {
-		$key    = self::preview_transient_key();
-		$result = get_transient( $key );
-
-		if ( is_array( $result ) ) {
-			delete_transient( $key );
-			return $result;
-		}
-
-		return null;
-	}
-
-	/**
-	 * Return current user's preview transient key.
-	 *
-	 * @return string
-	 */
-	private static function preview_transient_key(): string {
-		return self::TRANSIENT_BASE . get_current_user_id();
-	}
-
-	/**
-	 * Redirect to an admin page.
-	 *
-	 * @param string      $page Page slug.
-	 * @param string      $message Message key.
-	 * @param string|null $detail Optional detail.
-	 */
-	private static function redirect( string $page, string $message, ?string $detail = null ): void {
-		$args = array(
-			'page'               => $page,
-			'pressqueue_message' => $message,
-		);
-
-		if ( null !== $detail && '' !== $detail ) {
-			$args['pressqueue_detail'] = rawurlencode( $detail );
-		}
-
-		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+		// The old preview form now hands over to the overview's "Check a post" card.
+		wp_safe_redirect( Ui::url( Ui::PAGE_OVERVIEW, array( 'check_post' => self::post_int( 'post_id', 0 ) ) ) . '#pq-check' );
 		exit;
 	}
 
@@ -605,18 +273,6 @@ final class AdminScreens {
 	}
 
 	/**
-	 * Return a POST text field.
-	 *
-	 * @param string $key Key.
-	 * @param string $fallback Fallback.
-	 * @return string
-	 */
-	private static function post_text( string $key, string $fallback = '' ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers check nonces before reading mutations.
-		return isset( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $fallback;
-	}
-
-	/**
 	 * Return a POST integer field.
 	 *
 	 * @param string $key Key.
@@ -626,36 +282,5 @@ final class AdminScreens {
 	private static function post_int( string $key, int $fallback ): int {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers check nonces before reading mutations.
 		return isset( $_POST[ $key ] ) ? (int) sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $fallback;
-	}
-
-	/**
-	 * Return bounded integer query value.
-	 *
-	 * @param string $key Key.
-	 * @param int    $fallback Fallback.
-	 * @param int    $minimum Minimum.
-	 * @param int    $maximum Maximum.
-	 * @return int
-	 */
-	private static function bounded_int_query( string $key, int $fallback, int $minimum, int $maximum ): int {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Pagination query args are read-only.
-		$value = isset( $_GET[ $key ] ) ? (int) sanitize_text_field( wp_unslash( $_GET[ $key ] ) ) : $fallback;
-
-		return max( $minimum, min( $maximum, $value ) );
-	}
-
-
-
-
-	/**
-	 * Return pretty JSON.
-	 *
-	 * @param mixed $value Value.
-	 * @return string
-	 */
-	private static function pretty_json( $value ): string {
-		$json = wp_json_encode( $value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-
-		return is_string( $json ) ? $json : CanonicalJson::encode( $value );
 	}
 }

@@ -135,8 +135,8 @@ final class Labels {
 			'first_publish'         => __( 'published', 'pressqueue' ),
 			'scheduled_publication' => __( 'published on schedule', 'pressqueue' ),
 			'update'                => __( 'updated', 'pressqueue' ),
-			'bulk'                  => __( 'shared from the archive', 'pressqueue' ),
-			'repost'                => __( 'shared again', 'pressqueue' ),
+			'bulk'                  => __( 'picked in Share old posts', 'pressqueue' ),
+			'repost'                => __( 'picked to share again', 'pressqueue' ),
 		);
 
 		return $labels[ $trigger ] ?? $trigger;
@@ -266,7 +266,7 @@ final class Labels {
 	 */
 	public static function decision_result( string $result ): array {
 		$results = array(
-			'included'     => array( __( 'Shared', 'pressqueue' ), 'ok' ),
+			'included'     => array( __( 'Matched', 'pressqueue' ), 'ok' ),
 			'excluded'     => array( __( 'Never share', 'pressqueue' ), 'bad' ),
 			'skipped'      => array( __( 'Not shared', 'pressqueue' ), 'idle' ),
 			'policy_error' => array( __( 'Blocked by an error', 'pressqueue' ), 'bad' ),

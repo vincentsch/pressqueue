@@ -347,16 +347,17 @@ final class ChannelsPage {
 
 		echo '<div class="pq-account-actions">';
 		if ( in_array( $state, array( 'on', 'off' ), true ) && null !== $connection->remote_organization_id ) {
-			Ui::button_form(
+			Ui::form_start(
 				'pressqueue_sync_connection',
 				'pressqueue_sync_connection',
 				array(
 					'connection_public_id'   => $connection->public_id,
-					'remote_organization_id' => $connection->remote_organization_id,
+					'remote_organization_id' => (string) $connection->remote_organization_id,
 				),
-				__( 'Refresh channels', 'pressqueue' ),
-				'button'
+				array( 'class' => 'pq-inline' )
 			);
+			echo '<button type="submit" class="button" data-pq-busy="' . esc_attr__( 'Refreshing...', 'pressqueue' ) . '">' . esc_html__( 'Refresh channels', 'pressqueue' ) . '</button>';
+			Ui::form_end();
 		}
 		if ( 'off' === $state ) {
 			Ui::button_form( 'pressqueue_enable_connection', 'pressqueue_enable_connection', array( 'connection_public_id' => $connection->public_id ), __( 'Turn on', 'pressqueue' ), 'button button-primary' );
@@ -392,9 +393,9 @@ final class ChannelsPage {
 		$checked = $connection->credential_verified_at;
 		if ( null !== $checked && 'credential_invalid' !== $connection->connection_status ) {
 			$relative = time() - $checked->getTimestamp() < 60
-				? __( 'Checked just now', 'pressqueue' )
+				? __( 'Key checked just now', 'pressqueue' )
 				/* translators: %s: relative time such as "5 mins ago" or a date. */
-				: sprintf( __( 'Checked %s', 'pressqueue' ), Ui::relative_time( $checked ) );
+				: sprintf( __( 'Key last checked %s', 'pressqueue' ), Ui::relative_time( $checked ) );
 			$parts[] = '<time datetime="' . esc_attr( $checked->format( DATE_ATOM ) ) . '" title="' . esc_attr( Ui::local_datetime( $checked ) ) . '">' . esc_html( $relative ) . '</time>';
 		}
 
@@ -829,7 +830,8 @@ final class ChannelsPage {
 			/* translators: %d: number of rules. */
 			echo Ui::pill( 'ok', sprintf( _n( 'Used by %d rule', 'Used by %d rules', $used_by, 'pressqueue' ), $used_by ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
 		} elseif ( $channel->enabled ) {
-			echo Ui::pill( 'info', __( 'Not in a rule yet', 'pressqueue' ), __( 'Add this channel to a rule to share posts there.', 'pressqueue' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
+			echo '<span class="pq-muted pq-small">' . esc_html__( 'Add it to a rule to share posts here.', 'pressqueue' ) . '</span> ';
+			echo Ui::pill( 'info', __( 'Not in a rule yet', 'pressqueue' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
 		} elseif ( $used_by > 0 ) {
 			/* translators: %d: number of rules. */
 			echo Ui::pill( 'warn', sprintf( _n( 'Off, %d rule skips it', 'Off, %d rules skip it', $used_by, 'pressqueue' ), $used_by ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
@@ -1141,7 +1143,9 @@ final class ChannelsPage {
 
 		switch ( $message ) {
 			case 'buffer_connected':
-				return __( 'Buffer connected. Switch on the channels you want to use.', 'pressqueue' );
+				return array() === $listed
+					? __( 'Buffer connected.', 'pressqueue' )
+					: __( 'Buffer connected. Switch on the channels you want to use.', 'pressqueue' );
 			case 'buffer_reconnected':
 				return __( 'Buffer reconnected. Channels you had switched on are on again.', 'pressqueue' );
 			case 'organization_switched':

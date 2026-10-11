@@ -110,7 +110,7 @@ final class PostListColumn {
 			} elseif ( self::sharing_switched_off( $post_id ) ) {
 				echo '<span class="pq-col-off">' . esc_html__( 'Sharing off', 'pressqueue' ) . '</span>';
 			} else {
-				echo '<span class="pq-col-none" aria-hidden="true">&middot;</span><span class="screen-reader-text">' . esc_html__( 'Not shared', 'pressqueue' ) . '</span>';
+				echo '<span class="screen-reader-text">' . esc_html__( 'Not shared', 'pressqueue' ) . '</span>';
 			}
 			return;
 		}

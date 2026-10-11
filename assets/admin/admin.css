@@ -16,7 +16,7 @@
 	--pq-line-soft: #ececee;
 	--pq-card: #fff;
 	--pq-subtle: #f6f7f7;
-	--pq-ok: #1a7f45;
+	--pq-ok: #146c3a;
 	--pq-ok-soft: #e4f4ea;
 	--pq-warn: #8a5200;
 	--pq-warn-soft: #fdf0d9;
@@ -251,6 +251,7 @@
 	border-top: 1px solid var(--pq-line-soft);
 }
 
+.pq-admin .pq-section h2,
 .pq-admin .pq-section h3 {
 	display: flex;
 	flex-wrap: wrap;
@@ -261,6 +262,7 @@
 	font-weight: 600;
 }
 
+.pq-admin .pq-section h2 small,
 .pq-admin .pq-section h3 small {
 	color: var(--pq-muted);
 	font-size: 12px;
@@ -407,7 +409,7 @@
 
 .pq-admin .pq-pill--info {
 	background: var(--pq-accent-soft);
-	color: var(--pq-accent-dark);
+	color: color-mix(in srgb, var(--pq-accent) 62%, #000);
 }
 
 /* ---------- Service badges ---------- */

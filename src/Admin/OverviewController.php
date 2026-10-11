@@ -158,20 +158,38 @@ final class OverviewController {
 						? sprintf( __( '"%s" is on.', 'pressqueue' ), $sharing[0]->name )
 						/* translators: %d: number of rules. */
 						: sprintf( __( '%d sharing rules are on.', 'pressqueue' ), count( $sharing ) ) )
-					: __( 'A rule says which posts go to which channels, and when. Start with one for all new posts.', 'pressqueue' ),
-				'action' => array() !== $sharing ? __( 'View', 'pressqueue' ) : __( 'Create a rule', 'pressqueue' ),
-				'url'    => array() !== $sharing ? Ui::url( Ui::PAGE_RULES ) : Ui::url( Ui::PAGE_RULES, array( 'view' => 'new' ) ),
+					: ( self::has_include_rules( $rules )
+						? __( 'You have a rule, but it is switched off. Test it and switch it on under Rules.', 'pressqueue' )
+						: __( 'A rule says which posts go to which channels, and when. Start with one that shares every new post.', 'pressqueue' ) ),
+				'action' => array() !== $sharing ? __( 'View', 'pressqueue' ) : ( self::has_include_rules( $rules ) ? __( 'Open Rules', 'pressqueue' ) : 'quickstart' ),
+				'url'    => Ui::url( Ui::PAGE_RULES ),
 			),
 			array(
 				'done'   => 'live' === $mode,
 				'title'  => __( 'Go live', 'pressqueue' ),
 				'text'   => 'live' === $mode
 					? __( 'Matching posts are sent to Buffer.', 'pressqueue' )
-					: __( 'Test mode records what would be shared and sends nothing. When the results below look right, switch to Live.', 'pressqueue' ),
+					: __( 'Test mode records what would be shared and sends nothing. Publish a post or test a rule, check the test runs below, and switch to Live when they look right.', 'pressqueue' ),
 				'action' => 'golive',
 				'url'    => Ui::url( Ui::PAGE_SETTINGS ),
 			),
 		);
+	}
+
+	/**
+	 * Check whether any sharing rule exists, switched on or off.
+	 *
+	 * @param array<int,RuleRecord> $rules Rules.
+	 * @return bool
+	 */
+	private static function has_include_rules( array $rules ): bool {
+		foreach ( $rules as $rule ) {
+			if ( 'include' === $rule->effect ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -207,6 +225,13 @@ final class OverviewController {
 				}
 			} elseif ( $step['done'] ) {
 				echo '<a href="' . esc_url( $step['url'] ) . '">' . esc_html( $step['action'] ) . '</a>';
+			} elseif ( 'quickstart' === $step['action'] ) {
+				if ( $is_current && current_user_can( Capabilities::MANAGE_RULES ) ) {
+					echo '<div class="pq-row" style="justify-content:flex-end">';
+					Ui::button_form( 'pressqueue_quick_start_rule', 'pressqueue_quick_start_rule', array(), __( 'Share every new post', 'pressqueue' ), 'button button-primary' );
+					echo '<a href="' . esc_url( Ui::url( Ui::PAGE_RULES, array( 'view' => 'new' ) ) ) . '">' . esc_html__( 'Build my own', 'pressqueue' ) . '</a>';
+					echo '</div>';
+				}
 			} elseif ( $is_current ) {
 				echo '<a class="button button-primary" href="' . esc_url( $step['url'] ) . '">' . esc_html( $step['action'] ) . '</a>';
 			}
@@ -280,11 +305,16 @@ final class OverviewController {
 			if ( array() !== $shares ) {
 				$states = array_unique( array_column( $shares, 'state' ) );
 				$slot   = (string) ( $shares[0]['schedule_slot'] ?? '' );
+				$when   = $shares[0]['scheduled_for_utc'] ?? null;
 				$parts  = array();
 				if ( '' !== $entry['rule'] ) {
 					$parts[] = $entry['rule'];
 				}
-				if ( array( 'dry_run' ) === array_values( $states ) ) {
+				$is_test = array( 'dry_run' ) === array_values( $states );
+				if ( 'explicit_time' === $slot && $when instanceof \DateTimeInterface ) {
+					/* translators: %s: date and time. */
+					$parts[] = sprintf( $is_test ? __( 'test run, scheduled for %s', 'pressqueue' ) : __( 'Scheduled for %s', 'pressqueue' ), Ui::short_datetime( $when ) );
+				} elseif ( $is_test ) {
 					/* translators: %s: schedule phrase such as "end of the Buffer queue". */
 					$parts[] = sprintf( __( 'test run, would go to the %s', 'pressqueue' ), Labels::schedule_phrase( $slot ) );
 				} else {
@@ -354,22 +384,24 @@ final class OverviewController {
 	private static function render_stats( ActivitySummary $summary, string $mode ): void {
 		$counts    = $summary->delivery_counts( 7 );
 		$attention = $summary->count_in_states( array( 'failed', 'ambiguous' ) );
-		$waiting   = $summary->count_in_states( array( 'proposed', 'queued', 'leased', 'retrying', 'held' ) );
+		$waiting   = $summary->count_in_states( array( 'proposed', 'queued', 'leased', 'retrying' ) );
 		$can_view  = current_user_can( Capabilities::VIEW_DELIVERIES );
 
 		echo '<div class="pq-card"><div class="pq-stats">';
 		if ( 'test' === $mode ) {
-			self::stat( (int) ( $counts['dry_run'] ?? 0 ), __( 'Would share', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'state' => 'dry_run' ) ) : '' );
+			self::stat( (int) ( $counts['dry_run'] ?? 0 ), __( 'Would share this week', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'state' => 'dry_run' ) ) : '' );
 		} else {
-			self::stat( (int) ( $counts['accepted'] ?? 0 ), __( 'Sent to Buffer', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'state' => 'accepted' ) ) : '' );
-			self::stat( $waiting, __( 'Waiting', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'group' => 'waiting' ) ) : '' );
+			self::stat( (int) ( $counts['accepted'] ?? 0 ), __( 'Sent this week', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'state' => 'accepted' ) ) : '' );
+			self::stat( $waiting, __( 'Waiting now', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'group' => 'waiting' ) ) : '' );
 		}
-		self::stat( $summary->skipped_count( 7 ), __( 'Not shared', 'pressqueue' ), current_user_can( Capabilities::VIEW_DECISIONS ) ? Ui::url( Ui::PAGE_ACTIVITY, array( 'tab' => 'decisions' ) ) : '' );
+		self::stat( $summary->skipped_count( 7 ), __( 'Not shared this week', 'pressqueue' ), current_user_can( Capabilities::VIEW_DECISIONS ) ? Ui::url( Ui::PAGE_ACTIVITY, array( 'tab' => 'decisions' ) ) : '' );
 		if ( $attention > 0 ) {
-			self::stat( $attention, __( 'Need attention', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'group' => 'attention' ) ) : '', true );
+			self::stat( $attention, __( 'Needs attention', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'group' => 'attention' ) ) : '', true );
 		}
-		echo '</div><div class="pq-divider"></div>';
-		echo '<p class="pq-muted pq-small" style="margin:0;padding:10px 20px">' . esc_html( 'test' === $mode ? __( 'Last 7 days. In test mode nothing reaches Buffer.', 'pressqueue' ) : __( 'Shares from the last 7 days.', 'pressqueue' ) ) . '</p>';
+		echo '</div>';
+		if ( 'test' === $mode ) {
+			echo '<div class="pq-divider"></div><p class="pq-muted pq-small" style="margin:0;padding:10px 20px">' . esc_html__( 'In test mode nothing reaches Buffer.', 'pressqueue' ) . '</p>';
+		}
 		echo '</div>';
 	}
 
@@ -494,7 +526,17 @@ final class OverviewController {
 				return;
 			}
 
-			$result = ( new Planner() )->preview( $event, $rules, false );
+			$result = ( new Planner() )->preview_as_new_publication( $event, $rules, false );
+			if ( 'publish' === get_post_status( $post_id ) ) {
+				$published = get_post_datetime( $post_id, 'date', 'gmt' );
+				echo '<p class="pq-muted pq-small" style="margin:0">' . esc_html(
+					sprintf(
+						/* translators: %s: publication date. */
+						__( 'Published on %s. Shown as if it were published today; existing posts are only shared through Share old posts.', 'pressqueue' ),
+						false === $published ? '' : (string) wp_date( (string) get_option( 'date_format', 'M j, Y' ), $published->getTimestamp() )
+					)
+				) . '</p>';
+			}
 			PreviewPresenter::render( $result->to_array(), true );
 		} catch ( \Throwable $throwable ) {
 			echo '<div class="pq-callout pq-callout--bad"><p>' . esc_html__( 'This post could not be checked.', 'pressqueue' ) . ' ' . esc_html( SafeOperatorError::message( $throwable ) ) . '</p></div>';

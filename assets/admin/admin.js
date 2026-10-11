@@ -63,6 +63,11 @@
 				return;
 			}
 			form.dataset.pqSubmitting = '1';
+			var busy = submitter && submitter.dataset.pqBusy;
+			if ( busy ) {
+				submitter.textContent = busy;
+				submitter.setAttribute( 'aria-disabled', 'true' );
+			}
 			window.setTimeout( function () {
 				delete form.dataset.pqSubmitting;
 			}, 4000 );

@@ -165,6 +165,21 @@ final class Planner {
 	}
 
 	/**
+	 * Preview an existing post as if it were being published for the first time today.
+	 *
+	 * Rule tests and post checks use this so older posts show what a rule does instead of
+	 * the backdated-publication skip. It never writes rows and is never used at runtime.
+	 *
+	 * @param NormalizedEvent            $event Event.
+	 * @param array<int,RuleRecord>|null $rules Rules to evaluate.
+	 * @param bool                       $allow_probe Whether new media URL probes may run.
+	 * @return PlanningResult
+	 */
+	public function preview_as_new_publication( NormalizedEvent $event, ?array $rules = null, bool $allow_probe = true ): PlanningResult {
+		return $this->plan( $event, $rules ?? $this->rules->find_enabled_for_trigger( $event->trigger ), false, null, null, $allow_probe, true );
+	}
+
+	/**
 	 * Run durable runtime planning.
 	 *
 	 * @param NormalizedEvent $event Event.
@@ -214,9 +229,10 @@ final class Planner {
 	 * @param string|null           $only_channel_public_id Optional destination filter.
 	 * @param SchedulePolicy|null   $schedule_override Reviewed schedule override.
 	 * @param bool                  $allow_probe Whether new media URL probes may run.
+	 * @param bool                  $ignore_backdating Whether a non-durable preview may skip the backdated-publication guard.
 	 * @return PlanningResult
 	 */
-	private function plan( NormalizedEvent $event, array $rules, bool $durable, ?string $only_channel_public_id = null, ?SchedulePolicy $schedule_override = null, bool $allow_probe = true ): PlanningResult {
+	private function plan( NormalizedEvent $event, array $rules, bool $durable, ?string $only_channel_public_id = null, ?SchedulePolicy $schedule_override = null, bool $allow_probe = true, bool $ignore_backdating = false ): PlanningResult {
 		if ( null !== $only_channel_public_id ) {
 			PublicIds::assert( $only_channel_public_id );
 		}
@@ -243,7 +259,7 @@ final class Planner {
 			return new PlanningResult( $event, $decisions, array(), $durable );
 		}
 
-		if ( $event->is_backdated_automatic_publication() ) {
+		if ( $event->is_backdated_automatic_publication() && ! ( $ignore_backdating && ! $durable ) ) {
 			$decisions[] = $this->decision_summary(
 				$event,
 				$settings,

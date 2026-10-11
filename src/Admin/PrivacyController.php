@@ -303,8 +303,14 @@ final class PrivacyController {
 	private static function render_runtime_state( bool $settings_valid ): void {
 		$status = self::runtime_status( $settings_valid );
 
+		// A healthy state is a quiet line; only a stopped state needs a callout.
+		if ( 'ok' === $status['tone'] ) {
+			echo '<p class="pq-muted pq-small pq-privacy-status" role="status"><span class="pq-yes" aria-hidden="true">&#x2713;</span> ' . esc_html( $status['title'] ) . '</p>';
+			return;
+		}
+
 		echo '<div class="pq-callout pq-callout--' . esc_attr( $status['tone'] ) . ' pq-privacy-status" role="status">';
-		echo '<p><span class="' . ( 'ok' === $status['tone'] ? 'pq-yes' : 'pq-no' ) . '" aria-hidden="true">' . ( 'ok' === $status['tone'] ? '&#x2713;' : '&#x2715;' ) . '</span> <strong>' . esc_html( $status['title'] ) . '</strong>';
+		echo '<p><span class="pq-no" aria-hidden="true">&#x2715;</span> <strong>' . esc_html( $status['title'] ) . '</strong>';
 		if ( '' !== $status['text'] ) {
 			echo ' ' . esc_html( $status['text'] );
 		}
@@ -329,7 +335,7 @@ final class PrivacyController {
 		$title = __( 'Background sharing is stopped.', 'pressqueue' );
 
 		if ( ! $settings_valid ) {
-			$text = __( 'The saved data and privacy settings are damaged. Check the settings below and click Save in each section to repair them.', 'pressqueue' );
+			$text = __( 'The saved data and privacy settings are damaged. Check the settings below and save each section to repair them.', 'pressqueue' );
 		} elseif ( ! Database::has_global_database() ) {
 			$text = __( 'PressQueue cannot reach the WordPress database. Reload this page in a minute.', 'pressqueue' );
 		} else {
@@ -342,7 +348,7 @@ final class PrivacyController {
 				} elseif ( ! $schema->is_current() ) {
 					$text = __( 'PressQueue needs to update its database first. Reload this page, or visit any admin page, to start the update.', 'pressqueue' );
 				} else {
-					$text = __( 'Click Save in Keep history below. PressQueue checks its settings and starts again when everything is in order.', 'pressqueue' );
+					$text = __( 'Click Save history settings below. PressQueue checks its settings and starts again when everything is in order.', 'pressqueue' );
 				}
 			} catch ( Throwable $throwable ) {
 				unset( $throwable );
@@ -438,7 +444,7 @@ final class PrivacyController {
 			echo '<label class="pq-privacy-ack"><input type="checkbox" name="acknowledge_uninstall_effect" value="1" /> <span>' . esc_html__( 'I understand this permanently deletes PressQueue\'s rules, history, settings and saved Buffer key when the plugin is deleted.', 'pressqueue' ) . '</span></label>';
 		}
 
-		echo '<div><button type="submit" class="button">' . esc_html__( 'Save', 'pressqueue' ) . '</button></div>';
+		echo '<div><button type="submit" class="button">' . esc_html__( 'Save deletion setting', 'pressqueue' ) . '</button></div>';
 		echo '</div>';
 		Ui::form_end();
 		echo '</div>';

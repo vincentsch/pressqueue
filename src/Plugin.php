@@ -11,6 +11,7 @@ namespace PressQueue;
 
 use PressQueue\Admin\AdminScreens;
 use PressQueue\Admin\AttentionNotice;
+use PressQueue\Admin\PluginLinks;
 use PressQueue\Admin\PostListColumn;
 use PressQueue\Batch\BatchQueueService;
 use PressQueue\Planning\EventCollector;
@@ -68,6 +69,7 @@ final class Plugin {
 		if ( function_exists( 'update_option' ) ) {
 			update_option( SettingsRepository::ACTIVATED_AT_OPTION, (string) time(), true );
 		}
+		PluginLinks::queue_welcome();
 		PrivacySettings::ensure_defaults_for_current_site();
 		RetentionStateStore::ensure_defaults_for_current_site();
 		self::assert_runtime_state_valid();
@@ -105,6 +107,7 @@ final class Plugin {
 		AdminScreens::register_hooks();
 		PostListColumn::register_hooks();
 		AttentionNotice::register_hooks();
+		PluginLinks::register_hooks();
 		PersonalDataExporter::register_hooks();
 		PersonalDataEraser::register_hooks();
 		add_filter( 'wpmu_drop_tables', array( UninstallPolicy::class, 'site_deletion_tables' ), 10, 2 );
