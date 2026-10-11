@@ -470,6 +470,32 @@ test( 'a matching "never share" rule locks the switch off without changing the s
 	h.unmount();
 } );
 
+test( 'a "never share" lock never outlives the post facts it was checked for', async () => {
+	const h = await loaded();
+	h.flushTimers();
+	h.request( request => request.path.endsWith( '/preview' ) ).resolve( keptOffResponse() );
+	await h.settle();
+	assert.equal( h.find( 'ToggleControl' ).props.disabled, true );
+
+	// The category changes. Until the new answer arrives, the switch shows the stored choice again.
+	h.post.record = { content: '<p>Moved out of the journal</p>' };
+	h.render();
+	h.render(); // The effect's state change re-renders right after the commit in React.
+	assert.equal( h.find( 'ToggleControl' ).props.checked, true, 'stored choice is visible while checking' );
+	assert.equal( h.find( 'ToggleControl' ).props.disabled, false );
+
+	// A failed check must not bring the old lock back either.
+	h.flushTimers();
+	const next = h.pending.filter( item => item.request.path.endsWith( '/preview' ) ).slice( 1 );
+	assert.equal( next.length, 1 );
+	next[ 0 ].reject( { message: 'Server unavailable' } );
+	await h.settle();
+	assert.equal( h.find( 'ToggleControl' ).props.disabled, false );
+	assert.equal( h.find( 'ToggleControl' ).props.checked, true );
+	assert.ok( h.text().includes( 'PressQueue could not check where this post goes: Server unavailable' ) );
+	h.unmount();
+} );
+
 test( 'a stored exclusion that a "never share" rule also covers stays stored as it is', async () => {
 	const h = await loaded( {}, controlsResponse( 'exclude' ) );
 	h.flushTimers();

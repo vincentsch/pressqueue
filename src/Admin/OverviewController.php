@@ -45,36 +45,61 @@ final class OverviewController {
 			return;
 		}
 
-		$steps = self::setup_steps( $connections, $channels, $rules, $mode );
-		$done  = count( array_filter( array_column( $steps, 'done' ) ) );
+		$steps       = self::setup_steps( $connections, $channels, $rules, $mode );
+		$done        = count( array_filter( array_column( $steps, 'done' ) ) );
+		$can_manage  = current_user_can( Capabilities::MANAGE_SETTINGS ) || current_user_can( Capabilities::MANAGE_RULES ) || current_user_can( Capabilities::MANAGE_CONNECTIONS );
+		$can_shares  = current_user_can( Capabilities::VIEW_DELIVERIES );
+		$can_reasons = current_user_can( Capabilities::VIEW_DECISIONS );
 
 		Ui::page_start( __( 'PressQueue', 'pressqueue' ), array( 'brand' => true ) );
 		SettingsController::render_notice();
 
+		if ( ! $can_manage && ! $can_shares && ! $can_reasons ) {
+			// Writers who may only switch sharing for their own posts see no site-wide data.
+			self::render_writer_landing();
+			Ui::page_end();
+			return;
+		}
+
 		if ( 'paused' === $mode ) {
-			self::render_paused_banner( $summary );
+			self::render_paused_banner( $summary, $can_shares );
 		}
 
 		echo '<div class="pq-cols">';
 		echo '<div class="pq-stack">';
-		if ( current_user_can( Capabilities::VIEW_DELIVERIES ) || current_user_can( Capabilities::MANAGE_SETTINGS ) ) {
+		if ( $can_shares || current_user_can( Capabilities::MANAGE_SETTINGS ) ) {
 			SchedulerHealth::render_card();
 		}
-		if ( $done < count( $steps ) ) {
+		if ( $can_manage && $done < count( $steps ) ) {
 			self::render_setup( $steps, $done );
 		}
-		self::render_feed( $summary, $mode );
+		if ( $can_shares || $can_reasons ) {
+			self::render_feed( $summary, $mode, $can_shares, $can_reasons );
+		}
 		echo '</div>';
 
 		echo '<div class="pq-stack">';
-		self::render_stats( $summary, $mode );
-		if ( current_user_can( Capabilities::VIEW_DECISIONS ) ) {
+		if ( $can_shares || $can_reasons ) {
+			self::render_stats( $summary, $mode, $can_shares, $can_reasons );
+		}
+		if ( $can_reasons ) {
 			self::render_check_post();
 		}
 		echo '</div>';
 		echo '</div>';
 
 		Ui::page_end();
+	}
+
+	/**
+	 * Explain the editor panel to people who can only change sharing for single posts.
+	 */
+	private static function render_writer_landing(): void {
+		echo '<div class="pq-card pq-card--pad pq-stack" style="max-width:640px">';
+		echo '<h2>' . esc_html__( 'Sharing your posts', 'pressqueue' ) . '</h2>';
+		echo '<p style="margin:0">' . esc_html__( 'Open a post in the editor and use the Social sharing panel. It shows where the post goes when you publish it, and the Share this post switch keeps a post off social media.', 'pressqueue' ) . '</p>';
+		echo '<p class="pq-muted" style="margin:0">' . esc_html__( 'Rules, channels and the activity log are managed by your site administrator.', 'pressqueue' ) . '</p>';
+		echo '</div>';
 	}
 
 	/**
@@ -246,9 +271,10 @@ final class OverviewController {
 	 * Render the paused banner.
 	 *
 	 * @param ActivitySummary $summary Summary.
+	 * @param bool            $can_shares Whether the viewer may see share counts.
 	 */
-	private static function render_paused_banner( ActivitySummary $summary ): void {
-		$held = $summary->count_in_states( array( 'held' ) );
+	private static function render_paused_banner( ActivitySummary $summary, bool $can_shares ): void {
+		$held = $can_shares ? $summary->count_in_states( array( 'held' ) ) : 0;
 		echo '<div class="pq-card pq-card--pad pq-row pq-row--between" style="margin-bottom:20px;border-color:#f1c1bd;background:#fffafa">';
 		echo '<div><h2>' . esc_html__( 'PressQueue is paused', 'pressqueue' ) . '</h2><p class="pq-sub">';
 		if ( $held > 0 ) {
@@ -272,14 +298,23 @@ final class OverviewController {
 	 *
 	 * @param ActivitySummary $summary Summary.
 	 * @param string          $mode Sharing mode.
+	 * @param bool            $can_shares Whether the viewer may see shares.
+	 * @param bool            $can_reasons Whether the viewer may see why posts were skipped.
 	 */
-	private static function render_feed( ActivitySummary $summary, string $mode ): void {
-		$feed = $summary->recent_feed( 8 );
+	private static function render_feed( ActivitySummary $summary, string $mode, bool $can_shares, bool $can_reasons ): void {
+		$feed = array_values(
+			array_filter(
+				$summary->recent_feed( 8 ),
+				static function ( array $entry ) use ( $can_shares, $can_reasons ): bool {
+					return array() === $entry['shares'] ? $can_reasons : $can_shares;
+				}
+			)
+		);
 
 		echo '<div class="pq-card">';
 		echo '<div class="pq-card-head"><h2>' . esc_html__( 'Recent activity', 'pressqueue' ) . '</h2>';
-		if ( current_user_can( Capabilities::VIEW_DELIVERIES ) ) {
-			echo '<a href="' . esc_url( Ui::url( Ui::PAGE_ACTIVITY ) ) . '">' . esc_html__( 'See all', 'pressqueue' ) . '</a>';
+		if ( $can_shares || $can_reasons ) {
+			echo '<a href="' . esc_url( Ui::url( Ui::PAGE_ACTIVITY, $can_shares ? array() : array( 'tab' => 'decisions' ) ) ) . '">' . esc_html__( 'See all', 'pressqueue' ) . '</a>';
 		}
 		echo '</div>';
 
@@ -380,23 +415,29 @@ final class OverviewController {
 	 *
 	 * @param ActivitySummary $summary Summary.
 	 * @param string          $mode Sharing mode.
+	 * @param bool            $can_shares Whether the viewer may see share counts.
+	 * @param bool            $can_reasons Whether the viewer may see skip counts.
 	 */
-	private static function render_stats( ActivitySummary $summary, string $mode ): void {
-		$counts    = $summary->delivery_counts( 7 );
-		$attention = $summary->count_in_states( array( 'failed', 'ambiguous' ) );
-		$waiting   = $summary->count_in_states( array( 'proposed', 'queued', 'leased', 'retrying' ) );
-		$can_view  = current_user_can( Capabilities::VIEW_DELIVERIES );
-
+	private static function render_stats( ActivitySummary $summary, string $mode, bool $can_shares, bool $can_reasons ): void {
 		echo '<div class="pq-card"><div class="pq-stats">';
-		if ( 'test' === $mode ) {
-			self::stat( (int) ( $counts['dry_run'] ?? 0 ), __( 'Would share this week', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'state' => 'dry_run' ) ) : '' );
-		} else {
-			self::stat( (int) ( $counts['accepted'] ?? 0 ), __( 'Sent this week', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'state' => 'accepted' ) ) : '' );
-			self::stat( $waiting, __( 'Waiting now', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'group' => 'waiting' ) ) : '' );
+		if ( $can_shares ) {
+			$counts  = $summary->delivery_counts( 7 );
+			$waiting = $summary->count_in_states( array( 'proposed', 'queued', 'leased', 'retrying' ) );
+			if ( 'test' === $mode ) {
+				self::stat( (int) ( $counts['dry_run'] ?? 0 ), __( 'Would share this week', 'pressqueue' ), Ui::url( Ui::PAGE_ACTIVITY, array( 'state' => 'dry_run' ) ) );
+			} else {
+				self::stat( (int) ( $counts['accepted'] ?? 0 ), __( 'Sent this week', 'pressqueue' ), Ui::url( Ui::PAGE_ACTIVITY, array( 'state' => 'accepted' ) ) );
+				self::stat( $waiting, __( 'Waiting now', 'pressqueue' ), Ui::url( Ui::PAGE_ACTIVITY, array( 'group' => 'waiting' ) ) );
+			}
 		}
-		self::stat( $summary->skipped_count( 7 ), __( 'Not shared this week', 'pressqueue' ), current_user_can( Capabilities::VIEW_DECISIONS ) ? Ui::url( Ui::PAGE_ACTIVITY, array( 'tab' => 'decisions' ) ) : '' );
-		if ( $attention > 0 ) {
-			self::stat( $attention, __( 'Needs attention', 'pressqueue' ), $can_view ? Ui::url( Ui::PAGE_ACTIVITY, array( 'group' => 'attention' ) ) : '', true );
+		if ( $can_reasons ) {
+			self::stat( $summary->skipped_count( 7 ), __( 'Not shared this week', 'pressqueue' ), Ui::url( Ui::PAGE_ACTIVITY, array( 'tab' => 'decisions' ) ) );
+		}
+		if ( $can_shares ) {
+			$attention = $summary->count_in_states( array( 'failed', 'ambiguous' ) );
+			if ( $attention > 0 ) {
+				self::stat( $attention, __( 'Needs attention', 'pressqueue' ), Ui::url( Ui::PAGE_ACTIVITY, array( 'group' => 'attention' ) ), true );
+			}
 		}
 		echo '</div>';
 		if ( 'test' === $mode ) {

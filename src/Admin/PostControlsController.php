@@ -479,7 +479,12 @@ final class PostControlsController {
 				echo Ui::channel_name( (string) $channel['service'], (string) $channel['name'] );
 				echo '</label>';
 			}
-			echo '<span class="pq-ed-help">' . esc_html__( 'Untick a channel to leave it out for this post.', 'pressqueue' ) . '</span></fieldset>';
+			echo '<span class="pq-ed-help">' . esc_html__( 'Untick a channel to leave it out for this post.', 'pressqueue' ) . '</span>';
+			if ( null !== $selected ) {
+				// A stored restriction only goes away when the writer asks for it explicitly.
+				echo '<label class="pq-ed-check"><input type="checkbox" name="pressqueue_channel_reset" value="1" /> ' . esc_html__( 'Use the channels from the rule again', 'pressqueue' ) . '</label>';
+			}
+			echo '</fieldset>';
 		}
 
 		// Timing.
@@ -793,13 +798,17 @@ final class PostControlsController {
 			'pressqueue_policy'       => $policy,
 		);
 
-		if ( array() === $listed ) {
-			$stored = is_array( $current['channels'] ?? null ) ? $current['channels'] : array( 'mode' => 'inherit' );
-			if ( 'override' === ( $stored['mode'] ?? '' ) ) {
-				$form['pressqueue_channel_mode']       = 'override';
-				$form['pressqueue_channel_public_ids'] = is_array( $stored['channel_public_ids'] ?? null ) ? $stored['channel_public_ids'] : array();
-			}
-		} elseif ( count( $checked ) < count( array_unique( $listed ) ) ) {
+		$stored        = is_array( $current['channels'] ?? null ) ? $current['channels'] : array( 'mode' => 'inherit' );
+		$stored_ids    = 'override' === ( $stored['mode'] ?? '' ) && is_array( $stored['channel_public_ids'] ?? null ) ? self::string_list( $stored['channel_public_ids'] ) : null;
+		$reset_request = ! empty( $input['pressqueue_channel_reset'] );
+
+		if ( null !== $stored_ids && ! $reset_request ) {
+			// Keep an existing restriction. Channels the form did not list (for example ones that are
+			// switched off right now) stay as they were; listed ones follow the checkboxes.
+			$hidden                                = array_values( array_diff( $stored_ids, $listed ) );
+			$form['pressqueue_channel_mode']       = 'override';
+			$form['pressqueue_channel_public_ids'] = array_values( array_unique( array_merge( $hidden, $checked ) ) );
+		} elseif ( null === $stored_ids && array() !== $listed && count( $checked ) < count( array_unique( $listed ) ) ) {
 			$form['pressqueue_channel_mode']       = 'override';
 			$form['pressqueue_channel_public_ids'] = array_values( array_unique( $checked ) );
 		}

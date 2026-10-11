@@ -603,15 +603,16 @@
 		var active = data.loaded && ! post.password && post.status !== 'private' && ! problem;
 
 		useEffect( function () {
+			// Any change to the inputs invalidates the last answer at once, so a stale
+			// "never share" lock can never outlive the post facts it was computed for.
+			var requestSequence = ++sequence.current;
 			if ( ! active ) {
-				sequence.current++;
 				return undefined;
 			}
 			setPreview( function ( current ) {
 				return Object.assign( {}, current, { loading: true } );
 			} );
 			var timer = setTimeout( function () {
-				var requestSequence = ++sequence.current;
 				var snapshot = editorSnapshot( wp.data.select, facts );
 				wp.apiFetch( {
 					path: '/pressqueue/v1/posts/' + postId + '/preview',
@@ -622,13 +623,14 @@
 					}
 				} ).then( function ( response ) {
 					if ( requestSequence === sequence.current ) {
-						setPreview( { display: response && response.display ? response.display : null, loading: false, error: '' } );
+						setPreview( { display: response && response.display ? response.display : null, loading: false, error: '', sequence: requestSequence } );
 					}
 				}, function ( error ) {
 					if ( requestSequence === sequence.current ) {
 						setPreview( function ( current ) {
 							return {
 								display: current.display,
+								sequence: requestSequence,
 								loading: false,
 								error: error && error.message
 									? sprintf(
@@ -653,7 +655,9 @@
 			};
 		}, [] );
 
-		var keptOff = active && preview.display && typeof preview.display.kept_off === 'string' ? preview.display.kept_off : '';
+		// Only a successful answer for the current inputs may lock the switch.
+		var current = active && ! preview.loading && ! preview.error && preview.sequence === sequence.current;
+		var keptOff = current && preview.display && typeof preview.display.kept_off === 'string' ? preview.display.kept_off : '';
 		return Object.assign( {}, preview, { problem: problem, keptOff: keptOff } );
 	}
 
@@ -905,7 +909,17 @@
 			var all = listed.every( function ( channel ) {
 				return next.indexOf( channel.public_id ) !== -1;
 			} );
-			props.onChange( withControl( controls, 'channels', all ? { mode: 'inherit' } : { mode: 'override', channel_public_ids: next } ) );
+			// Once a post restricts its channels, it keeps the restriction until the writer resets it.
+			// Ticking every visible channel must not silently allow channels that are switched off now.
+			if ( all && channels.mode !== 'override' ) {
+				props.onChange( withControl( controls, 'channels', { mode: 'inherit' } ) );
+				return;
+			}
+			props.onChange( withControl( controls, 'channels', { mode: 'override', channel_public_ids: next } ) );
+		}
+
+		function resetChannels() {
+			props.onChange( withControl( controls, 'channels', { mode: 'inherit' } ) );
 		}
 
 		function setScheduleMode( mode ) {
@@ -1020,7 +1034,8 @@
 							el( ChannelName, { channel: channel } )
 						);
 					} ),
-					el( 'p', { className: 'pq-ed-help' }, __( 'Untick a channel to leave it out for this post.', 'pressqueue' ) )
+					el( 'p', { className: 'pq-ed-help' }, __( 'Untick a channel to leave it out for this post.', 'pressqueue' ) ),
+					channels.mode === 'override' ? el( Button, { variant: 'link', onClick: resetChannels, disabled: disabled }, __( 'Use the channels from the rule again', 'pressqueue' ) ) : null
 				) : null,
 				el( SelectControl, {
 					label: __( 'Timing', 'pressqueue' ),

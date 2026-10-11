@@ -215,6 +215,67 @@ final class PostControlAuthorizationTest extends TestCase {
 		);
 	}
 
+	public function test_share_form_keeps_a_stored_restriction_until_it_is_reset(): void {
+		$channel_a = '01M4GEP5AENBCT7C65XXZATDTQ';
+		$channel_b = '01M4GEP5AG08N89H8610KY62BP';
+		$current   = PostControlMetadata::normalize_bundle(
+			array_merge(
+				PostControlMetadata::default_bundle(),
+				array(
+					'channels' => array(
+						'mode'               => 'override',
+						'channel_public_ids' => array( $channel_a ),
+					),
+				)
+			)
+		);
+
+		// Channel B is switched off, so the form only lists A, ticked. Saving must not widen the restriction.
+		$unchanged = PostControlsController::bundle_from_share_form(
+			array(
+				'pressqueue_share'              => '1',
+				'pressqueue_channel_listed'     => array( $channel_a ),
+				'pressqueue_channel_public_ids' => array( $channel_a ),
+			),
+			$current
+		);
+		self::assertSame( 'override', $unchanged['channels']['mode'] );
+		self::assertSame( array( $channel_a ), $unchanged['channels']['channel_public_ids'] );
+
+		// A stored channel the form did not list survives a save that changes the listed ones.
+		$stored_both = PostControlMetadata::normalize_bundle(
+			array_merge(
+				PostControlMetadata::default_bundle(),
+				array(
+					'channels' => array(
+						'mode'               => 'override',
+						'channel_public_ids' => array( $channel_a, $channel_b ),
+					),
+				)
+			)
+		);
+		$partly      = PostControlsController::bundle_from_share_form(
+			array(
+				'pressqueue_share'              => '1',
+				'pressqueue_channel_listed'     => array( $channel_a ),
+				'pressqueue_channel_public_ids' => array(),
+			),
+			$stored_both
+		);
+		self::assertSame( array( $channel_b ), $partly['channels']['channel_public_ids'] );
+
+		$reset = PostControlsController::bundle_from_share_form(
+			array(
+				'pressqueue_share'              => '1',
+				'pressqueue_channel_listed'     => array( $channel_a ),
+				'pressqueue_channel_public_ids' => array( $channel_a ),
+				'pressqueue_channel_reset'      => '1',
+			),
+			$current
+		);
+		self::assertSame( array( 'mode' => 'inherit' ), $reset['channels'] );
+	}
+
 	public function test_share_form_maps_message_timing_and_images(): void {
 		$current = PostControlMetadata::default_bundle();
 		$bundle  = PostControlsController::bundle_from_share_form(
