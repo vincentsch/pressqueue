@@ -1,0 +1,87 @@
+/*
+ * PressQueue Settings > Data and privacy tab.
+ *
+ * Builds on admin.css. Every rule is scoped to .pq-admin.
+ */
+
+.pq-admin .pq-privacy-status {
+	margin-bottom: 16px;
+}
+
+.pq-admin .pq-privacy .pq-section > h2 {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.pq-admin .pq-privacy .pq-section > h3 {
+	margin: 0;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.pq-admin .pq-privacy .pq-section > .pq-sub,
+.pq-admin .pq-privacy .pq-section > p {
+	max-width: 75ch;
+	margin: 0;
+}
+
+.pq-admin .pq-privacy-switch,
+.pq-admin .pq-privacy-ack {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	max-width: 75ch;
+}
+
+.pq-admin .pq-privacy-switch {
+	font-weight: 600;
+}
+
+.pq-admin .pq-privacy-switch input,
+.pq-admin .pq-privacy-ack input {
+	margin-top: 2px;
+}
+
+.pq-admin .pq-privacy-ack {
+	padding: 10px 12px;
+	border: 1px solid #f2d7a6;
+	border-radius: 6px;
+	background: var(--pq-warn-soft);
+}
+
+.pq-admin .pq-privacy-days {
+	display: grid;
+	gap: 0;
+}
+
+.pq-admin .pq-privacy-unit {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.pq-admin .pq-privacy-unit input.pq-field {
+	max-width: 120px;
+}
+
+.pq-admin .pq-privacy-explain {
+	max-width: 75ch;
+}
+
+.pq-admin .pq-privacy-cleanup {
+	background: var(--pq-subtle);
+	border-radius: 0 0 var(--pq-radius) var(--pq-radius);
+}
+
+/* Show acknowledgments only when the box they confirm is ticked. Browsers without :has() always show them. */
+
+.pq-admin .pq-privacy-retention:has(#pq-retention-enabled:not(:checked)) .pq-privacy-ack,
+.pq-admin .pq-privacy-uninstall:has(#pq-delete-on-uninstall:not(:checked)) .pq-privacy-ack,
+.pq-admin .pq-privacy-export:has(#pq-export-rendered:not(:checked)) .pq-privacy-export-ack {
+	display: none;
+}
+
+.pq-admin .pq-privacy .pq-section > .pq-callout {
+	max-width: 75ch;
+}

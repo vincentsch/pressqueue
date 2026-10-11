@@ -1,0 +1,277 @@
+/*
+ * PressQueue "Share old posts" screen.
+ *
+ * Builds on admin.css. Every rule is scoped to .pq-admin .pq-batch.
+ */
+
+/* Step 1 sits inside its form, so the shared section divider needs help. */
+.pq-admin .pq-batch-main > form + .pq-section {
+	border-top: 1px solid var(--pq-line-soft);
+}
+
+/* Keep text fields, dates and selects the same height. */
+.pq-admin .pq-batch input.pq-field:not([type="checkbox"]):not([type="radio"]),
+.pq-admin .pq-batch select.pq-field {
+	height: 40px;
+	min-height: 40px;
+	padding-top: 0;
+	padding-bottom: 0;
+	line-height: normal;
+}
+
+.pq-admin .pq-batch-step > h2 {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.pq-admin .pq-batch-step > h2 small {
+	color: var(--pq-muted);
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.pq-admin .pq-batch-step .pq-step-dot {
+	width: 22px;
+	height: 22px;
+	border-color: var(--pq-text);
+	color: var(--pq-text);
+	font-size: 11px;
+}
+
+.pq-admin .pq-batch .pq-choice--off {
+	background: var(--pq-subtle);
+	cursor: not-allowed;
+}
+
+.pq-admin .pq-batch .pq-choice--off b {
+	color: var(--pq-muted);
+}
+
+.pq-admin .pq-batch .pq-batch-warn {
+	color: var(--pq-warn);
+	font-weight: 500;
+}
+
+.pq-admin .pq-batch .pq-help + .pq-help {
+	margin-top: 0;
+}
+
+.pq-admin .pq-batch-unit {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	white-space: nowrap;
+}
+
+.pq-admin .pq-batch-unit input.pq-field {
+	max-width: 110px;
+}
+
+.pq-admin .pq-batch-repost {
+	display: grid;
+	gap: 0;
+	padding: 12px 14px;
+	border-radius: 6px;
+	background: var(--pq-subtle);
+}
+
+.pq-admin .pq-batch-repost .pq-label {
+	margin-bottom: 6px;
+}
+
+/* Parts that only apply to one batch type or timing. Browsers without :has() show all of them. */
+
+.pq-admin .pq-batch:has(input[name="batch_type"][value="bulk"]:checked) .pq-only-repost,
+.pq-admin .pq-batch:has(input[name="batch_type"][value="repost"]:checked) .pq-only-bulk {
+	display: none;
+}
+
+.pq-admin .pq-batch-stagger {
+	display: grid;
+	gap: 0;
+	margin: -2px 0 4px 26px;
+	padding: 12px 14px;
+	border-left: 2px solid var(--pq-line);
+}
+
+.pq-admin .pq-batch:has(input[name="timing"][value="staggered_explicit_time"]:not(:checked)) .pq-batch-stagger {
+	display: none;
+}
+
+.pq-admin .pq-batch-stagger .pq-field-row {
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	max-width: 620px;
+}
+
+/* Review list */
+
+.pq-admin .pq-batch-placeholder {
+	max-width: 70ch;
+	margin: 0;
+}
+
+.pq-admin ul.pq-batch-review {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pq-admin ul.pq-batch-review > li.pq-batch-post {
+	display: grid;
+	grid-template-columns: 20px minmax(0, 1fr);
+	gap: 10px;
+	margin: 0;
+	padding: 12px 0;
+	border-top: 1px solid var(--pq-line-soft);
+}
+
+.pq-admin ul.pq-batch-review > li.pq-batch-post:first-child {
+	border-top: 0;
+	padding-top: 2px;
+}
+
+.pq-admin ul.pq-batch-review--detail > li.pq-batch-post {
+	grid-template-columns: minmax(0, 1fr);
+	padding: 14px 22px;
+}
+
+.pq-admin ul.pq-batch-review--detail > li.pq-batch-post:first-child {
+	padding-top: 14px;
+	border-top: 1px solid var(--pq-line-soft);
+}
+
+.pq-admin .pq-batch-mark {
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.pq-admin .pq-batch-post-body {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+}
+
+.pq-admin .pq-batch-post-title {
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+.pq-admin .pq-batch-channels {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 14px;
+}
+
+.pq-admin ul.pq-batch-skips,
+.pq-admin ul.pq-batch-lines {
+	display: grid;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pq-admin ul.pq-batch-skips li,
+.pq-admin ul.pq-batch-lines li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 12px;
+	margin: 0;
+}
+
+.pq-admin .pq-batch-names {
+	font-size: 13px;
+}
+
+.pq-admin details.pq-batch-skipped {
+	padding-top: 10px;
+	border-top: 1px solid var(--pq-line-soft);
+}
+
+.pq-admin ul.pq-batch-lines li .pq-channel-name {
+	min-width: 150px;
+}
+
+.pq-admin .pq-batch-post-body details.pq-more > summary {
+	font-weight: 500;
+}
+
+/* Actions */
+
+.pq-admin .pq-batch-actions {
+	position: relative;
+}
+
+.pq-admin .pq-batch-actions .pq-batch-reset {
+	margin-left: auto;
+}
+
+.pq-admin .pq-batch-actions .button[disabled] {
+	cursor: not-allowed;
+}
+
+.pq-admin .pq-batch-stale {
+	flex-basis: 100%;
+	margin: 0;
+	color: var(--pq-warn);
+	font-weight: 500;
+}
+
+.pq-admin .pq-batch-stale[hidden] {
+	display: none;
+}
+
+.pq-admin .pq-batch-runtime {
+	margin-bottom: 16px;
+}
+
+.pq-admin .pq-batch-side p {
+	margin: 0;
+}
+
+.pq-admin .pq-batch-side form.pq-inline {
+	display: inline-flex;
+}
+
+.pq-admin dl.pq-batch-tech {
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr);
+	gap: 4px 12px;
+	margin: 0;
+}
+
+.pq-admin dl.pq-batch-tech dt {
+	color: var(--pq-muted);
+}
+
+.pq-admin dl.pq-batch-tech dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.pq-admin table.pq-batch-table td:first-child {
+	min-width: 180px;
+}
+
+@media (max-width: 782px) {
+	.pq-admin .pq-batch-stagger {
+		margin-left: 0;
+	}
+
+	.pq-admin ul.pq-batch-review--detail > li.pq-batch-post {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+
+	.pq-admin .pq-batch-actions .pq-batch-reset {
+		margin-left: 0;
+	}
+}
