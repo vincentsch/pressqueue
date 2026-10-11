@@ -96,7 +96,7 @@ final class DeliveryActionController {
 	 */
 	public static function handle_cancel_delivery(): void {
 		self::mutation_boundary( 'pressqueue_cancel_delivery' );
-		self::require_confirmation();
+		self::require_confirmation( 'delivery_confirm_cancel' );
 
 		$delivery_public_id = '';
 		try {
@@ -153,7 +153,7 @@ final class DeliveryActionController {
 		}
 
 		AdminPostBoundary::check( 'pressqueue_reconcile_delivery_' . $outcome, Capabilities::OPERATE_DELIVERIES, __( 'You are not allowed to operate PressQueue deliveries.', 'pressqueue' ) );
-		self::require_confirmation();
+		self::require_confirmation( 'delivery_confirm_reconcile' );
 
 		$delivery_public_id = '';
 		try {
@@ -190,7 +190,9 @@ final class DeliveryActionController {
 	 */
 	public static function handle_cancel_held_deliveries(): void {
 		self::mutation_boundary( 'pressqueue_cancel_held_deliveries' );
-		self::require_confirmation();
+		if ( ! self::has_confirmation() ) {
+			self::redirect_activity( array( 'pressqueue_message' => 'held_confirm_cancel' ) );
+		}
 
 		self::redirect_activity( self::cancel_held_batch( self::actor_user_id() ) );
 	}
@@ -370,15 +372,31 @@ final class DeliveryActionController {
 	}
 
 	/**
-	 * Require explicit local-effect confirmation.
+	 * Send the person back to the share with a friendly notice when the box was not ticked.
+	 *
+	 * Nothing changes without the tick. Callers check the nonce and capability first.
+	 *
+	 * @param string $message Notice key shown after the redirect.
 	 */
-	private static function require_confirmation(): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is checked before this method is called.
-		$confirmed = isset( $_POST['confirm_local_effect'] ) ? sanitize_text_field( wp_unslash( $_POST['confirm_local_effect'] ) ) : '';
-
-		if ( '1' !== $confirmed ) {
-			wp_die( esc_html__( 'Delivery action confirmation is required.', 'pressqueue' ) );
+	private static function require_confirmation( string $message ): void {
+		if ( self::has_confirmation() ) {
+			return;
 		}
+
+		$delivery_public_id = self::post_action_text( 'delivery_public_id' );
+		self::redirect_detail( PublicIds::is_valid( $delivery_public_id ) ? $delivery_public_id : '', $message );
+	}
+
+	/**
+	 * Check whether the person ticked the confirmation box.
+	 *
+	 * @return bool
+	 */
+	private static function has_confirmation(): bool {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce is checked before this method is called; the value is only compared with a fixed string.
+		$confirmed = isset( $_POST['confirm_local_effect'] ) ? wp_unslash( $_POST['confirm_local_effect'] ) : '';
+
+		return is_string( $confirmed ) && '1' === trim( $confirmed );
 	}
 
 	/**

@@ -95,6 +95,14 @@ final class BatchPrivacyAdminIntegrationTest extends WP_UnitTestCase {
 		self::assertStringContainsString( 'Share again', $html );
 		self::assertStringContainsString( 'Taking part: Archive sharing.', $html );
 		self::assertStringContainsString( 'No rule is set up to share posts again yet.', $html );
+		self::assertStringContainsString( 'Tick &quot;I pick shared posts to share again&quot; in a rule under <a href="' . esc_url( admin_url( 'admin.php?page=pressqueue-rules' ) ) . '">Rules</a>.', $html );
+		self::assertStringContainsString( 'Only rules with &quot;I pick old posts in Share old posts&quot; ticked take part.', $html );
+		self::assertStringNotContainsString( 'Old posts are picked', $html );
+		self::assertStringNotContainsString( 'Shared posts are picked', $html );
+		self::assertStringNotContainsString( 'never-share', $html );
+		self::assertStringContainsString( 'aria-labelledby="pq-batch-max-label pq-batch-max-unit"', $html );
+		self::assertStringContainsString( 'aria-labelledby="pq-batch-days-label pq-batch-days-unit"', $html );
+		self::assertStringNotContainsString( '<span aria-hidden="true">posts</span>', $html );
 		self::assertStringContainsString( 'Before you start', $html );
 		self::assertStringContainsString( 'name="action" value="pressqueue_preview_batch"', $html );
 		self::assertStringNotContainsString( 'Filters JSON', $html );
@@ -107,6 +115,7 @@ final class BatchPrivacyAdminIntegrationTest extends WP_UnitTestCase {
 		$html = $this->renderBatches();
 
 		self::assertStringContainsString( 'No rule takes part yet.', $html );
+		self::assertStringContainsString( 'tick &quot;I pick old posts in Share old posts&quot; or &quot;I pick shared posts to share again&quot; under When', $html );
 		self::assertStringContainsString( 'page=pressqueue-rules', $html );
 		self::assertMatchesRegularExpression( '/<button type="submit" form="pq-batch-form" class="button button-primary" disabled="disabled">Preview posts</', $html );
 	}
@@ -171,7 +180,8 @@ final class BatchPrivacyAdminIntegrationTest extends WP_UnitTestCase {
 		self::assertStringContainsString( '1 post matches, 1 share in total, 1 post skipped', $html );
 		self::assertStringContainsString( 'Old recipe worth sharing', $html );
 		self::assertStringContainsString( 'Private oven notes', $html );
-		self::assertStringContainsString( 'The never-share rule &quot;Keep private notes private&quot; matches this post.', $html );
+		self::assertStringContainsString( 'The &quot;never share&quot; rule &quot;Keep private notes private&quot; matches this post.', $html );
+		self::assertStringNotContainsString( 'never-share', $html );
 		self::assertStringNotContainsString( 'Outside the dates', $html );
 		self::assertStringContainsString( '>Share 1 post</button>', $html );
 		self::assertStringContainsString( 'name="action" value="pressqueue_confirm_batch"', $html );
@@ -214,6 +224,72 @@ final class BatchPrivacyAdminIntegrationTest extends WP_UnitTestCase {
 		self::assertStringContainsString( 'View in Activity', $done );
 		self::assertStringContainsString( '1 share added.', $done );
 		self::assertStringNotContainsString( 'name="action" value="pressqueue_cancel_batch"', $done );
+	}
+
+	public function test_single_share_timings_explain_a_batch_with_several_shares(): void {
+		$destination = $this->enabledDestination();
+		$this->createEnabledRule( $this->includeRuleInput( $destination, 'Archive sharing' ) );
+		$this->post( 'Old recipe worth sharing', '2001-06-10 10:00:00' );
+		$this->post( 'Rye starter guide', '2001-06-12 10:00:00' );
+
+		$batch = $this->preview(
+			array(
+				'published_after'  => '2001-01-01',
+				'published_before' => '2001-06-30',
+				'timing'           => 'immediate',
+			)
+		);
+		$html  = $this->renderBatches( array( 'batch_public_id' => $batch->public_id ) );
+
+		self::assertStringContainsString( 'Post right away only works when the batch has one share. This batch has 2 shares. Pick another timing below', $html );
+		self::assertStringContainsString( '2 posts match, 2 shares in total', $html );
+		self::assertStringNotContainsString( 'No posts match', $html );
+		self::assertStringNotContainsString( 'This timing only works for a single share.', $html );
+		self::assertStringNotContainsString( 'name="action" value="pressqueue_confirm_batch"', $html );
+		self::assertStringContainsString( 'Fix the problem above, then update the preview.', $html );
+		self::assertMatchesRegularExpression( '/value="queue_next"\s+disabled=\'disabled\' data-pq-single-timing/', $html );
+		self::assertMatchesRegularExpression( '/value="immediate"\s+checked=\'checked\' data-pq-single-timing/', $html );
+		self::assertStringContainsString( 'Not available: this preview has 2 shares.', $html );
+		self::assertStringContainsString( 'Pick another timing: this preview has 2 shares.', $html );
+		self::assertStringContainsString( 'Shared once you pick another timing', $html );
+
+		$single = $this->preview(
+			array(
+				'published_after'  => '2001-06-11',
+				'published_before' => '2001-06-30',
+				'timing'           => 'immediate',
+			)
+		);
+		$one    = $this->renderBatches( array( 'batch_public_id' => $single->public_id ) );
+		self::assertStringContainsString( 'name="action" value="pressqueue_confirm_batch"', $one );
+		self::assertStringNotContainsString( 'data-pq-single-timing', $one );
+	}
+
+	public function test_draft_batches_do_not_promise_new_posts_to_followers(): void {
+		$destination = $this->enabledDestination();
+		$this->createEnabledRule( $this->includeRuleInput( $destination, 'Archive sharing' ) );
+		$this->post( 'Old recipe worth sharing', '2001-06-10 10:00:00' );
+		( new SettingsRepository() )->set_dry_run_enabled( false );
+
+		$drafts = $this->preview(
+			array(
+				'published_after'  => '2001-01-01',
+				'published_before' => '2001-06-30',
+				'timing'           => 'draft',
+			)
+		);
+		$html   = $this->renderBatches( array( 'batch_public_id' => $drafts->public_id ) );
+		self::assertStringContainsString( 'data-pq-confirm="Share 1 post? PressQueue sends 1 share to Buffer. They are saved as Buffer drafts. Nothing goes public until you schedule them in Buffer."', $html );
+		self::assertStringNotContainsString( 'Your followers see them as new posts.', $html );
+
+		$queue = $this->preview(
+			array(
+				'published_after'  => '2001-01-01',
+				'published_before' => '2001-06-30',
+				'timing'           => 'queue_end',
+			)
+		);
+		self::assertStringContainsString( 'They go to the end of your Buffer queue. Your followers see them as new posts.', $this->renderBatches( array( 'batch_public_id' => $queue->public_id ) ) );
 	}
 
 	public function test_unfinished_batch_blocks_the_same_post_in_a_second_preview(): void {

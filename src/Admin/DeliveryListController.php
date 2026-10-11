@@ -159,6 +159,18 @@ final class DeliveryListController {
 			return;
 		}
 
+		$confirm = array(
+			/* translators: %s: label of the checkbox, such as "I looked for this post in Buffer". */
+			'delivery_confirm_reconcile' => sprintf( __( 'Nothing was saved. Tick "%s", then click the button again.', 'pressqueue' ), DeliveryDetailController::reconciliation_confirmation() ),
+			'delivery_confirm_cancel'    => __( 'Nothing was cancelled. Tick the box to confirm, then click Cancel share again.', 'pressqueue' ),
+			'held_confirm_cancel'        => __( 'Nothing was cancelled. Tick the box to confirm, then click Cancel shares on hold again.', 'pressqueue' ),
+		);
+
+		if ( isset( $confirm[ $message ] ) ) {
+			Ui::notice( 'warning', $confirm[ $message ] );
+			return;
+		}
+
 		$messages = array(
 			'delivery_cancelled'            => __( 'Cancelled. It will not be sent.', 'pressqueue' ),
 			'delivery_resumed'              => __( 'Resumed. PressQueue will send it shortly.', 'pressqueue' ),
@@ -307,9 +319,9 @@ final class DeliveryListController {
 		echo '<h2>' . esc_html( sprintf( _n( '%d share is on hold', '%d shares are on hold', $held, 'pressqueue' ), $held ) ) . '</h2>';
 
 		if ( 'paused' === $mode ) {
-			echo '<p class="pq-sub">' . esc_html__( 'PressQueue is paused, so nothing is sent. Switch sharing back to Live, then resume these shares here.', 'pressqueue' ) . '</p>';
+			echo '<p class="pq-sub">' . esc_html__( 'PressQueue is paused, so nothing is sent. Resume sharing first, then resume these shares here.', 'pressqueue' ) . '</p>';
 		} elseif ( 'test' === $mode ) {
-			echo '<p class="pq-sub">' . esc_html__( 'PressQueue is in test mode, so these shares cannot be sent. Switch to Live first, then resume them here.', 'pressqueue' ) . '</p>';
+			echo '<p class="pq-sub">' . esc_html__( 'PressQueue is in test mode, so these shares cannot be sent. Go live first, then resume them here.', 'pressqueue' ) . '</p>';
 		} else {
 			echo '<p class="pq-sub">' . esc_html__( 'They were held while PressQueue was paused or because something changed. Resume them to send them to Buffer now, or cancel them.', 'pressqueue' ) . '</p>';
 			if ( $can_operate && $held > $batch ) {
@@ -321,7 +333,7 @@ final class DeliveryListController {
 
 		echo '<div class="pq-held-banner-actions">';
 		if ( 'live' !== $mode && current_user_can( Capabilities::MANAGE_SETTINGS ) ) {
-			echo '<a class="button" href="' . esc_url( Ui::url( Ui::PAGE_SETTINGS ) ) . '">' . esc_html__( 'Open Settings', 'pressqueue' ) . '</a>';
+			SettingsController::render_mode_button( 'live', 'paused' === $mode ? __( 'Resume sharing', 'pressqueue' ) : __( 'Go live', 'pressqueue' ), 'button button-primary', Ui::PAGE_ACTIVITY );
 		}
 
 		if ( $can_operate ) {
@@ -425,7 +437,7 @@ final class DeliveryListController {
 		echo '<option value="1" ' . selected( $request['due_retry'], '1', false ) . '>' . esc_html__( 'Retry due now', 'pressqueue' ) . '</option>';
 		echo '<option value="0" ' . selected( $request['due_retry'], '0', false ) . '>' . esc_html__( 'No retry due', 'pressqueue' ) . '</option>';
 		echo '</select></div>';
-		echo '<div><label class="pq-label" for="pq-activity-identifier">' . esc_html__( 'Exact ID', 'pressqueue' ) . '</label><input class="pq-field pq-mono" id="pq-activity-identifier" type="text" name="identifier" maxlength="191" value="' . esc_attr( $request['identifier'] ) . '" aria-describedby="pq-activity-identifier-help" /><p class="pq-help" id="pq-activity-identifier-help">' . esc_html__( 'A share ID, delivery key or Buffer post ID.', 'pressqueue' ) . '</p></div>';
+		echo '<div><label class="pq-label" for="pq-activity-identifier">' . esc_html__( 'Exact ID', 'pressqueue' ) . '</label><input class="pq-field pq-mono" id="pq-activity-identifier" type="text" name="identifier" maxlength="191" value="' . esc_attr( $request['identifier'] ) . '" aria-describedby="pq-activity-identifier-help" /><p class="pq-help" id="pq-activity-identifier-help">' . esc_html__( 'A share ID or Buffer post ID.', 'pressqueue' ) . '</p></div>';
 		echo '<div><label class="pq-label" for="pq-activity-limit">' . esc_html__( 'Rows per page', 'pressqueue' ) . '</label><input class="pq-field" id="pq-activity-limit" type="number" name="limit" min="1" max="' . esc_attr( (string) DeliveryQueryRepository::MAX_PAGE_SIZE ) . '" value="' . esc_attr( (string) $request['limit'] ) . '" /></div>';
 		echo '</div></details>';
 		echo '</form>';
@@ -609,19 +621,19 @@ final class DeliveryListController {
 	 */
 	public static function due_line( DeliveryRecord $delivery ): string {
 		if ( 'retrying' === $delivery->state && null !== $delivery->next_attempt_at ) {
-			/* translators: %s: time such as "11:05" or "Oct 12, 11:05". */
-			return sprintf( __( 'Next try %s', 'pressqueue' ), DeliveryExplainer::short_time( $delivery->next_attempt_at ) );
+			/* translators: %s: date and time such as "today, 11:05" or "Oct 12, 11:05". */
+			return sprintf( __( 'Next try: %s', 'pressqueue' ), DeliveryExplainer::short_time( $delivery->next_attempt_at ) );
 		}
 
 		if ( in_array( $delivery->state, array( 'proposed', 'queued', 'leased', 'held', 'dry_run' ), true ) && 'explicit_time' === $delivery->schedule_slot && null !== $delivery->scheduled_for_utc ) {
-			/* translators: %s: time such as "11:05" or "Oct 12, 11:05". */
+			/* translators: %s: date and time such as "today, 11:05" or "Oct 12, 11:05". */
 			return sprintf( __( 'Scheduled for %s', 'pressqueue' ), DeliveryExplainer::short_time( $delivery->scheduled_for_utc ) );
 		}
 
 		if ( 'accepted' === $delivery->state ) {
 			$due = self::receipt_due_at( $delivery );
 			if ( null !== $due && $due->getTimestamp() > time() ) {
-				/* translators: %s: time such as "11:05" or "Oct 12, 11:05". */
+				/* translators: %s: date and time such as "today, 11:05" or "Oct 12, 11:05". */
 				return sprintf( __( 'Buffer posts it %s', 'pressqueue' ), DeliveryExplainer::short_time( $due ) );
 			}
 		}

@@ -294,8 +294,10 @@ final class DeliveryDetailController {
 
 		if ( 'dry_run' === $delivery->state ) {
 			$title = __( 'Message that would have been sent', 'pressqueue' );
-		} elseif ( in_array( $delivery->state, array( 'accepted', 'ambiguous' ), true ) ) {
+		} elseif ( 'accepted' === $delivery->state ) {
 			$title = __( 'Message sent to Buffer', 'pressqueue' );
+		} elseif ( 'ambiguous' === $delivery->state || ( $delivery->attempt_count > 0 && in_array( $delivery->state, array( 'failed', 'retrying', 'cancelled' ), true ) ) ) {
+			$title = __( 'Message PressQueue tried to send', 'pressqueue' );
 		} else {
 			$title = __( 'Message', 'pressqueue' );
 		}
@@ -359,9 +361,10 @@ final class DeliveryDetailController {
 		}
 
 		if ( 'failed' === $delivery->state ) {
-			$hint = DeliveryExplainer::fix_hint( $delivery );
-			if ( '' !== $hint ) {
-				echo '<p class="pq-muted">' . esc_html( $hint ) . '</p>';
+			$steps = DeliveryExplainer::failure_steps( $delivery, self::can_retry( $delivery ) );
+			if ( array() !== $steps ) {
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- steps_html returns escaped markup.
+				echo '<p class="pq-next-steps">' . DeliveryExplainer::steps_html( $steps ) . '</p>';
 			}
 		}
 
@@ -484,14 +487,10 @@ final class DeliveryDetailController {
 			echo '</div>';
 		}
 
-		if ( 'failed' === $delivery->state ) {
+		if ( 'failed' === $delivery->state && self::can_retry( $delivery ) ) {
 			$has_action = true;
 			echo '<div class="pq-share-action">';
-			if ( self::can_retry( $delivery ) ) {
-				self::render_retry_action( $delivery );
-			} else {
-				echo '<p class="pq-help">' . esc_html__( 'PressQueue cannot retry this share automatically or by hand. Cancel it to clear it from the list.', 'pressqueue' ) . '</p>';
-			}
+			self::render_retry_action( $delivery );
 			echo '</div>';
 		}
 
@@ -717,16 +716,16 @@ final class DeliveryDetailController {
 	 * @return string
 	 */
 	private static function cancel_confirmation(): string {
-		return __( 'Cancel this share in PressQueue. It will not be sent. PressQueue will not contact Buffer and will not remove any remote post.', 'pressqueue' );
+		return __( 'Yes, cancel this share. PressQueue will not send it.', 'pressqueue' );
 	}
 
 	/**
-	 * Return reconciliation confirmation copy.
+	 * Return the one acknowledgement each "Check Buffer" choice asks for.
 	 *
 	 * @return string
 	 */
-	private static function reconciliation_confirmation(): string {
-		return __( 'Record local evidence only. PressQueue will not contact Buffer and will not remove any remote post.', 'pressqueue' );
+	public static function reconciliation_confirmation(): string {
+		return __( 'I looked for this post in Buffer', 'pressqueue' );
 	}
 
 	/**

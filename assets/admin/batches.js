@@ -2,8 +2,9 @@
  * Progressive enhancements for the "Share old posts" screen.
  *
  * The screen works without this file. It only keeps the share button from
- * confirming an outdated preview after the picks change, and refreshes a
- * batch page while PressQueue is still adding its shares.
+ * confirming an outdated preview after the picks change, offers the
+ * single-share timings again once the picks change, and refreshes a batch
+ * page while PressQueue is still adding its shares.
  */
 ( function () {
 	'use strict';
@@ -18,8 +19,52 @@
 		}
 	}
 
+	/*
+	 * Post right away and Next free queue slot are switched off while the
+	 * preview has more than one share. Once other picks change, the next
+	 * preview may have a single share, so offer them again.
+	 */
+	function reopenSingleShareTimings( form ) {
+		var inputs = document.querySelectorAll( 'input[data-pq-single-timing]' );
+		if ( ! inputs.length ) {
+			return;
+		}
+
+		function onChange( event ) {
+			var changed = event.target;
+			var i;
+			if ( ! changed || changed.form !== form ) {
+				return;
+			}
+
+			for ( i = 0; i < inputs.length; i++ ) {
+				var input = inputs[ i ];
+				var label = input.closest ? input.closest( 'label' ) : null;
+				var note = label ? label.querySelector( '[data-pq-single-note]' ) : null;
+
+				if ( changed.name !== 'timing' ) {
+					input.disabled = false;
+					if ( label ) {
+						label.classList.remove( 'pq-batch-timing-off' );
+					}
+				}
+
+				if ( note && ! input.disabled && ! input.checked ) {
+					note.hidden = true;
+				}
+			}
+		}
+
+		document.addEventListener( 'change', onChange );
+		document.addEventListener( 'input', onChange );
+	}
+
 	function watchForChanges( root ) {
 		var form = document.getElementById( 'pq-batch-form' );
+		if ( form ) {
+			reopenSingleShareTimings( form );
+		}
+
 		var confirmButton = root.querySelector( '[data-pq-batch-confirm]' );
 		if ( ! form || ! confirmButton ) {
 			return;

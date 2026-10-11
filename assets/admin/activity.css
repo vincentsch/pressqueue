@@ -442,7 +442,12 @@
 }
 
 .pq-admin .pq-resolve-form .pq-confirm-check {
-	font-size: 12px;
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.pq-admin .pq-share-status .pq-next-steps {
+	line-height: 1.5;
 }
 
 /* Technical details */
@@ -537,8 +542,13 @@
 	min-width: 0;
 }
 
-.pq-admin .pq-decision-title {
+.pq-admin .pq-decision-title,
+.pq-admin h2.pq-decision-title {
+	margin: 0;
+	padding: 0;
+	font-size: inherit;
 	font-weight: 600;
+	line-height: 1.4;
 }
 
 .pq-admin .pq-decision-title a {
@@ -561,10 +571,30 @@
 .pq-admin .pq-decision-status {
 	padding: 0 7px;
 	border-radius: 4px;
-	background: var(--pq-warn-soft);
-	color: var(--pq-warn);
+	background: var(--pq-idle-soft);
+	color: var(--pq-idle);
 	font-size: 12px;
 	line-height: 20px;
+}
+
+.pq-admin .pq-decision-status--bad {
+	background: var(--pq-bad-soft);
+	color: var(--pq-bad);
+}
+
+.pq-admin .pq-decision-status--warn {
+	background: var(--pq-warn-soft);
+	color: var(--pq-warn);
+}
+
+.pq-admin .pq-decision-status--ok {
+	background: var(--pq-ok-soft);
+	color: var(--pq-ok);
+}
+
+.pq-admin .pq-decision-status--info {
+	background: var(--pq-accent-soft);
+	color: color-mix(in srgb, var(--pq-accent) 62%, #000);
 }
 
 .pq-admin .pq-decision-meta {

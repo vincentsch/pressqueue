@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Admin;
 
+use PressQueue\Security\Capabilities;
 use PressQueue\Storage\Record\DecisionRecord;
 use PressQueue\Storage\Record\DeliveryEventRecord;
 use PressQueue\Storage\Record\DeliveryRecord;
@@ -69,12 +70,6 @@ final class DeliveryExplainer {
 					'text' => self::hold_sentence( $hold_reason ),
 					'tone' => 'warn',
 				);
-
-			case 'dry_run':
-				return array(
-					'text' => __( 'Recorded in test mode. Nothing was sent.', 'pressqueue' ),
-					'tone' => 'idle',
-				);
 		}
 
 		return array(
@@ -95,8 +90,8 @@ final class DeliveryExplainer {
 		if ( 'retrying' === $delivery->state ) {
 			$sentence = self::retry_reason( $error_class );
 			if ( null !== $delivery->next_attempt_at ) {
-				/* translators: 1: why the last try failed, 2: time of the next try such as "11:05" or "Oct 12, 11:05". */
-				return sprintf( __( '%1$s Next try at %2$s.', 'pressqueue' ), $sentence, self::short_time( $delivery->next_attempt_at ) );
+				/* translators: 1: why the last try failed, 2: time of the next try such as "today, 11:05" or "Oct 12, 11:05". */
+				return sprintf( __( '%1$s Next try: %2$s.', 'pressqueue' ), $sentence, self::short_time( $delivery->next_attempt_at ) );
 			}
 
 			return $sentence . ' ' . __( 'PressQueue will try again.', 'pressqueue' );
@@ -110,31 +105,111 @@ final class DeliveryExplainer {
 	}
 
 	/**
-	 * Return a short, plain fix for a failed share, or an empty string.
+	 * Return what to do about a failed share, as sentences with optional links.
+	 *
+	 * A step whose page is set has one %s in its text, which stands for a link to
+	 * that admin page named by its label. Use steps_html() to show them.
 	 *
 	 * @param DeliveryRecord $delivery Delivery.
-	 * @return string
+	 * @param bool           $can_retry Whether the share can be retried by hand.
+	 * @return array<int,array{text:string,page:string,label:string}>
 	 */
-	public static function fix_hint( DeliveryRecord $delivery ): string {
-		$error_class = (string) ( $delivery->error_class ?? '' );
+	public static function failure_steps( DeliveryRecord $delivery, bool $can_retry ): array {
+		$steps = array();
+		$fix   = self::fix_step( (string) ( $delivery->error_class ?? '' ) );
 
+		if ( null !== $fix ) {
+			$steps[] = $fix;
+		}
+
+		if ( $can_retry ) {
+			if ( null !== $fix ) {
+				$steps[] = array(
+					'label' => '',
+					'page'  => '',
+					'text'  => __( 'Then retry this share.', 'pressqueue' ),
+				);
+			}
+
+			return $steps;
+		}
+
+		$steps[] = array(
+			'label' => __( 'Share old posts', 'pressqueue' ),
+			'page'  => Ui::PAGE_BATCHES,
+			/* translators: %s: link to the Share old posts screen. */
+			'text'  => __( 'This share cannot be sent again. Cancel it, then share the post from %s.', 'pressqueue' ),
+		);
+
+		return $steps;
+	}
+
+	/**
+	 * Render steps as escaped markup, linking pages the viewer may open.
+	 *
+	 * @param array<int,array{text:string,page:string,label:string}> $steps Steps.
+	 * @return string Escaped markup.
+	 */
+	public static function steps_html( array $steps ): string {
+		$pages = array(
+			Ui::PAGE_BATCHES  => Capabilities::OPERATE_BATCHES,
+			Ui::PAGE_CHANNELS => Capabilities::MANAGE_CONNECTIONS,
+			Ui::PAGE_RULES    => Capabilities::MANAGE_RULES,
+		);
+		$parts = array();
+
+		foreach ( $steps as $step ) {
+			if ( '' === $step['page'] ) {
+				$parts[] = esc_html( $step['text'] );
+				continue;
+			}
+
+			$label = esc_html( $step['label'] );
+			if ( isset( $pages[ $step['page'] ] ) && current_user_can( $pages[ $step['page'] ] ) ) {
+				$label = '<a href="' . esc_url( Ui::url( $step['page'] ) ) . '">' . $label . '</a>';
+			}
+
+			$parts[] = sprintf( esc_html( $step['text'] ), $label );
+		}
+
+		return implode( ' ', $parts );
+	}
+
+	/**
+	 * Return the fix for an error class, or null when there is nothing to fix first.
+	 *
+	 * @param string $error_class Error class.
+	 * @return array{text:string,page:string,label:string}|null
+	 */
+	private static function fix_step( string $error_class ): ?array {
 		if ( 'invalid_credential' === $error_class || 'credential_unavailable' === $error_class ) {
-			return __( 'Add a new Buffer API key under Channels, then retry.', 'pressqueue' );
+			return array(
+				'label' => __( 'Channels', 'pressqueue' ),
+				'page'  => Ui::PAGE_CHANNELS,
+				/* translators: %s: link to the Channels screen. */
+				'text'  => __( 'Add a new Buffer API key under %s.', 'pressqueue' ),
+			);
 		}
 
 		if ( in_array( $error_class, array( 'forbidden', 'not_found', 'capability_mismatch', 'destination_binding_failed' ), true ) ) {
-			return __( 'Check that the channel is still connected in Buffer, then sync channels under Channels.', 'pressqueue' );
+			return array(
+				'label' => __( 'Channels', 'pressqueue' ),
+				'page'  => Ui::PAGE_CHANNELS,
+				/* translators: %s: link to the Channels screen. */
+				'text'  => __( 'Check that the channel is still connected in Buffer, then refresh the channels under %s.', 'pressqueue' ),
+			);
 		}
 
 		if ( in_array( $error_class, array( 'invalid_input', 'mutation_error' ), true ) ) {
-			return __( 'Check the message and image in the rule. Buffer may not accept this kind of post for this channel.', 'pressqueue' );
+			return array(
+				'label' => __( 'Rules', 'pressqueue' ),
+				'page'  => Ui::PAGE_RULES,
+				/* translators: %s: link to the Rules screen. */
+				'text'  => __( 'Check the message and image of the rule under %s. Buffer may not accept this kind of post for this channel.', 'pressqueue' ),
+			);
 		}
 
-		if ( in_array( $error_class, self::LEGACY_CLASSES, true ) ) {
-			return __( 'Share the post again to create a new share.', 'pressqueue' );
-		}
-
-		return '';
+		return null;
 	}
 
 	/**
@@ -156,7 +231,7 @@ final class DeliveryExplainer {
 			'post_excluded'            => __( 'Held because sharing was switched off for this post.', 'pressqueue' ),
 			'post_destination_removed' => __( 'Held because the post settings no longer include this channel.', 'pressqueue' ),
 			'rule_conditions_changed'  => __( 'Held because the post no longer matches the rule.', 'pressqueue' ),
-			'current_exclusion_policy' => __( 'Held because a never share rule now matches this post.', 'pressqueue' ),
+			'current_exclusion_policy' => __( 'Held because a "never share" rule now matches this post.', 'pressqueue' ),
 			'credential_unavailable'   => __( 'Held because PressQueue could not read the saved Buffer key.', 'pressqueue' ),
 		);
 
@@ -196,7 +271,7 @@ final class DeliveryExplainer {
 			'post_excluded'                   => __( 'Sharing is switched off for this post.', 'pressqueue' ),
 			'post_destination_removed'        => __( 'The post settings no longer include this channel.', 'pressqueue' ),
 			'rule_conditions_changed'         => __( 'The post no longer matches the rule.', 'pressqueue' ),
-			'current_exclusion_policy'        => __( 'A never share rule now matches this post.', 'pressqueue' ),
+			'current_exclusion_policy'        => __( 'A "never share" rule now matches this post.', 'pressqueue' ),
 		);
 
 		$normalized = self::normalize_block_code( $code );
@@ -253,7 +328,7 @@ final class DeliveryExplainer {
 		}
 
 		if ( 'Delivery action confirmation is required.' === $detail ) {
-			return __( 'Tick the confirmation box first.', 'pressqueue' );
+			return __( 'Tick the box first, then click the button again.', 'pressqueue' );
 		}
 
 		return \PressQueue\Security\SafeOperatorError::notice_detail( $detail );
@@ -365,7 +440,7 @@ final class DeliveryExplainer {
 	}
 
 	/**
-	 * Return a short local time: only the time for today, otherwise date and time.
+	 * Return a short local date and time such as "today, 9:00 am" or "Oct 21, 9:00 am".
 	 *
 	 * @param \DateTimeInterface $time UTC time.
 	 * @return string
@@ -373,12 +448,24 @@ final class DeliveryExplainer {
 	public static function short_time( \DateTimeInterface $time ): string {
 		$timestamp   = $time->getTimestamp();
 		$time_format = (string) get_option( 'time_format', 'H:i' );
-		$today       = wp_date( 'Y-m-d' );
-		$day         = wp_date( 'Y-m-d', $timestamp );
-		$format      = $today === $day ? $time_format : 'M j, ' . $time_format;
-		$value       = wp_date( $format, $timestamp );
+		$clock       = wp_date( $time_format, $timestamp );
+		$clock       = is_string( $clock ) ? $clock : '';
 
-		return is_string( $value ) ? $value : '';
+		if ( wp_date( 'Y-m-d' ) === wp_date( 'Y-m-d', $timestamp ) ) {
+			/* translators: %s: time of day such as "9:00 am". */
+			return sprintf( __( 'today, %s', 'pressqueue' ), $clock );
+		}
+
+		/* translators: short date format for dates in the current year, see https://www.php.net/manual/datetime.format.php */
+		$date_format = __( 'M j', 'pressqueue' );
+		if ( wp_date( 'Y' ) !== wp_date( 'Y', $timestamp ) ) {
+			/* translators: short date format with the year, see https://www.php.net/manual/datetime.format.php */
+			$date_format = __( 'M j, Y', 'pressqueue' );
+		}
+		$date = wp_date( $date_format, $timestamp );
+
+		/* translators: 1: short date such as "Oct 21", 2: time of day such as "9:00 am". */
+		return sprintf( _x( '%1$s, %2$s', 'short date and time', 'pressqueue' ), is_string( $date ) ? $date : '', $clock );
 	}
 
 	/**
@@ -448,8 +535,8 @@ final class DeliveryExplainer {
 			case 'retry_scheduled':
 				$text = self::retry_reason( $classification );
 				if ( $is_last_retry && 'retrying' === $delivery->state && null !== $delivery->next_attempt_at ) {
-					/* translators: 1: why the try failed, 2: time of the next try. */
-					$text = sprintf( __( '%1$s Next try at %2$s.', 'pressqueue' ), $text, self::short_time( $delivery->next_attempt_at ) );
+					/* translators: 1: why the try failed, 2: time of the next try such as "today, 11:05" or "Oct 12, 11:05". */
+					$text = sprintf( __( '%1$s Next try: %2$s.', 'pressqueue' ), $text, self::short_time( $delivery->next_attempt_at ) );
 				}
 				$tone = 'warn';
 				break;

@@ -23,12 +23,20 @@ use PressQueue\Storage\ValidationException;
 
 /**
  * Groups runtime decisions per post event and explains each one in a sentence.
+ *
+ * A batch from Share old posts records one event per channel. Those events are
+ * grouped by post and batch, so each post shows up once per batch.
  */
 final class DecisionsController {
 	/**
-	 * Post events per page.
+	 * Rows per page.
 	 */
 	private const PAGE_SIZE = 20;
+
+	/**
+	 * Prefix of row keys that group one post's events in one batch.
+	 */
+	private const BATCH_PREFIX = 'b:';
 
 	/**
 	 * Reason codes that describe a successful step, not a reason to skip.
@@ -57,7 +65,7 @@ final class DecisionsController {
 	public static function outcomes(): array {
 		return array(
 			'all'        => __( 'All', 'pressqueue' ),
-			'shared'     => __( 'Shared', 'pressqueue' ),
+			'shared'     => __( 'Matched', 'pressqueue' ),
 			'not_shared' => __( 'Not shared', 'pressqueue' ),
 			'blocked'    => __( 'Blocked by an error', 'pressqueue' ),
 		);
@@ -78,7 +86,7 @@ final class DecisionsController {
 		try {
 			$database = Database::from_globals();
 			$counts   = self::outcome_counts( $database );
-			$keys     = self::event_keys( $database, $outcome, $page );
+			$keys     = self::group_keys( $database, $outcome, $page );
 			$events   = self::load_events( $database, $keys );
 		} catch ( StorageException | ValidationException $exception ) {
 			echo '<div class="pq-callout pq-callout--bad"><p>' . esc_html( SafeOperatorError::message( $exception, __( 'Decisions could not be loaded.', 'pressqueue' ) ) ) . '</p></div>';
@@ -111,7 +119,7 @@ final class DecisionsController {
 	}
 
 	/**
-	 * Count post events per outcome.
+	 * Count rows per outcome.
 	 *
 	 * @param Database $database Database.
 	 * @return array<string,int>
@@ -130,14 +138,16 @@ final class DecisionsController {
 	}
 
 	/**
-	 * Return the event keys for one page, newest first.
+	 * Return the row keys for one page, newest first.
+	 *
+	 * A row key is an event key, or a post and batch for events from Share old posts.
 	 *
 	 * @param Database $database Database.
 	 * @param string   $outcome Outcome filter.
 	 * @param int      $page Page number.
 	 * @return array<int,string>
 	 */
-	private static function event_keys( Database $database, string $outcome, int $page ): array {
+	private static function group_keys( Database $database, string $outcome, int $page ): array {
 		$conditions = array(
 			'all'        => '1 = 1',
 			'shared'     => 'shared > 0',
@@ -146,28 +156,74 @@ final class DecisionsController {
 		);
 
 		$rows = $database->get_results(
-			'SELECT event_key FROM (' . self::grouped_sql( $database ) . ') AS grouped_events WHERE ' . $conditions[ $outcome ] . ' ORDER BY last_id DESC LIMIT %d OFFSET %d',
+			'SELECT group_key FROM (' . self::grouped_sql( $database ) . ') AS grouped_events WHERE ' . $conditions[ $outcome ] . ' ORDER BY last_id DESC LIMIT %d OFFSET %d',
 			array( self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE )
 		);
 
-		return array_map( static fn( object $row ): string => (string) $row->event_key, $rows );
+		return array_map( static fn( object $row ): string => (string) $row->group_key, $rows );
 	}
 
 	/**
-	 * Return the per-event aggregate used for counts and paging.
+	 * Return the per-row aggregate used for counts and paging.
+	 *
+	 * Events from one batch item are joined through their occurrence key and
+	 * grouped by batch and post. Every other event is its own row.
 	 *
 	 * @param Database $database Database.
 	 * @return string
 	 */
 	private static function grouped_sql( Database $database ): string {
-		return "SELECT event_key, MAX(id) AS last_id, SUM(result = 'included') AS shared, SUM(result = 'policy_error') AS errors FROM `" . $database->table( Schema::DECISIONS ) . "` WHERE event_mode = 'runtime' GROUP BY event_key";
+		return "SELECT COALESCE(CONCAT('" . self::BATCH_PREFIX . "', items.batch_public_id, ':', decisions.post_id), decisions.event_key) AS group_key, MAX(decisions.id) AS last_id, SUM(decisions.result = 'included') AS shared, SUM(decisions.result = 'policy_error') AS errors FROM `" . $database->table( Schema::DECISIONS ) . '` AS decisions LEFT JOIN `' . $database->table( Schema::BATCH_ITEMS ) . "` AS items ON items.intent_occurrence_key = decisions.intent_occurrence_key WHERE decisions.event_mode = 'runtime' GROUP BY group_key";
 	}
 
 	/**
-	 * Load decisions and shares for a page of event keys.
+	 * Map the event keys behind a page of rows to their row keys.
 	 *
 	 * @param Database          $database Database.
-	 * @param array<int,string> $keys Event keys in display order.
+	 * @param array<int,string> $keys Row keys.
+	 * @return array<string,string> Event key => row key.
+	 */
+	private static function event_map( Database $database, array $keys ): array {
+		$map     = array();
+		$batches = array();
+
+		foreach ( $keys as $key ) {
+			if ( ! str_starts_with( $key, self::BATCH_PREFIX ) ) {
+				$map[ $key ] = $key;
+				continue;
+			}
+
+			$parts = explode( ':', substr( $key, strlen( self::BATCH_PREFIX ) ) );
+			if ( 2 === count( $parts ) ) {
+				$batches[ $parts[0] ] = true;
+			}
+		}
+
+		if ( array() === $batches ) {
+			return $map;
+		}
+
+		$wanted = array_flip( $keys );
+		$rows   = $database->get_results(
+			'SELECT DISTINCT decisions.event_key, decisions.post_id, items.batch_public_id FROM `' . $database->table( Schema::DECISIONS ) . '` AS decisions INNER JOIN `' . $database->table( Schema::BATCH_ITEMS ) . "` AS items ON items.intent_occurrence_key = decisions.intent_occurrence_key WHERE decisions.event_mode = 'runtime' AND items.batch_public_id IN (" . implode( ', ', array_fill( 0, count( $batches ), '%s' ) ) . ')',
+			array_keys( $batches )
+		);
+
+		foreach ( $rows as $row ) {
+			$key = self::BATCH_PREFIX . (string) $row->batch_public_id . ':' . (string) (int) $row->post_id;
+			if ( isset( $wanted[ $key ] ) ) {
+				$map[ (string) $row->event_key ] = $key;
+			}
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Load decisions and shares for a page of rows.
+	 *
+	 * @param Database          $database Database.
+	 * @param array<int,string> $keys Row keys in display order.
 	 * @return array<int,array{post_id:int,trigger:string,created_at:\DateTimeImmutable,decisions:array<int,DecisionRecord>,deliveries:array<int,DeliveryRecord>}>
 	 */
 	private static function load_events( Database $database, array $keys ): array {
@@ -175,7 +231,13 @@ final class DecisionsController {
 			return array();
 		}
 
-		$placeholders = implode( ', ', array_fill( 0, count( $keys ), '%s' ) );
+		$map = self::event_map( $database, $keys );
+		if ( array() === $map ) {
+			return array();
+		}
+
+		$event_keys   = array_map( 'strval', array_keys( $map ) );
+		$placeholders = implode( ', ', array_fill( 0, count( $event_keys ), '%s' ) );
 		$events       = array();
 
 		foreach ( $keys as $key ) {
@@ -187,24 +249,24 @@ final class DecisionsController {
 
 		$rows = $database->get_results(
 			'SELECT * FROM `' . $database->table( Schema::DECISIONS ) . "` WHERE event_mode = 'runtime' AND event_key IN (" . $placeholders . ') ORDER BY id ASC',
-			$keys
+			$event_keys
 		);
 		foreach ( $rows as $row ) {
 			$decision = self::hydrate_decision( $row );
-			if ( null !== $decision ) {
-				$events[ $decision->event_key ]['decisions'][] = $decision;
+			if ( null !== $decision && isset( $map[ $decision->event_key ] ) ) {
+				$events[ $map[ $decision->event_key ] ]['decisions'][] = $decision;
 			}
 		}
 
 		$repository = new DeliveryRepository( $database );
 		$rows       = $database->get_results(
 			'SELECT * FROM `' . $database->table( Schema::DELIVERIES ) . '` WHERE event_key IN (' . $placeholders . ') ORDER BY id ASC',
-			$keys
+			$event_keys
 		);
 		foreach ( $rows as $row ) {
 			$delivery = $repository->hydrate_record( $row );
-			if ( isset( $events[ $delivery->event_key ] ) ) {
-				$events[ $delivery->event_key ]['deliveries'][] = $delivery;
+			if ( isset( $map[ $delivery->event_key ] ) ) {
+				$events[ $map[ $delivery->event_key ] ]['deliveries'][] = $delivery;
 			}
 		}
 
@@ -270,14 +332,14 @@ final class DecisionsController {
 
 		echo '<li class="pq-decision pq-decision--' . esc_attr( $kind ) . '">';
 		echo '<div class="pq-decision-main">';
-		echo '<div class="pq-decision-title">';
+		echo '<h2 class="pq-decision-title">';
 		$link = $can_edit ? get_edit_post_link( $post_id ) : '';
 		if ( is_string( $link ) && '' !== $link ) {
 			echo '<a class="pq-row-link" href="' . esc_url( $link ) . '">' . esc_html( Ui::post_title( $post_id ) ) . '</a>';
 		} else {
 			echo esc_html( Ui::post_title( $post_id ) );
 		}
-		echo '</div>';
+		echo '</h2>';
 
 		echo '<div class="pq-decision-summary">';
 		if ( 'shared' === $kind && array() !== $channels ) {
@@ -289,9 +351,9 @@ final class DecisionsController {
 			echo '</span>';
 		}
 		echo '<span>' . esc_html( self::summary_sentence( $kind, $event, $channels, $can_edit, $test_run, $summary ) ) . '</span>';
-		$status = self::share_status_note( $event['deliveries'] );
-		if ( '' !== $status ) {
-			echo '<span class="pq-decision-status">' . esc_html( $status ) . '</span>';
+		$outcome = self::delivery_outcome( $event['deliveries'] );
+		if ( '' !== $outcome['text'] ) {
+			echo '<span class="pq-decision-status pq-decision-status--' . esc_attr( $outcome['tone'] ) . '">' . esc_html( $outcome['text'] ) . '</span>';
 		}
 		echo '</div>';
 
@@ -341,7 +403,7 @@ final class DecisionsController {
 
 		$rules = self::rule_lines( $event['decisions'], $summary );
 		if ( array() !== $rules ) {
-			echo '<div><h4 class="pq-why-heading">' . esc_html__( 'Rules checked', 'pressqueue' ) . '</h4><ul class="pq-checklist pq-why-list">';
+			echo '<div><h3 class="pq-why-heading">' . esc_html__( 'Rules checked', 'pressqueue' ) . '</h3><ul class="pq-checklist pq-why-list">';
 			foreach ( $rules as $line ) {
 				echo '<li><span class="' . esc_attr( $line['matched'] ? 'pq-yes' : 'pq-no' ) . '" aria-hidden="true">' . ( $line['matched'] ? '&#x2713;' : '&#x2715;' ) . '</span><span>' . esc_html( $line['text'] );
 				if ( '' !== $line['detail'] ) {
@@ -354,7 +416,7 @@ final class DecisionsController {
 
 		$channels = self::channel_lines( $event['decisions'], $summary );
 		if ( array() !== $channels ) {
-			echo '<div><h4 class="pq-why-heading">' . esc_html__( 'Channels', 'pressqueue' ) . '</h4><ul class="pq-checklist pq-why-list">';
+			echo '<div><h3 class="pq-why-heading">' . esc_html__( 'Channels', 'pressqueue' ) . '</h3><ul class="pq-checklist pq-why-list">';
 			foreach ( $channels as $line ) {
 				echo '<li><span class="' . esc_attr( $line['shared'] ? 'pq-yes' : 'pq-no' ) . '" aria-hidden="true">' . ( $line['shared'] ? '&#x2713;' : '&#x2715;' ) . '</span><span>';
 				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
@@ -366,7 +428,7 @@ final class DecisionsController {
 
 		$reasons = self::all_reasons( $event['decisions'] );
 		if ( array() !== $reasons ) {
-			echo '<div><h4 class="pq-why-heading">' . esc_html__( 'Reasons', 'pressqueue' ) . '</h4><ul class="pq-why-reasons">';
+			echo '<div><h3 class="pq-why-heading">' . esc_html__( 'Reasons', 'pressqueue' ) . '</h3><ul class="pq-why-reasons">';
 			foreach ( $reasons as $reason ) {
 				echo '<li>' . esc_html( $reason ) . '</li>';
 			}
@@ -448,7 +510,7 @@ final class DecisionsController {
 		if ( 'shared' === $kind ) {
 			$names = self::channel_list( $channels );
 			if ( '' === $names ) {
-				return $test_run ? __( 'Test run: would be shared.', 'pressqueue' ) : __( 'Shared.', 'pressqueue' );
+				return $test_run ? __( 'Test run: would be shared.', 'pressqueue' ) : __( 'A rule matched.', 'pressqueue' );
 			}
 
 			if ( $test_run ) {
@@ -457,7 +519,7 @@ final class DecisionsController {
 			}
 
 			/* translators: %s: list of channels such as "LinkedIn, X and Bluesky". */
-			return sprintf( __( 'Shared to %s.', 'pressqueue' ), $names );
+			return sprintf( __( 'Matched for %s.', 'pressqueue' ), $names );
 		}
 
 		if ( ! $can_edit ) {
@@ -479,22 +541,30 @@ final class DecisionsController {
 	}
 
 	/**
-	 * Say how many shares are not sent yet, such as "2 on hold".
+	 * Say what happened to the shares, such as "2 sent, 1 failed".
 	 *
-	 * @param array<int,DeliveryRecord> $deliveries Shares for the event.
-	 * @return string
+	 * Test runs are left out: their pill already says so.
+	 *
+	 * @param array<int,DeliveryRecord> $deliveries Shares for the row.
+	 * @return array{text:string,tone:string}
 	 */
-	private static function share_status_note( array $deliveries ): string {
+	private static function delivery_outcome( array $deliveries ): array {
 		$counts = array(
-			'attention' => 0,
 			'cancelled' => 0,
+			'check'     => 0,
+			'failed'    => 0,
 			'held'      => 0,
+			'sent'      => 0,
 			'waiting'   => 0,
 		);
 
 		foreach ( $deliveries as $delivery ) {
-			if ( in_array( $delivery->state, array( 'failed', 'ambiguous' ), true ) ) {
-				++$counts['attention'];
+			if ( 'accepted' === $delivery->state ) {
+				++$counts['sent'];
+			} elseif ( 'failed' === $delivery->state ) {
+				++$counts['failed'];
+			} elseif ( 'ambiguous' === $delivery->state ) {
+				++$counts['check'];
 			} elseif ( 'held' === $delivery->state ) {
 				++$counts['held'];
 			} elseif ( 'cancelled' === $delivery->state ) {
@@ -505,9 +575,17 @@ final class DecisionsController {
 		}
 
 		$parts = array();
-		if ( $counts['attention'] > 0 ) {
+		if ( $counts['sent'] > 0 ) {
+			/* translators: %d: number of shares Buffer accepted. */
+			$parts[] = sprintf( _n( '%d sent', '%d sent', $counts['sent'], 'pressqueue' ), $counts['sent'] );
+		}
+		if ( $counts['failed'] > 0 ) {
 			/* translators: %d: number of shares. */
-			$parts[] = sprintf( _n( '%d needs attention', '%d need attention', $counts['attention'], 'pressqueue' ), $counts['attention'] );
+			$parts[] = sprintf( _n( '%d failed', '%d failed', $counts['failed'], 'pressqueue' ), $counts['failed'] );
+		}
+		if ( $counts['check'] > 0 ) {
+			/* translators: %d: number of shares that may have reached Buffer. */
+			$parts[] = sprintf( _n( '%d to check in Buffer', '%d to check in Buffer', $counts['check'], 'pressqueue' ), $counts['check'] );
 		}
 		if ( $counts['held'] > 0 ) {
 			/* translators: %d: number of shares. */
@@ -522,7 +600,21 @@ final class DecisionsController {
 			$parts[] = sprintf( _n( '%d cancelled', '%d cancelled', $counts['cancelled'], 'pressqueue' ), $counts['cancelled'] );
 		}
 
-		return implode( ', ', $parts );
+		$tone = 'idle';
+		if ( $counts['failed'] + $counts['check'] > 0 ) {
+			$tone = 'bad';
+		} elseif ( $counts['held'] > 0 ) {
+			$tone = 'warn';
+		} elseif ( $counts['waiting'] > 0 ) {
+			$tone = 'info';
+		} elseif ( $counts['sent'] > 0 ) {
+			$tone = 'ok';
+		}
+
+		return array(
+			'text' => implode( ', ', $parts ),
+			'tone' => $tone,
+		);
 	}
 
 	/**
@@ -706,7 +798,7 @@ final class DecisionsController {
 
 			$channel = $summary->channel( $decision->scope_public_id );
 			$shared  = 'included' === $decision->result;
-			$reason  = $shared ? Labels::reason( 'included_destination' ) : self::first_reason( $decision->reasons );
+			$reason  = $shared ? __( 'The matching rule picks this channel.', 'pressqueue' ) : self::first_reason( $decision->reasons );
 
 			$lines[ $decision->scope_public_id ] = array(
 				'name'    => null === $channel ? __( 'Removed channel', 'pressqueue' ) : ActivitySummary::channel_display_name( $channel ),
@@ -819,7 +911,7 @@ final class DecisionsController {
 				}
 
 				if ( 'explicit_post_exclusion' === $reason['code'] ) {
-					return Labels::reason( 'explicit_post_exclusion' );
+					return __( 'sharing is switched off for this post.', 'pressqueue' );
 				}
 
 				if ( ! self::is_condition_reason( $reason ) || 'matched' !== ( $reason['condition_result'] ?? '' ) ) {
@@ -856,7 +948,7 @@ final class DecisionsController {
 			}
 		}
 
-		return __( 'a never share rule matches this post.', 'pressqueue' );
+		return __( 'a "never share" rule matches this post.', 'pressqueue' );
 	}
 
 	/**
@@ -952,11 +1044,11 @@ final class DecisionsController {
 	private static function render_empty_state( string $outcome ): void {
 		switch ( $outcome ) {
 			case 'shared':
-				Ui::empty_state( __( 'No post was shared yet', 'pressqueue' ), __( 'Posts that match a sharing rule show up here.', 'pressqueue' ) );
+				Ui::empty_state( __( 'No post matched a rule yet', 'pressqueue' ), __( 'Posts that match a sharing rule show up here.', 'pressqueue' ) );
 				return;
 
 			case 'not_shared':
-				Ui::empty_state( __( 'Every checked post was shared', 'pressqueue' ), __( 'Posts that no rule matched, or that a never share rule stopped, show up here.', 'pressqueue' ) );
+				Ui::empty_state( __( 'Every checked post matched a rule', 'pressqueue' ), __( 'Posts that no rule matched, or that a "never share" rule stopped, show up here.', 'pressqueue' ) );
 				return;
 
 			case 'blocked':
@@ -984,13 +1076,8 @@ final class DecisionsController {
 		}
 
 		echo '<nav class="pq-pagination" aria-label="' . esc_attr__( 'Decision pages', 'pressqueue' ) . '"><span>';
-		if ( $total_pages > 1 ) {
-			/* translators: 1: first row number, 2: last row number, 3: total number of posts. */
-			echo esc_html( sprintf( _n( 'Showing %1$s to %2$s of %3$s post event', 'Showing %1$s to %2$s of %3$s post events', $total, 'pressqueue' ), number_format_i18n( $first ), number_format_i18n( $last ), number_format_i18n( $total ) ) );
-		} else {
-			/* translators: %s: number of post events. */
-			echo esc_html( sprintf( _n( '%s post event', '%s post events', $total, 'pressqueue' ), number_format_i18n( $total ) ) );
-		}
+		/* translators: 1: first row number, 2: last row number, 3: total number of rows. */
+		echo esc_html( sprintf( __( 'Showing %1$s to %2$s of %3$s', 'pressqueue' ), number_format_i18n( $first ), number_format_i18n( $last ), number_format_i18n( $total ) ) );
 		echo '</span>';
 
 		if ( $page > 1 ) {

@@ -543,7 +543,8 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		DeliveryDetailController::render_page();
 		$html = (string) ob_get_clean();
 
-		self::assertStringContainsString( 'Record local evidence only', $html );
+		self::assertStringContainsString( 'I looked for this post in Buffer', $html );
+		self::assertStringNotContainsString( 'Record local evidence only', $html );
 		self::assertStringContainsString( 'User #999999 (deleted)', $html );
 		self::assertStringContainsString( 'User #' . (string) $user_id, $html );
 		self::assertStringContainsString( 'Automatic Budget Exhausted (automatic_budget_exhausted)', $html );
@@ -623,7 +624,7 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertStringContainsString( 'Buffer said the API key is no longer valid.', $html );
 		self::assertStringContainsString( 'Buffer could not find this channel.', $html );
 		self::assertStringContainsString( 'Buffer may have received this, but the reply was cut off.', $html );
-		self::assertStringContainsString( 'Buffer limits requests per day. Next try at', $html );
+		self::assertStringContainsString( 'Buffer limits requests per day. Next try: ', $html );
 		self::assertStringContainsString( 'Held because PressQueue was paused when the post was published.', $html );
 		self::assertStringContainsString( 'Spring menu', $html );
 		self::assertStringContainsString( 'Needs attention <b>3</b>', $html );
@@ -651,6 +652,105 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertStringNotContainsString( 'value="pressqueue_resume_delivery"', $test_mode );
 		self::assertStringNotContainsString( 'Resume all on hold', $test_mode );
 		self::assertStringContainsString( 'PressQueue is in test mode, so these shares cannot be sent.', $test_mode );
+		self::assertStringContainsString( '>Go live</button>', $test_mode );
+		self::assertStringContainsString( 'name="sharing_mode" value="live"', $test_mode );
+		self::assertStringContainsString( 'name="redirect_page" value="pressqueue-deliveries"', $test_mode );
+		self::assertStringNotContainsString( 'Open Settings', $test_mode );
+		self::assertStringContainsString( 'A share ID or Buffer post ID.', $test_mode );
+		self::assertStringNotContainsString( 'delivery key', $test_mode );
+
+		( new SettingsRepository() )->set_dry_run_enabled( false );
+		( new SettingsRepository() )->set_kill_switch_enabled( true );
+		$paused = $this->renderActivity( array( 'group' => 'held' ) );
+		self::assertStringContainsString( '>Resume sharing</button>', $paused );
+		self::assertStringNotContainsString( 'value="pressqueue_resume_delivery"', $paused );
+		( new SettingsRepository() )->set_kill_switch_enabled( false );
+	}
+
+	public function test_failed_share_gives_one_consistent_next_step(): void {
+		$this->activityAdmin();
+		$invalid = $this->liveDelivery( $this->titledPost( 121, 'Spring menu' ) );
+		$this->updateDelivery( $invalid->public_id, array( 'attempt_count' => 1, 'error_class' => 'invalid_credential', 'provider_result' => 'permanent_failure', 'retry_safety' => 'not_retryable', 'state' => 'failed' ) );
+
+		$html = $this->renderDetail( $invalid->public_id );
+
+		self::assertStringContainsString( 'Buffer said the API key is no longer valid.', $html );
+		self::assertStringContainsString( 'Add a new Buffer API key under <a href="' . esc_url( admin_url( 'admin.php?page=pressqueue-connections' ) ) . '">Channels</a>.', $html );
+		self::assertStringContainsString( 'This share cannot be sent again. Cancel it, then share the post from <a href="' . esc_url( admin_url( 'admin.php?page=pressqueue-batches' ) ) . '">Share old posts</a>.', $html );
+		self::assertStringContainsString( 'value="pressqueue_cancel_delivery"', $html );
+		self::assertStringNotContainsString( 'value="pressqueue_retry_delivery"', $html );
+		self::assertStringNotContainsString( 'then retry', $html );
+		self::assertStringNotContainsString( 'cannot retry this share', $html );
+		self::assertStringNotContainsString( 'clear it from the list', $html );
+		self::assertStringContainsString( 'Message PressQueue tried to send', $html );
+		self::assertStringNotContainsString( 'Message sent to Buffer', $html );
+
+		$missing = $this->liveDelivery( $this->titledPost( 126, 'Hiring a weekend baker' ) );
+		$this->updateDelivery( $missing->public_id, array( 'attempt_count' => 1, 'error_class' => 'not_found', 'provider_result' => 'permanent_failure', 'retry_safety' => 'manual_allowed', 'state' => 'failed' ) );
+
+		$retry = $this->renderDetail( $missing->public_id );
+
+		self::assertStringContainsString( 'Buffer could not find this channel.', $retry );
+		self::assertStringContainsString( 'refresh the channels under <a href=', $retry );
+		self::assertStringContainsString( 'Then retry this share.', $retry );
+		self::assertStringContainsString( '>Retry</button>', $retry );
+		self::assertStringNotContainsString( 'cannot be sent again', $retry );
+
+		$this->commandUser( Capabilities::VIEW_DELIVERIES );
+		$viewer = $this->renderDetail( $invalid->public_id );
+		self::assertStringContainsString( 'Add a new Buffer API key under Channels.', $viewer );
+		self::assertStringNotContainsString( 'page=pressqueue-connections', $viewer );
+	}
+
+	public function test_missing_confirmation_returns_to_the_share_with_a_notice(): void {
+		$this->activityAdmin();
+		$ambiguous = $this->ambiguousDelivery( $this->titledPost( 131, 'Rye starter guide' ) );
+		$held      = $this->liveDelivery( $this->titledPost( 136, 'Holiday hours' ) );
+		$this->updateDelivery( $held->public_id, array( 'state' => 'held' ) );
+
+		$location = $this->submit(
+			array( DeliveryActionController::class, 'handle_reconcile_delivery' ),
+			'pressqueue_reconcile_delivery_cancelled',
+			array(
+				'delivery_public_id' => $ambiguous->public_id,
+				'outcome'            => 'cancelled',
+			)
+		);
+		self::assertStringContainsString( 'page=pressqueue-delivery', $location );
+		self::assertStringContainsString( 'delivery_public_id=' . $ambiguous->public_id, $location );
+		self::assertStringContainsString( 'pressqueue_message=delivery_confirm_reconcile', $location );
+		self::assertSame( 'ambiguous', $this->storedState( $ambiguous->public_id ) );
+
+		$_GET = $this->queryArgs( $location );
+		ob_start();
+		DeliveryDetailController::render_page();
+		$notice = (string) ob_get_clean();
+		self::assertStringContainsString( 'notice-warning', $notice );
+		self::assertStringContainsString( 'Nothing was saved. Tick &quot;I looked for this post in Buffer&quot;, then click the button again.', $notice );
+
+		$location = $this->submit( array( DeliveryActionController::class, 'handle_cancel_delivery' ), 'pressqueue_cancel_delivery', array( 'delivery_public_id' => $held->public_id ) );
+		self::assertStringContainsString( 'pressqueue_message=delivery_confirm_cancel', $location );
+		self::assertSame( 'held', $this->storedState( $held->public_id ) );
+
+		$location = $this->submit( array( DeliveryActionController::class, 'handle_cancel_held_deliveries' ), 'pressqueue_cancel_held_deliveries', array() );
+		self::assertStringContainsString( 'page=pressqueue-deliveries', $location );
+		self::assertStringContainsString( 'group=held', $location );
+		self::assertStringContainsString( 'pressqueue_message=held_confirm_cancel', $location );
+		self::assertSame( 'held', $this->storedState( $held->public_id ) );
+		self::assertStringContainsString( 'Nothing was cancelled. Tick the box to confirm, then click Cancel shares on hold again.', $this->renderActivity( $this->queryArgs( $location ) ) );
+
+		// With the tick the choice is saved. The handler redirects from inside its try block,
+		// so the test redirect interception only proves the state change here.
+		$this->submit(
+			array( DeliveryActionController::class, 'handle_reconcile_delivery' ),
+			'pressqueue_reconcile_delivery_cancelled',
+			array(
+				'confirm_local_effect' => '1',
+				'delivery_public_id'   => $ambiguous->public_id,
+				'outcome'              => 'cancelled',
+			)
+		);
+		self::assertSame( 'cancelled', $this->storedState( $ambiguous->public_id ) );
 	}
 
 	public function test_activity_hides_titles_and_actions_from_viewers_without_rights(): void {
@@ -756,7 +856,11 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertStringContainsString( 'I found it in Buffer', $html );
 		self::assertStringContainsString( 'It is not in Buffer', $html );
 		self::assertStringContainsString( 'Cancel it', $html );
-		self::assertSame( 3, substr_count( $html, 'Record local evidence only' ) );
+		self::assertSame( 3, substr_count( $html, 'I looked for this post in Buffer' ) );
+		self::assertSame( 3, substr_count( $html, 'name="confirm_local_effect" value="1" required' ) );
+		self::assertStringNotContainsString( 'Record local evidence only', $html );
+		self::assertStringContainsString( 'Message PressQueue tried to send', $html );
+		self::assertStringNotContainsString( 'Message sent to Buffer', $html );
 		foreach ( array( 'confirmed_remote_id', 'confirmed_not_accepted', 'cancelled' ) as $outcome ) {
 			self::assertStringContainsString( 'name="outcome" value="' . $outcome . '"', $html );
 		}
@@ -847,8 +951,14 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 
 		self::assertStringContainsString( 'Not shared: No sharing rule matches this post.', $html );
 		self::assertStringContainsString( 'Never share: in a category you never share.', $html );
-		self::assertStringContainsString( 'Shared to Mastodon.', $html );
+		self::assertStringContainsString( 'Matched for Mastodon.', $html );
+		self::assertStringNotContainsString( 'Shared to', $html );
+		self::assertStringContainsString( 'Matched <b>1</b>', $html );
 		self::assertStringContainsString( 'All <b>3</b>', $html );
+		self::assertStringContainsString( 'Showing 1 to 3 of 3', $html );
+		self::assertStringNotContainsString( 'post event', $html );
+		self::assertStringNotContainsString( '<h4', $html );
+		self::assertStringContainsString( '<h3 class="pq-why-heading">Rules checked</h3>', $html );
 		self::assertSame( 1, substr_count( $html, 'Market stall news' ) );
 		self::assertStringNotContainsString( 'Previewed only', $html );
 		self::assertStringContainsString( 'Publish posts matched.', $html );
@@ -864,6 +974,147 @@ final class DeliveryOperatorIntegrationTest extends WP_UnitTestCase {
 		self::assertStringNotContainsString( 'in a category you never share', $viewer );
 		self::assertStringNotContainsString( 'Rye starter guide', $viewer );
 		self::assertStringContainsString( 'Details are hidden because you cannot edit this post.', $viewer );
+	}
+
+	public function test_decisions_tab_shows_one_row_per_post_and_batch_with_the_real_outcome(): void {
+		$first   = $this->enabledDestination();
+		$second  = $this->enabledDestination();
+		$include = ( new RuleRepository() )->create( $this->ruleInput( $first['channel']->public_id ) );
+		$rye     = (int) self::factory()->post->create( array( 'post_title' => 'Rye starter feeding schedule' ) );
+		$weekend = (int) self::factory()->post->create( array( 'post_title' => 'Weekend opening times' ) );
+		$this->recordBatchDecision( $rye, $include, $first['channel']->public_id, '01J00000000000000000BATCH1', 1 );
+		$this->recordBatchDecision( $rye, $include, $second['channel']->public_id, '01J00000000000000000BATCH1', 2 );
+		$this->recordBatchDecision( $rye, $include, $first['channel']->public_id, '01J00000000000000000BATCH2', 1 );
+
+		$sent   = $this->liveDelivery( $weekend, $first );
+		$failed = $this->liveDelivery( $weekend, $second );
+		$this->updateDelivery( $sent->public_id, array( 'state' => 'accepted' ) );
+		$this->updateDelivery( $failed->public_id, array( 'error_class' => 'not_found', 'provider_result' => 'permanent_failure', 'retry_safety' => 'manual_allowed', 'state' => 'failed' ) );
+
+		$this->activityAdmin();
+		$html = $this->renderDecisions( array() );
+
+		self::assertSame( 2, substr_count( $html, 'Rye starter feeding schedule' ) );
+		self::assertSame( 1, substr_count( $html, 'Weekend opening times' ) );
+		self::assertStringContainsString( 'Matched for Example Social and Example Social.', $html );
+		self::assertStringContainsString( '1 sent, 1 failed', $html );
+		self::assertStringContainsString( 'pq-decision-status--bad', $html );
+		self::assertStringContainsString( 'All <b>3</b>', $html );
+		self::assertStringContainsString( 'Matched <b>3</b>', $html );
+
+		$matched = $this->renderDecisions( array( 'outcome' => 'shared' ) );
+		self::assertStringContainsString( 'aria-current="true">Matched <b>3</b>', $matched );
+	}
+
+	/**
+	 * Record one channel decision for an item of a Share old posts batch.
+	 *
+	 * @param int        $post_id Post ID.
+	 * @param RuleRecord $rule Rule.
+	 * @param string     $channel_public_id Channel public ID.
+	 * @param string     $batch_public_id Batch public ID.
+	 * @param int        $position Item position.
+	 */
+	private function recordBatchDecision( int $post_id, RuleRecord $rule, string $channel_public_id, string $batch_public_id, int $position ): void {
+		global $wpdb;
+
+		$intent = hash( 'sha256', 'intent-' . $batch_public_id . '-' . (string) $post_id . '-' . $channel_public_id );
+		( new DecisionRepository() )->create(
+			array(
+				'author_id'             => 1,
+				'decision_key'          => hash( 'sha256', 'decision-' . $intent ),
+				'event_key'             => hash( 'sha256', 'event-' . $intent ),
+				'event_mode'            => 'runtime',
+				'intent_occurrence_key' => $intent,
+				'post_id'               => $post_id,
+				'post_status'           => 'publish',
+				'post_type'             => 'post',
+				'reasons'               => array( array( 'code' => 'included_destination' ) ),
+				'result'                => 'included',
+				'revision_fingerprint'  => hash( 'sha256', 'revision-' . (string) $post_id ),
+				'rule_id'               => $rule->id,
+				'rule_public_id'        => $rule->public_id,
+				'rule_version'          => $rule->version,
+				'scope_public_id'       => $channel_public_id,
+				'scope_type'            => 'channel',
+				'snapshot'              => array( 'post' => array( 'id' => $post_id ) ),
+				'trigger'               => 'bulk',
+			)
+		);
+
+		$wpdb->insert(
+			Database::from_globals()->table( Schema::BATCH_ITEMS ),
+			array(
+				'batch_id'              => 1,
+				'batch_public_id'       => $batch_public_id,
+				'channel_public_id'     => $channel_public_id,
+				'created_at'            => '2026-08-24 12:00:00',
+				'intent_occurrence_key' => $intent,
+				'item_key'              => hash( 'sha256', 'item-' . $intent ),
+				'position'              => $position,
+				'post_id'               => $post_id,
+				'preview_item_json'     => '{}',
+				'public_id'             => strtoupper( substr( '01J' . hash( 'sha256', 'public-' . $intent ), 0, 26 ) ),
+				'reason_json'           => '{}',
+				'semantic_preview_hash' => hash( 'sha256', 'semantic-' . $intent ),
+				'state'                 => 'queued',
+				'updated_at'            => '2026-08-24 12:00:00',
+			)
+		);
+	}
+
+	/**
+	 * Submit one admin-post handler and return where it redirected.
+	 *
+	 * @param callable             $handler Handler.
+	 * @param string               $nonce_action Nonce action.
+	 * @param array<string,string> $post POST fields.
+	 * @return string
+	 */
+	private function submit( callable $handler, string $nonce_action, array $post ): string {
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_GET                      = array();
+		$_POST                     = array_merge( $post, array( '_wpnonce' => wp_create_nonce( $nonce_action ) ) );
+		$_REQUEST                  = $_POST;
+
+		remove_all_filters( 'wp_redirect' );
+		add_filter(
+			'wp_redirect',
+			static function ( $location ): void {
+				throw new \RuntimeException( 'pressqueue-test-redirect:' . (string) $location );
+			}
+		);
+
+		try {
+			$handler();
+		} catch ( \RuntimeException $exception ) {
+			if ( ! str_starts_with( $exception->getMessage(), 'pressqueue-test-redirect:' ) ) {
+				throw $exception;
+			}
+
+			return substr( $exception->getMessage(), strlen( 'pressqueue-test-redirect:' ) );
+		} finally {
+			remove_all_filters( 'wp_redirect' );
+			$_POST                     = array();
+			$_REQUEST                  = array();
+			$_SERVER['REQUEST_METHOD'] = 'GET';
+		}
+
+		self::fail( 'The handler did not redirect.' );
+	}
+
+	/**
+	 * Return the query arguments of a redirect location.
+	 *
+	 * @param string $location Location.
+	 * @return array<string,string>
+	 */
+	private function queryArgs( string $location ): array {
+		$query = (string) wp_parse_url( $location, PHP_URL_QUERY );
+		$args  = array();
+		parse_str( $query, $args );
+
+		return array_map( 'strval', $args );
 	}
 
 	/**

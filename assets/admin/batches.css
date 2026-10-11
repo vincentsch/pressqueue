@@ -58,6 +58,23 @@
 	font-weight: 500;
 }
 
+.pq-admin .pq-batch-timings .pq-batch-warn {
+	display: block;
+	margin-top: 2px;
+}
+
+.pq-admin .pq-batch-timings label.pq-batch-timing-off {
+	cursor: not-allowed;
+}
+
+.pq-admin .pq-batch-timings label.pq-batch-timing-off .pq-check-title {
+	color: var(--pq-muted);
+}
+
+.pq-admin .pq-batch .pq-choice-help a {
+	cursor: pointer;
+}
+
 .pq-admin .pq-batch .pq-help + .pq-help {
 	margin-top: 0;
 }

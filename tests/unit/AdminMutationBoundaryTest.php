@@ -281,50 +281,35 @@ final class AdminMutationBoundaryTest extends TestCase {
 		self::assertStringNotContainsString( 'hunter2', $generic['detail'] );
 	}
 
-	public function test_cancel_handler_requires_confirmation(): void {
-		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::OPERATE_DELIVERIES ] = true;
-		$_SERVER['REQUEST_METHOD'] = 'POST';
-		$_POST                     = array(
-			'_wpnonce'           => 'valid-nonce',
-			'delivery_public_id' => '01H00000000000000000000000',
-		);
-		$_REQUEST                  = $_POST;
-		$GLOBALS['pressqueue_test_valid_nonces']['pressqueue_cancel_delivery'] = 'valid-nonce';
+	public function test_confirmation_requires_the_exact_tick(): void {
+		$_POST = array();
+		self::assertFalse( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation' ) );
 
-		$this->expectException( RuntimeException::class );
-		$this->expectExceptionMessage( 'confirmation is required' );
+		$_POST = array( 'confirm_local_effect' => 'yes' );
+		self::assertFalse( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation' ) );
 
-		DeliveryActionController::handle_cancel_delivery();
+		$_POST = array( 'confirm_local_effect' => array( '1' ) );
+		self::assertFalse( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation' ) );
+
+		$_POST = array( 'confirm_local_effect' => '1' );
+		self::assertTrue( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation' ) );
 	}
 
-	public function test_cancel_held_handler_requires_confirmation(): void {
-		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::OPERATE_DELIVERIES ] = true;
-		$_SERVER['REQUEST_METHOD'] = 'POST';
-		$_POST                     = array( '_wpnonce' => 'valid-nonce' );
-		$_REQUEST                  = $_POST;
-		$GLOBALS['pressqueue_test_valid_nonces']['pressqueue_cancel_held_deliveries'] = 'valid-nonce';
+	public function test_confirmed_actions_check_the_tick_after_the_boundary_and_before_any_change(): void {
+		$source = (string) file_get_contents( dirname( __DIR__, 2 ) . '/src/Admin/DeliveryActionController.php' );
 
-		$this->expectException( RuntimeException::class );
-		$this->expectExceptionMessage( 'confirmation is required' );
+		foreach ( array( 'handle_cancel_delivery', 'handle_reconcile_delivery', 'handle_cancel_held_deliveries' ) as $handler ) {
+			self::assertSame( 1, preg_match( '/function ' . $handler . '\(\): void \{(.*?)\n\t\}/s', $source, $matches ), $handler );
+			$body     = $matches[1];
+			$boundary = max( (int) strpos( $body, 'mutation_boundary(' ), (int) strpos( $body, 'AdminPostBoundary::check(' ) );
+			$tick     = strpos( $body, 'confirmation(' );
+			$change   = false === strpos( $body, '_service()' ) ? strpos( $body, '_batch(' ) : strpos( $body, '_service()' );
 
-		DeliveryActionController::handle_cancel_held_deliveries();
-	}
-
-	public function test_reconcile_handler_requires_confirmation(): void {
-		$GLOBALS['pressqueue_test_current_user_caps'][ Capabilities::OPERATE_DELIVERIES ] = true;
-		$_SERVER['REQUEST_METHOD'] = 'POST';
-		$_POST                     = array(
-			'_wpnonce'           => 'valid-nonce',
-			'delivery_public_id' => '01H00000000000000000000000',
-			'outcome'            => 'confirmed_not_accepted',
-		);
-		$_REQUEST                  = $_POST;
-		$GLOBALS['pressqueue_test_valid_nonces']['pressqueue_reconcile_delivery_confirmed_not_accepted'] = 'valid-nonce';
-
-		$this->expectException( RuntimeException::class );
-		$this->expectExceptionMessage( 'confirmation is required' );
-
-		DeliveryActionController::handle_reconcile_delivery();
+			self::assertNotFalse( $tick, $handler );
+			self::assertNotFalse( $change, $handler );
+			self::assertGreaterThan( $boundary, $tick, $handler );
+			self::assertLessThan( $change, $tick, $handler );
+		}
 	}
 
 	public function test_delivery_public_id_post_value_is_not_truncated(): void {

@@ -292,7 +292,7 @@ final class BatchController {
 		echo '<div class="pq-card pq-batch-main">';
 		self::render_pick_step( $form, $rules, $batch );
 		self::render_review_step( $batch, $review );
-		self::render_timing_step( $form, $rules );
+		self::render_timing_step( $form, $rules, $review );
 		self::render_builder_actions( $batch, $review, $rules, $runtime );
 		echo '</div>';
 		self::render_side_card();
@@ -324,13 +324,15 @@ final class BatchController {
 			echo '<span><b>' . esc_html( $copy['label'] ) . '</b><span class="pq-choice-help">' . esc_html( $copy['help'] ) . '</span>';
 			if ( ! $available ) {
 				echo '<span class="pq-choice-help pq-batch-warn">' . esc_html( $copy['no_rule'] ) . '</span>';
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- The format is escaped and rules_link returns escaped markup.
+				echo '<span class="pq-choice-help">' . sprintf( esc_html( $copy['tick'] ), self::rules_link() ) . '</span>';
 			}
 			echo '</span></label>';
 		}
 		echo '</div>';
 
 		if ( array() === $rules['bulk'] && array() === $rules['repost'] ) {
-			echo '<div class="pq-callout pq-callout--warn"><p><strong>' . esc_html__( 'No rule takes part yet.', 'pressqueue' ) . '</strong> ' . esc_html__( 'Open a rule, tick "Old posts are picked in Share old posts" or "Shared posts are picked to share again" under When, and save it. Then come back here.', 'pressqueue' ) . '</p>';
+			echo '<div class="pq-callout pq-callout--warn"><p><strong>' . esc_html__( 'No rule takes part yet.', 'pressqueue' ) . '</strong> ' . esc_html__( 'Open a rule, tick "I pick old posts in Share old posts" or "I pick shared posts to share again" under When, and save it. Then come back here.', 'pressqueue' ) . '</p>';
 			echo '<p><a class="button" href="' . esc_url( Ui::url( Ui::PAGE_RULES ) ) . '">' . esc_html__( 'Open Rules', 'pressqueue' ) . '</a></p></div>';
 		} else {
 			foreach ( $types as $type => $copy ) {
@@ -354,7 +356,7 @@ final class BatchController {
 		self::render_category_field( (int) $form['category'] );
 		echo '<div><label class="pq-label" for="pq-batch-after">' . esc_html__( 'Published after', 'pressqueue' ) . '</label><input class="pq-field" type="date" id="pq-batch-after" name="published_after" value="' . esc_attr( (string) $form['published_after'] ) . '" /></div>';
 		echo '<div><label class="pq-label" for="pq-batch-before">' . esc_html__( 'Published before', 'pressqueue' ) . '</label><input class="pq-field" type="date" id="pq-batch-before" name="published_before" value="' . esc_attr( (string) $form['published_before'] ) . '" /></div>';
-		echo '<div><label class="pq-label" for="pq-batch-max">' . esc_html__( 'At most', 'pressqueue' ) . '</label><span class="pq-batch-unit"><input class="pq-field" type="number" id="pq-batch-max" name="max_posts" min="1" max="' . esc_attr( (string) BatchLimitService::MAX_CANDIDATE_LIMIT ) . '" step="1" value="' . esc_attr( (string) $form['max_posts'] ) . '" aria-describedby="pq-batch-max-help" /><span aria-hidden="true">' . esc_html__( 'posts', 'pressqueue' ) . '</span></span></div>';
+		echo '<div><label class="pq-label" id="pq-batch-max-label" for="pq-batch-max">' . esc_html__( 'At most', 'pressqueue' ) . '</label><span class="pq-batch-unit"><input class="pq-field" type="number" id="pq-batch-max" name="max_posts" min="1" max="' . esc_attr( (string) BatchLimitService::MAX_CANDIDATE_LIMIT ) . '" step="1" value="' . esc_attr( (string) $form['max_posts'] ) . '" aria-labelledby="pq-batch-max-label pq-batch-max-unit" aria-describedby="pq-batch-max-help" /><span id="pq-batch-max-unit">' . esc_html__( 'posts', 'pressqueue' ) . '</span></span></div>';
 		echo '</div>';
 		echo '<p class="pq-help" id="pq-batch-max-help">' . esc_html(
 			sprintf(
@@ -366,8 +368,8 @@ final class BatchController {
 		) . '</p>';
 
 		echo '<div class="pq-only-repost pq-batch-repost">';
-		echo '<label class="pq-label" for="pq-batch-days">' . esc_html__( 'Only posts last sent at least', 'pressqueue' ) . '</label>';
-		echo '<span class="pq-batch-unit"><input class="pq-field" type="number" id="pq-batch-days" name="repost_min_days" min="1" max="3650" step="1" value="' . esc_attr( (string) $form['repost_min_days'] ) . '" aria-describedby="pq-batch-days-help" /><span aria-hidden="true">' . esc_html__( 'days ago', 'pressqueue' ) . '</span></span>';
+		echo '<label class="pq-label" id="pq-batch-days-label" for="pq-batch-days">' . esc_html__( 'Only posts last sent at least', 'pressqueue' ) . '</label>';
+		echo '<span class="pq-batch-unit"><input class="pq-field" type="number" id="pq-batch-days" name="repost_min_days" min="1" max="3650" step="1" value="' . esc_attr( (string) $form['repost_min_days'] ) . '" aria-labelledby="pq-batch-days-label pq-batch-days-unit" aria-describedby="pq-batch-days-help" /><span id="pq-batch-days-unit">' . esc_html__( 'days ago', 'pressqueue' ) . '</span></span>';
 		echo '<p class="pq-help" id="pq-batch-days-help">' . esc_html__( 'Counted from the last time Buffer accepted the post on that channel. Leave empty to allow any gap. A post is never shared again while an earlier share of it is still waiting.', 'pressqueue' ) . '</p>';
 		echo '</div>';
 
@@ -559,7 +561,11 @@ final class BatchController {
 		echo '<li class="pq-batch-post">';
 		echo '<span class="pq-batch-mark ' . ( $yes ? 'pq-yes' : 'pq-no' ) . '" aria-hidden="true">' . ( $yes ? '&#x2713;' : '&#x2715;' ) . '</span>';
 		echo '<div class="pq-batch-post-body">';
-		self::render_post_heading( $post, $yes ? __( 'Will be shared', 'pressqueue' ) : __( 'Skipped', 'pressqueue' ) );
+		$status = $yes ? __( 'Will be shared', 'pressqueue' ) : __( 'Skipped', 'pressqueue' );
+		if ( $yes && '' !== $post['timing_blocked'] ) {
+			$status = __( 'Shared once you pick another timing', 'pressqueue' );
+		}
+		self::render_post_heading( $post, $status );
 
 		if ( $yes ) {
 			echo '<div class="pq-batch-channels"><span class="pq-muted pq-small">' . esc_html__( 'Shares to', 'pressqueue' ) . '</span>';
@@ -578,6 +584,10 @@ final class BatchController {
 			if ( array() !== $cards ) {
 				echo '<details class="pq-more pq-small"><summary>' . esc_html( _n( 'Show message', 'Show messages', count( $cards ), 'pressqueue' ) ) . '</summary><div class="pq-more-body pq-stack">';
 				foreach ( $cards as $card ) {
+					if ( '' !== $post['timing_blocked'] ) {
+						// Show the timing that was picked, which these shares cannot use yet.
+						$card['schedule_slot'] = $post['timing_blocked'];
+					}
 					PreviewPresenter::render_share( $card );
 				}
 				echo '</div></details>';
@@ -670,17 +680,44 @@ final class BatchController {
 	/**
 	 * Render step 3.
 	 *
+	 * Post right away and Next free queue slot only work for a single share, so
+	 * they are switched off once a preview shows more than one share.
+	 *
 	 * @param array<string,mixed>                 $form Form values.
 	 * @param array<string,array<int,RuleRecord>> $rules Participating rules.
+	 * @param array<string,mixed>|null            $review Review data of the current preview.
 	 */
-	private static function render_timing_step( array $form, array $rules ): void {
+	private static function render_timing_step( array $form, array $rules, ?array $review = null ): void {
+		$shares = null === $review ? 0 : (int) $review['share_count'];
+
 		echo '<div class="pq-section pq-batch-step">';
 		echo '<h2 id="pq-batch-timing">' . self::step_dot( 3 ) . esc_html__( 'Timing', 'pressqueue' ) . '</h2>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- step_dot returns escaped markup.
 		echo '<div class="pq-checks pq-batch-timings" role="radiogroup" aria-labelledby="pq-batch-timing">';
 
 		foreach ( self::timing_choices( $rules, (string) $form['batch_type'] ) as $value => $choice ) {
-			echo '<label><input type="radio" form="' . esc_attr( self::FORM_ID ) . '" name="timing" value="' . esc_attr( $value ) . '" ' . checked( $form['timing'], $value, false ) . ' />';
-			echo '<span><span class="pq-check-title">' . esc_html( $choice['label'] ) . '</span><span class="pq-muted">' . esc_html( $choice['help'] ) . '</span></span></label>';
+			$single   = in_array( $value, array( 'queue_next', 'immediate' ), true ) && $shares > 1;
+			$selected = $form['timing'] === $value;
+			$note     = '';
+			if ( $single ) {
+				$note = $selected
+					? sprintf(
+						/* translators: %d: number of shares in the preview. */
+						_n( 'Pick another timing: this preview has %d share.', 'Pick another timing: this preview has %d shares.', $shares, 'pressqueue' ),
+						$shares
+					)
+					: sprintf(
+						/* translators: %d: number of shares in the preview. */
+						_n( 'Not available: this preview has %d share.', 'Not available: this preview has %d shares.', $shares, 'pressqueue' ),
+						$shares
+					);
+			}
+
+			echo '<label' . ( $single && ! $selected ? ' class="pq-batch-timing-off"' : '' ) . '><input type="radio" form="' . esc_attr( self::FORM_ID ) . '" name="timing" value="' . esc_attr( $value ) . '" ' . checked( $selected, true, false ) . disabled( $single && ! $selected, true, false ) . ( $single ? ' data-pq-single-timing' : '' ) . ' />';
+			echo '<span><span class="pq-check-title">' . esc_html( $choice['label'] ) . '</span><span class="pq-muted">' . esc_html( $choice['help'] ) . '</span>';
+			if ( '' !== $note ) {
+				echo '<span class="pq-batch-warn" data-pq-single-note>' . esc_html( $note ) . '</span>';
+			}
+			echo '</span></label>';
 
 			if ( 'staggered_explicit_time' === $value ) {
 				self::render_stagger_fields( $form );
@@ -792,7 +829,7 @@ final class BatchController {
 		echo '<div class="pq-card pq-card--pad pq-stack pq-batch-side">';
 		echo '<h2>' . esc_html__( 'Before you start', 'pressqueue' ) . '</h2>';
 		echo '<p class="pq-muted">' . esc_html__( 'Followers see old posts as new ones. A small batch spread across your queue looks natural. Fifty posts in one morning does not.', 'pressqueue' ) . '</p>';
-		echo '<p class="pq-muted">' . esc_html__( 'Your never-share rules still apply, and nothing is shared twice by accident: posts that already have a share on a channel are skipped.', 'pressqueue' ) . '</p>';
+		echo '<p class="pq-muted">' . esc_html__( 'Your "never share" rules still apply, and nothing is shared twice by accident: posts that already have a share on a channel are skipped.', 'pressqueue' ) . '</p>';
 
 		$mode = self::current_mode();
 		if ( 'test' === $mode ) {
@@ -1024,14 +1061,26 @@ final class BatchController {
 		$channels    = array();
 		$mode        = '';
 		$rule_ids    = array();
+		$blocked     = 0;
+		$slots       = array();
 
 		foreach ( self::group_items( $items ) as $post ) {
-			$post['shares']  = array();
-			$post['skipped'] = array();
+			$post['shares']         = array();
+			$post['skipped']        = array();
+			$post['timing_blocked'] = '';
 
 			foreach ( $post['items'] as $entry ) {
 				$item = $entry['item'];
-				if ( 'previewed' === $item->state ) {
+
+				// A batch timing that needs a single share stops every share. Count them as
+				// shares so the review shows what the batch would share with another timing.
+				$timing_blocked = 'policy_error' === $item->state && 'batch_multi_item_schedule_not_allowed' === ( $item->reason['code'] ?? null );
+				if ( $timing_blocked ) {
+					++$blocked;
+					$post['timing_blocked'] = (string) ( $batch->batch_limits['schedule']['mode'] ?? '' );
+				}
+
+				if ( 'previewed' === $item->state || $timing_blocked ) {
 					$post['shares'][] = $entry;
 					++$share_count;
 					if ( null !== $item->channel_public_id ) {
@@ -1040,7 +1089,8 @@ final class BatchController {
 					if ( null !== $item->inclusion_rule_public_id ) {
 						$rule_ids[ $item->inclusion_rule_public_id ] = true;
 					}
-					$mode = (string) ( $item->preview_item['delivery']['delivery_mode'] ?? $mode );
+					$mode    = (string) ( $item->preview_item['delivery']['delivery_mode'] ?? $mode );
+					$slots[] = (string) ( $item->preview_item['delivery']['payload_preview']['schedule_slot'] ?? '' );
 					continue;
 				}
 
@@ -1060,6 +1110,7 @@ final class BatchController {
 		$counts = isset( $batch->preview_summary['counts'] ) && is_array( $batch->preview_summary['counts'] ) ? $batch->preview_summary['counts'] : array();
 
 		return array(
+			'all_drafts'       => array() !== $slots && array( 'draft' ) === array_values( array_unique( $slots ) ),
 			'channel_count'    => count( $channels ),
 			'delivery_mode'    => $mode,
 			'draft_conflicts'  => self::draft_conflicts( $batch, array_keys( $rule_ids ) ),
@@ -1067,6 +1118,7 @@ final class BatchController {
 			'post_count'       => count( $posts ) - $skipped,
 			'posts'            => $posts,
 			'share_count'      => $share_count,
+			'single_timing'    => $blocked > 0 ? (string) ( $batch->batch_limits['schedule']['mode'] ?? '' ) : '',
 			'skipped_posts'    => $skipped,
 			'truncated'        => true === ( $batch->preview_summary['truncated'] ?? false ),
 			'unauthorized'     => (int) ( $counts['unauthorized'] ?? 0 ),
@@ -1184,6 +1236,15 @@ final class BatchController {
 			);
 		}
 
+		if ( '' !== $review['single_timing'] ) {
+			$problems[] = sprintf(
+				/* translators: 1: timing such as "Post right away", 2: number of shares in the batch. */
+				_n( '%1$s only works when the batch has one share. This batch has %2$d share. Pick another timing below, such as Spread across the Buffer queue, and update the preview.', '%1$s only works when the batch has one share. This batch has %2$d shares. Pick another timing below, such as Spread across the Buffer queue, and update the preview.', (int) $review['share_count'], 'pressqueue' ),
+				'immediate' === $review['single_timing'] ? __( 'Post right away', 'pressqueue' ) : __( 'Next free queue slot', 'pressqueue' ),
+				(int) $review['share_count']
+			);
+		}
+
 		if ( $review['invalid_schedule'] ) {
 			$problems[] = __( 'A rule in this batch posts right away or in the next free queue slot. That only works for a single share. Pick another timing below, such as Spread across the Buffer queue, and update the preview.', 'pressqueue' );
 		}
@@ -1234,9 +1295,9 @@ final class BatchController {
 				$rule_id = $item->preview_item['decision']['rule_public_id'] ?? null;
 				$name    = is_string( $rule_id ) ? self::rule_name( $rule_id ) : '';
 				return '' === $name
-					? __( 'A never-share rule matches this post.', 'pressqueue' )
+					? __( 'A "never share" rule matches this post.', 'pressqueue' )
 					/* translators: %s: rule name. */
-					: sprintf( __( 'The never-share rule "%s" matches this post.', 'pressqueue' ), $name );
+					: sprintf( __( 'The "never share" rule "%s" matches this post.', 'pressqueue' ), $name );
 			case 'no_queueable_destination':
 				return self::planner_reason( $reason, $can_read_post );
 			case 'post_not_previewable':
@@ -1265,7 +1326,7 @@ final class BatchController {
 		}
 
 		if ( 'excluded' === $item->state ) {
-			return __( 'A never-share rule matches this post.', 'pressqueue' );
+			return __( 'A "never share" rule matches this post.', 'pressqueue' );
 		}
 
 		$label = Labels::reason( $code, '' );
@@ -1397,7 +1458,7 @@ final class BatchController {
 			'reserved'     => array( __( 'Being added', 'pressqueue' ), 'info', __( 'PressQueue is adding this share to the queue.', 'pressqueue' ) ),
 			'queued'       => array( __( 'Added', 'pressqueue' ), 'ok', __( 'Added to the queue. Follow it in Activity.', 'pressqueue' ) ),
 			'duplicate'    => array( __( 'Skipped', 'pressqueue' ), 'idle', __( 'Skipped so the post is not shared twice.', 'pressqueue' ) ),
-			'excluded'     => array( __( 'Skipped', 'pressqueue' ), 'idle', __( 'A never-share rule matches this post.', 'pressqueue' ) ),
+			'excluded'     => array( __( 'Skipped', 'pressqueue' ), 'idle', __( 'A "never share" rule matches this post.', 'pressqueue' ) ),
 			'policy_error' => array( __( 'Skipped', 'pressqueue' ), 'warn', __( 'Your rules do not allow this share.', 'pressqueue' ) ),
 			'cancelled'    => array( __( 'Cancelled', 'pressqueue' ), 'idle', __( 'Cancelled before it was added.', 'pressqueue' ) ),
 			'failed'       => array( __( 'Not added', 'pressqueue' ), 'bad', __( 'PressQueue stopped this share when adding it.', 'pressqueue' ) ),
@@ -1604,22 +1665,32 @@ final class BatchController {
 			);
 		}
 
-		return $question . ' ' . sprintf(
+		$text = $question . ' ' . sprintf(
 			/* translators: %d: number of shares. */
 			_n( 'PressQueue sends %d share to Buffer.', 'PressQueue sends %d shares to Buffer.', $shares, 'pressqueue' ),
 			$shares
-		) . ' ' . self::timing_sentence( $batch->batch_limits ) . ' ' . __( 'Your followers see them as new posts.', 'pressqueue' );
+		) . ' ' . self::timing_sentence( $batch->batch_limits, ! empty( $review['all_drafts'] ) );
+
+		if ( empty( $review['all_drafts'] ) ) {
+			$text .= ' ' . __( 'Your followers see them as new posts.', 'pressqueue' );
+		}
+
+		return $text;
 	}
 
 	/**
 	 * Return a sentence describing a batch's timing.
 	 *
 	 * @param array<string,mixed> $limits Batch limits.
+	 * @param bool                $all_drafts Whether every share is saved as a Buffer draft.
 	 * @return string
 	 */
-	private static function timing_sentence( array $limits ): string {
+	private static function timing_sentence( array $limits, bool $all_drafts = false ): string {
 		$schedule = isset( $limits['schedule'] ) && is_array( $limits['schedule'] ) ? $limits['schedule'] : array();
 		$mode     = (string) ( $schedule['mode'] ?? 'inherit' );
+		if ( 'inherit' === $mode && $all_drafts ) {
+			$mode = 'draft';
+		}
 
 		switch ( $mode ) {
 			case 'queue_end':
@@ -2318,7 +2389,7 @@ final class BatchController {
 	/**
 	 * Return the two batch types in plain words.
 	 *
-	 * @return array<string,array{label:string,help:string,no_rule:string,rules_note:string}>
+	 * @return array<string,array{label:string,help:string,no_rule:string,rules_note:string,tick:string}>
 	 */
 	private static function batch_types(): array {
 		return array(
@@ -2326,13 +2397,17 @@ final class BatchController {
 				'help'       => __( 'Posts that have no share yet on the channels your rules pick.', 'pressqueue' ),
 				'label'      => __( 'Never shared before', 'pressqueue' ),
 				'no_rule'    => __( 'No rule is set up for old posts yet.', 'pressqueue' ),
-				'rules_note' => __( 'Your rules still decide the channels and the message. Only rules set to run when "Old posts are picked in Share old posts" take part.', 'pressqueue' ),
+				'rules_note' => __( 'Your rules still decide the channels and the message. Only rules with "I pick old posts in Share old posts" ticked take part.', 'pressqueue' ),
+				/* translators: %s: link to the Rules screen. */
+				'tick'       => __( 'Tick "I pick old posts in Share old posts" in a rule under %s.', 'pressqueue' ),
 			),
 			'repost' => array(
 				'help'       => __( 'Posts Buffer accepted before. Each goes again only to channels it was sent to, and only after the gap you choose.', 'pressqueue' ),
 				'label'      => __( 'Share again', 'pressqueue' ),
 				'no_rule'    => __( 'No rule is set up to share posts again yet.', 'pressqueue' ),
-				'rules_note' => __( 'Your rules still decide the channels and the message. Only rules set to run when "Shared posts are picked to share again" take part.', 'pressqueue' ),
+				'rules_note' => __( 'Your rules still decide the channels and the message. Only rules with "I pick shared posts to share again" ticked take part.', 'pressqueue' ),
+				/* translators: %s: link to the Rules screen. */
+				'tick'       => __( 'Tick "I pick shared posts to share again" in a rule under %s.', 'pressqueue' ),
 			),
 		);
 	}
@@ -2462,6 +2537,21 @@ final class BatchController {
 			unset( $throwable );
 			return '';
 		}
+	}
+
+	/**
+	 * Return a link to the Rules screen, or the plain word when the viewer cannot open it.
+	 *
+	 * @return string Escaped markup.
+	 */
+	private static function rules_link(): string {
+		$label = esc_html__( 'Rules', 'pressqueue' );
+
+		if ( ! current_user_can( Capabilities::MANAGE_RULES ) ) {
+			return $label;
+		}
+
+		return '<a href="' . esc_url( Ui::url( Ui::PAGE_RULES ) ) . '">' . $label . '</a>';
 	}
 
 	/**
