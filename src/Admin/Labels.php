@@ -64,6 +64,25 @@ final class Labels {
 	}
 
 	/**
+	 * Return "Network (account)" so channels with the same name stay distinguishable in text.
+	 *
+	 * @param string $service Service slug.
+	 * @param string $name Channel display name.
+	 * @return string
+	 */
+	public static function channel_label( string $service, string $name ): string {
+		$network = self::service( $service );
+		$name    = trim( $name );
+
+		if ( '' === $name || 0 === strcasecmp( $name, $network ) ) {
+			return $network;
+		}
+
+		/* translators: 1: network name such as LinkedIn, 2: account or page name. */
+		return sprintf( __( '%1$s (%2$s)', 'pressqueue' ), $network, $name );
+	}
+
+	/**
 	 * Return the short monogram shown in a service badge.
 	 *
 	 * @param string $service Service slug.

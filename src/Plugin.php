@@ -65,6 +65,9 @@ final class Plugin {
 		do_action( 'pressqueue_schema_upgrade', $network_wide );
 		do_action( 'pressqueue_capability_registration', $network_wide );
 		SettingsRepository::ensure_defaults_for_current_site();
+		if ( function_exists( 'update_option' ) ) {
+			update_option( SettingsRepository::ACTIVATED_AT_OPTION, (string) time(), true );
+		}
 		PrivacySettings::ensure_defaults_for_current_site();
 		RetentionStateStore::ensure_defaults_for_current_site();
 		self::assert_runtime_state_valid();

@@ -24,6 +24,11 @@ final class SettingsRepository {
 	public const SHARING_MODES           = array( 'test', 'live', 'paused' );
 
 	/**
+	 * Unix time of the latest activation, used to give background tasks time to start.
+	 */
+	public const ACTIVATED_AT_OPTION = 'pressqueue_activated_at';
+
+	/**
 	 * Default activation callback.
 	 */
 	public static function ensure_defaults_for_current_site(): void {
@@ -40,6 +45,7 @@ final class SettingsRepository {
 	public function ensure_defaults(): void {
 		$this->add_boolean_default( self::KILL_SWITCH_OPTION, false );
 		$this->add_boolean_default( self::DRY_RUN_OPTION, true );
+		add_option( self::ACTIVATED_AT_OPTION, (string) time(), '', true );
 	}
 
 	/**

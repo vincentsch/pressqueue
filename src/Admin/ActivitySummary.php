@@ -102,8 +102,8 @@ final class ActivitySummary {
 	public function skipped_count( int $days = 7 ): int {
 		$since = gmdate( 'Y-m-d H:i:s', time() - max( 1, $days ) * DAY_IN_SECONDS );
 		$value = $this->database->get_var(
-			'SELECT COUNT(DISTINCT event_key) FROM `' . $this->database->table( Schema::DECISIONS ) . "` WHERE created_at >= %s AND event_mode = 'runtime' AND result IN ('skipped', 'excluded', 'policy_error') AND event_key NOT IN (SELECT event_key FROM `" . $this->database->table( Schema::DECISIONS ) . "` WHERE created_at >= %s AND result = 'included')",
-			array( $since, $since )
+			'SELECT COUNT(DISTINCT event_key) FROM `' . $this->database->table( Schema::DECISIONS ) . "` WHERE created_at >= %s AND event_mode = 'runtime' AND result IN ('skipped', 'excluded', 'policy_error') AND reasons_json NOT LIKE %s AND event_key NOT IN (SELECT event_key FROM `" . $this->database->table( Schema::DECISIONS ) . "` WHERE created_at >= %s AND result = 'included')",
+			array( $since, '%no\\_enabled\\_rules%', $since )
 		);
 
 		return (int) $value;
@@ -123,7 +123,7 @@ final class ActivitySummary {
 		$events    = array();
 
 		foreach ( $decisions as $decision ) {
-			if ( 'runtime' !== $decision->event_mode ) {
+			if ( 'runtime' !== $decision->event_mode || self::only_no_rules( $decision ) ) {
 				continue;
 			}
 
@@ -187,6 +187,28 @@ final class ActivitySummary {
 		}
 
 		return $feed;
+	}
+
+	/**
+	 * Check whether a decision only says that no rule exists for its trigger.
+	 *
+	 * Those events, such as updates on a site without update rules, are noise on the overview.
+	 *
+	 * @param DecisionRecord $decision Decision.
+	 * @return bool
+	 */
+	private static function only_no_rules( DecisionRecord $decision ): bool {
+		if ( 'skipped' !== $decision->result ) {
+			return false;
+		}
+
+		foreach ( $decision->reasons as $reason ) {
+			if ( ! is_array( $reason ) || 'no_enabled_rules' !== ( $reason['code'] ?? null ) ) {
+				return false;
+			}
+		}
+
+		return array() !== $decision->reasons;
 	}
 
 	/**

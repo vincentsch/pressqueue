@@ -420,7 +420,7 @@ final class RuleTestView {
 		if ( array() !== $shares ) {
 			$names = array();
 			foreach ( $shares as $share ) {
-				$names[] = (string) ( $share['channel_name'] ?? '' );
+				$names[] = Labels::channel_label( (string) ( $share['service'] ?? '' ), (string) ( $share['channel_name'] ?? '' ) );
 			}
 			echo '<div class="pq-small pq-muted">' . esc_html(
 				sprintf(

@@ -11,6 +11,7 @@ namespace PressQueue\Admin;
 
 use PressQueue\Scheduler\ActionSchedulerLoader;
 use PressQueue\Scheduler\ActionSchedulerQueue;
+use PressQueue\Storage\SettingsRepository;
 
 /**
  * PressQueue sends everything through Action Scheduler, which relies on WordPress cron.
@@ -30,6 +31,12 @@ final class SchedulerHealth {
 	public static function problem(): ?array {
 		try {
 			if ( ! ( new ActionSchedulerLoader() )->is_ready() ) {
+				// Right after activation WordPress has not had a chance to run its tasks yet.
+				$activated = (int) get_option( SettingsRepository::ACTIVATED_AT_OPTION, 0 );
+				if ( $activated > 0 && time() - $activated < self::LATE_SECONDS ) {
+					return null;
+				}
+
 				return array(
 					'title' => __( 'Background tasks have not started yet', 'pressqueue' ),
 					'text'  => __( 'PressQueue sends shares in the background. WordPress starts background tasks when someone visits the site. If this message stays after a few visits, your server may stop WordPress from running its scheduled tasks.', 'pressqueue' ),

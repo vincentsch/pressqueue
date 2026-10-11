@@ -114,7 +114,7 @@ final class OverviewController {
 
 		$channel_names = array_map(
 			static function ( ChannelRecord $channel ): string {
-				return ActivitySummary::channel_display_name( $channel );
+				return Labels::channel_label( $channel->service, ActivitySummary::channel_display_name( $channel ) );
 			},
 			$enabled
 		);
