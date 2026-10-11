@@ -54,6 +54,10 @@
 				return;
 			}
 			delete form.dataset.pqConfirmed;
+			// Downloads never leave the page, so they may be submitted again right away.
+			if ( form.dataset.pqDownload === '1' ) {
+				return;
+			}
 			if ( form.dataset.pqSubmitting === '1' ) {
 				event.preventDefault();
 				return;

@@ -449,7 +449,7 @@ final class PrivacyController {
 	 */
 	private static function render_export_card(): void {
 		echo '<div class="pq-card pq-privacy-export">';
-		Ui::form_start( 'pressqueue_export_data', 'pressqueue_export_data' );
+		Ui::form_start( 'pressqueue_export_data', 'pressqueue_export_data', array(), array( 'data-pq-download' => '1' ) );
 		echo '<div class="pq-section">';
 		echo '<h2>' . esc_html__( 'Download your data', 'pressqueue' ) . '</h2>';
 		echo '<p class="pq-sub">' . esc_html__( 'Download a JSON file with your rules, channels, settings and sharing history. The saved Buffer key is never included.', 'pressqueue' ) . '</p>';

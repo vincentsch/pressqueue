@@ -324,6 +324,8 @@ function assert_zip_contents( string $zip_path ): array {
 		'pressqueue/THIRD_PARTY_NOTICES.txt',
 		'pressqueue/languages/',
 		'pressqueue/languages/pressqueue.pot',
+		'pressqueue/assets/admin/admin.css',
+		'pressqueue/assets/admin/admin.js',
 		'pressqueue/assets/admin/condition-builder.js',
 		'pressqueue/assets/editor/post-controls.js',
 		'pressqueue/composer.json',
