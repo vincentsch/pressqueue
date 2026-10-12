@@ -31,7 +31,7 @@ These rules hold in every change:
 - Each delivery keeps the same identity across retries.
 - An uncertain reply from the provider is never retried automatically.
 
-Use HTTP fakes for provider tests. Never put real API keys, private site
+Use HTTP fakes for provider tests. Never put live API keys, private site
 settings, database exports or provider transcripts in code, issues or test
 fixtures. Do not copy code or assets from proprietary plugins.
 

@@ -1,9 +1,10 @@
-# Provider Extension Contract
+# Provider extensions
 
 Provider adapters are registered through the `pressqueue_provider_adapters`
-filter. PressQueue builds the registry lazily once per request. Late
-registration after the registry is frozen takes effect on the next request.
-Provider summaries derive a display label from the provider key.
+filter. PressQueue builds the registry the first time a request needs it and
+keeps it for the rest of that request. A provider registered after that point
+shows up on the next request. The label shown for a provider is derived from
+its provider key.
 
 ## Descriptor
 
@@ -35,22 +36,22 @@ The descriptor fields are:
 - `delivery_factory`: nullable no-argument callable returning
   `DeliveryProvider`
 
-At least one factory is required. Invalid descriptors, duplicate extension
-keys, and attempts to replace a reserved built-in key are ignored for that
+At least one factory is required. An invalid descriptor, a duplicate extension
+key, or an attempt to replace a reserved built-in key is ignored for that
 provider. The built-in `buffer` provider is registered outside the filter and
 cannot be replaced.
 
-Factory failures mark only that provider unavailable for the current request.
-PressQueue reports a redacted adapter-unavailable error and does not expose
-the thrown message.
+If a factory throws, only that provider becomes unavailable for the current
+request. PressQueue reports a redacted adapter-unavailable error and does not
+expose the thrown message.
 
-## Discovery And Delivery
+## Discovery and delivery
 
-Discovery adapters may read account, organization, and channel metadata. They
-must not create provider-side social posts.
+Discovery adapters may read account, organization and channel metadata. They
+must not create social posts on the provider's side.
 
 Delivery adapters receive `ProviderDeliveryRequest` objects created by the
-shared planner and worker gates. They return exactly one normalized result:
+shared planner and worker gates. They return one normalized result:
 
 - `accepted`
 - `retryable_failure`
@@ -58,12 +59,12 @@ shared planner and worker gates. They return exactly one normalized result:
 - `permanent_failure`
 - `ambiguous`
 
-Provider DTO public fields are immutable `readonly` properties.
+Public fields on the provider DTOs are immutable `readonly` properties.
 
-## Connection Service
+## Connection service
 
-PressQueue does not provide a generic credential UI for extension providers.
-Companion plugins own credential acquisition and provider-specific admin UI.
+PressQueue has no generic credential screen for extension providers. A
+companion plugin collects the credentials and provides its own admin screens.
 
 Use `PressQueue\Provider\ProviderConnectionService` to create and synchronize
 local connection state:
@@ -73,13 +74,13 @@ local connection state:
 - `verify_account( $connection, $credential )`
 - `sync_channels( $connection, $credential, $account, $organization_id, $preserve_enabled )`
 
-New connections and synced channels remain disabled until an operator enables
-them explicitly. Changing the selected organization demotes the connection to
-unverified and disables related destinations.
+New connections and synced channels stay disabled until an operator switches
+them on. Changing the selected organization sets the connection back to
+unverified and disables the channels that belong to it.
 
-## Conformance Tests
+## Conformance tests
 
 Reusable PHPUnit conformance support lives under `tests/Support/`. Companion
 providers can extend `ProviderConformanceTestCase` in their own test suites to
-verify DTO construction, immutable adapter boundaries, discovery success and
+check DTO construction, immutable adapter boundaries, discovery success and
 failure classification, and normalized delivery results.

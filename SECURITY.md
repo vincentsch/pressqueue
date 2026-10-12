@@ -9,5 +9,5 @@ Leave API keys, WordPress salts, account details and private content out of
 the report. Do not test against someone else's WordPress site or social
 account.
 
-Security fixes go into the latest release. PressQueue is young, so please
-update to the newest version before you report.
+Security fixes go into the latest release, so update to the newest version
+before you report.

@@ -1,15 +1,27 @@
 # PressQueue
 
-PressQueue shares your WordPress posts on LinkedIn, X, Bluesky, Mastodon,
-Threads and Facebook through your Buffer account. You decide which posts go
-where and what the message says. When you publish a post, PressQueue checks
-it against your rules. If a rule matches, it hands the post to Buffer in the
-background.
+PressQueue is a WordPress plugin that shares your posts on LinkedIn, X,
+Bluesky, Mastodon, Threads and Facebook through your Buffer account. It is
+free and open source.
 
-Nothing is sent until you say so. PressQueue starts in test mode and shows
-what it would share. Every share leaves a record.
+You make rules that say which posts go where and what the message says. When
+you publish a post, PressQueue checks it against your rules and hands it to
+Buffer in the background. PressQueue starts in test mode. It shows what it
+would share and sends nothing until you switch it to Live. Every share leaves
+a record.
 
 ![The PressQueue overview in the WordPress admin](docs/images/overview.png)
+
+## Try it
+
+1. Download the plugin ZIP from the releases page and upload it under
+   **Plugins > Add New > Upload Plugin**. Activate it.
+2. Open **PressQueue** in the admin menu. The checklist on the Overview takes
+   you through connecting Buffer, making a rule and going live.
+
+The [getting started guide](docs/getting-started.md) explains each step. To
+run PressQueue from a Git checkout, run `composer install --no-dev` in the
+plugin folder before you activate it.
 
 ## How it works
 
@@ -19,24 +31,31 @@ what it would share. Every share leaves a record.
 2. **Make a rule.** A rule says which posts to share, where to send them,
    what the message says and when it goes out. "Share every new post to all
    my channels" is one click.
-3. **Test it.** PressQueue starts in test mode. It records what it would
-   share and sends nothing, so you can check the results first.
+3. **Test it.** The rule editor runs a rule against your recent posts and
+   shows where each one would go. In test mode, PressQueue also records what
+   it would share for each post you publish, and sends nothing.
 4. **Go live.** From then on, publishing a matching post adds it to your
    Buffer queue, posts it right away or saves it as a Buffer draft, whichever
    the rule says.
 
 ## What you get
 
-- **Rules in plain words.** Pick posts by type, category, tag, author or
-  custom field. Write the message with placeholders like the title or
-  excerpt, and see a live preview with a character count.
-- **"Never share" rules.** Keep a category, tag or author off social media
-  for good. These rules win over every sharing rule. If one cannot be
-  checked, the post is not shared.
+- **Rules.** Pick posts by type, category, tag, author or custom field. Write
+  the message with placeholders like the title or excerpt, and see a live
+  preview with a character count. The link is added for you.
+- **"Never share" rules.** Keep a category, tag or author off social media.
+  These rules win over every sharing rule. If one cannot be checked, the post
+  is not shared.
 - **A switch in the editor.** Each post has a "Share this post" switch and a
   short summary of where it will go. You can change the message, channels or
   timing for one post. You can also make sharing opt-in, so new posts start
-  switched off.
+  switched off. **Share now** shares a published post that was never shared,
+  after a preview of what each channel gets.
+- **Social images.** PressQueue can draw an image for each post from its
+  title, in a style you pick once. 24 backgrounds and 6 fonts are included,
+  and you can use your own background. The same image can be the link
+  preview of your posts, with The SEO Framework, Yoast SEO, Rank Math,
+  Jetpack or no SEO plugin.
 - **Share old posts.** Pick older posts, review the list and share them
   spread across your Buffer queue. PressQueue will not share the same post
   to the same channel twice by accident.
@@ -88,26 +107,15 @@ from your own server.
   how many posts a free plan can queue.
 - Images must be public HTTPS URLs. Video posts, Instagram, TikTok, YouTube
   and Pinterest are not supported yet.
-
-## Install
-
-Download the plugin ZIP from the releases page and upload it under
-**Plugins > Add New > Upload Plugin**, then activate it. Open **PressQueue**
-in the admin menu and follow the checklist.
-
-To run it from a Git checkout, run `composer install --no-dev` in the plugin
-folder before activating.
-
-The [getting started guide](docs/getting-started.md) takes you through the
-setup.
+- Social images need the PHP GD extension with FreeType. Without it, posts
+  are shared with text and link.
 
 ## Why an API key and not "Log in with Buffer"?
 
 Buffer's login flow needs every website's address registered with Buffer in
 advance. That does not work for a plugin anyone can install on their own
-site. A personal API key is what Buffer recommends for tools you run
-yourself. It takes about a minute to create, and PressQueue stores it
-encrypted with your site's security keys.
+site. You create a personal API key in Buffer's settings instead, and
+PressQueue stores it encrypted with your site's security keys.
 
 ## Privacy
 
@@ -119,9 +127,9 @@ you switch on deletion under **Settings > Data and privacy**. See
 
 ## For developers
 
-PressQueue has WP-CLI commands with JSON output, hooks for observing
-decisions and deliveries, and a provider interface for adding services
-other than Buffer:
+PressQueue has WP-CLI commands with JSON output, hooks for watching decisions
+and deliveries, and a provider interface for adding services other than
+Buffer:
 
 - [WP-CLI commands](docs/developer/wp-cli.md)
 - [Observation hooks](docs/developer/observation-hooks.md)
@@ -138,7 +146,7 @@ composer run analyse
 ```
 
 Integration tests need the WordPress test suite and a throwaway database.
-They create and drop tables, so never point them at a real database:
+They create and drop tables, so never point them at a database you use:
 
 ```bash
 bash tools/install-wp-tests.sh pressqueue_tests root '' 127.0.0.1 7.1.3
@@ -158,3 +166,8 @@ under GPL-3.0-or-later. See [third-party notices](THIRD_PARTY_NOTICES.md).
 
 PressQueue is an independent project. It is not affiliated with Buffer or
 any other social publishing plugin.
+
+## Help
+
+Bug reports and questions go in the repository's issues. To report a
+security issue, read [SECURITY.md](SECURITY.md).

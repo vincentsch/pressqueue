@@ -42,9 +42,9 @@ First public release.
 - A "Share this post" switch in the block and classic editors that saves with
   the post, and an optional opt-in mode for new posts.
 - A Share now button in both editors for published posts that were never
-  shared. It shows exactly what each channel would get before anything is sent.
-- Posts kept back by their own switch show a calm "Sharing off" label instead
-  of looking like an error.
+  shared. It shows what each channel would get before anything is sent.
+- Posts kept back by their own switch show "Sharing off" instead of an error
+  label.
 - A Social sharing column in post lists and a dashboard notice for shares
   that need attention.
 

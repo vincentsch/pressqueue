@@ -1,7 +1,7 @@
 # Getting started
 
 This guide takes you from a fresh install to your first post on social media.
-Set aside about ten minutes. Nothing is sent to Buffer until the last step.
+Nothing is sent to Buffer until the last step.
 
 ## 1. Connect Buffer
 
@@ -53,7 +53,7 @@ anything. Posts you published earlier are tested as if they were new. Each
 post shows the channels it would go to or, if it would not be shared, why.
 Open **Show messages** to see the exact text.
 
-When the result looks right, click **Turn on this rule**.
+When it looks right, click **Turn on this rule**.
 
 PressQueue starts in **test mode**. Test mode checks every post you publish
 and records what it would share, but sends nothing to Buffer. Publish a post
@@ -102,7 +102,7 @@ feed.
 2. Open a rule and set **Image** to "Social image with the post title". A
    single post can choose it too, under **Customize for this post**.
 3. Under **Link previews**, choose "Use the social image for every post" so
-   the same picture appears when anyone shares the link, not only PressQueue.
+   the same picture appears whenever anyone shares the link.
 
 The image is made the first time a post needs it and saved in
 `wp-content/uploads/pressqueue/social`. It is made again when the title or
@@ -130,8 +130,8 @@ Only rules that include "I pick old posts" (or "I pick shared posts to share
 again") take part. Your "never share" rules still apply. With "Never shared
 before", PressQueue skips any channel a post was already shared to.
 
-Followers see old posts as new ones. A small batch spread across the queue
-looks natural; fifty posts in one morning does not.
+Followers see old posts as new ones, so share a small batch spread across
+the queue rather than fifty posts in one morning.
 
 ## When something goes wrong
 
@@ -161,13 +161,13 @@ happens and shows how to add a server cron job.
 ## Good to know
 
 - PressQueue keeps every message, including its link, within 280 characters
-  on every network. A message that is too long is refused, not cut off.
+  on every network. A message that is too long is refused rather than cut off.
 - Images must be JPEG, PNG or GIF files of up to 5 MB and 4096 pixels per
   side, at a public HTTPS address.
 - Posts dated more than a day in the past are not shared automatically when
   published. Use Share old posts for those.
 - An update is shared again only when a rule includes "A published post is
-  updated" and the post's content actually changed.
+  updated" and the post's content changed.
 - "Sent to Buffer" means Buffer accepted the share. Buffer then publishes it
   according to the timing you chose.
 

@@ -1,20 +1,21 @@
-# Observation Hooks
+# Observation hooks
 
-PressQueue exposes best-effort observation hooks for local integrations. Hook
-subscribers run after the outermost successful database commit. Subscriber
-exceptions are caught, redacted, and do not undo committed operations.
+PressQueue fires hooks that let code on the same site watch what it records.
+They are best effort. Subscribers run after the outermost database commit has
+succeeded. An exception thrown by a subscriber is caught and redacted, and it
+does not undo the committed operation.
 
-## Provider Registration
+## Provider registration
 
 `pressqueue_provider_adapters` is a filter that receives an array of
 `ProviderDescriptor` instances and returns an array of descriptors.
 
-The built-in `buffer` descriptor is inserted before the filter and cannot be
-replaced by the filter.
+The built-in `buffer` descriptor is inserted before the filter runs and
+cannot be replaced by the filter.
 
-## Decision Recorded
+## Decision recorded
 
-`pressqueue_decision_recorded` fires only for a newly inserted decision after
+`pressqueue_decision_recorded` fires only for a newly inserted decision, after
 the transaction commits. It does not fire when deduplication returns an
 existing decision row.
 
@@ -35,10 +36,10 @@ Payload keys:
 - `snapshot_hash`
 - `created_at_utc`
 
-## Delivery Event Recorded
+## Delivery event recorded
 
 `pressqueue_delivery_event_recorded` fires once per newly committed delivery
-event after the transaction commits. It does not fire on rollback.
+event, after the transaction commits. It does not fire on rollback.
 
 Payload keys:
 
@@ -57,9 +58,8 @@ Payload keys:
 - `classification`
 - `created_at_utc`
 
-Observation payloads expose identities, classifications, states, hashes, and
-timestamps. They do not expose snapshot bodies, event detail bodies, rendered
-content, media URLs, credentials, encrypted credential envelopes,
-Authorization headers, raw HTTP request arguments, raw provider responses,
-full provider payloads, or actor user IDs.
-
+Payloads carry identities, classifications, states, hashes and timestamps.
+They do not carry snapshot bodies, event detail bodies, rendered content,
+media URLs, credentials, encrypted credential envelopes, Authorization
+headers, raw HTTP request arguments, raw provider responses, full provider
+payloads or actor user IDs.

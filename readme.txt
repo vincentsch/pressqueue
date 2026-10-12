@@ -17,8 +17,8 @@ which posts go where and what the message says. When you publish a post,
 PressQueue checks it against your rules and hands it to Buffer in the
 background. There it joins your queue, goes out right away or waits as a draft.
 
-Nothing is sent until you say so. PressQueue starts in test mode, shows what
-it would share and keeps a record of every share.
+PressQueue starts in test mode. It shows what it would share, sends nothing
+until you go live, and keeps a record of every share.
 
 **Getting started**
 
@@ -26,7 +26,7 @@ it would share and keeps a record of every share.
 * Create a rule with one click: "Share every new post to all my channels".
 * Test it against your recent posts, then turn it on and go live.
 
-**Rules in plain words**
+**Rules**
 
 * Pick posts by post type, category, tag, author or custom field.
 * Write the message with the title, excerpt, author, categories or tags, and
@@ -46,8 +46,8 @@ it would share and keeps a record of every share.
 * Each post has a "Share this post" switch in the editor, plus options to
   change the message, channels or timing for that post.
 * Make sharing opt-in, so new posts start switched off.
-* Share an older post from the editor with Share now, after a preview of
-  exactly what each channel gets.
+* Share a published post that was never shared with Share now in the editor,
+  after a preview of what each channel gets.
 * Pause everything with one switch. Waiting shares are held until you resume.
 
 **Share older posts**
@@ -65,7 +65,7 @@ A column in your post list shows where each post went.
 
 **For developers**
 
-PressQueue has WP-CLI commands with JSON output, hooks for observing decisions
+PressQueue has WP-CLI commands with JSON output, hooks for watching decisions
 and deliveries, and a provider interface for services other than Buffer.
 
 PressQueue has no hosted service and no tracking. It talks to Buffer from
@@ -77,8 +77,8 @@ GPL-3.0-or-later.
 
 == Installation ==
 
-1. Install PressQueue from Plugins > Add New, or upload the ZIP under
-   Plugins > Add New > Upload Plugin, and activate it.
+1. Upload the plugin ZIP under Plugins > Add New > Upload Plugin and activate
+   it.
 2. Open PressQueue in the admin menu and follow the checklist on the Overview.
 3. Under Channels, create an API key in Buffer (Settings > API > New API key),
    paste it and click Connect. Switch on the channels you want to use.
@@ -99,8 +99,8 @@ many posts a free plan can keep in its queue.
 
 Buffer's login flow needs every website's address registered with Buffer in
 advance. That does not work for a plugin people install on their own sites.
-A personal API key is what Buffer recommends for tools you run yourself. It
-takes about a minute to create, and PressQueue stores it encrypted.
+You create a personal API key in Buffer's settings instead, and PressQueue
+stores it encrypted.
 
 = Which networks are supported? =
 
@@ -118,8 +118,8 @@ happens.
 = What is the difference between test mode and a Buffer draft? =
 
 Test mode stays inside WordPress and sends nothing to Buffer. A rule with the
-Buffer draft timing creates a real draft in Buffer, which you review and
-schedule there.
+Buffer draft timing creates a draft in Buffer, which you review and schedule
+there.
 
 = How do I stop a post from being shared? =
 
