@@ -90,10 +90,10 @@
 			event.preventDefault();
 			if ( ! frame ) {
 				frame = wp.media( {
-					title: __( 'Choose images to share', 'pressqueue' ),
-					button: { text: __( 'Use these images', 'pressqueue' ) },
+					title: __( 'Choose an image to share', 'pressqueue' ),
+					button: { text: __( 'Use this image', 'pressqueue' ) },
 					library: { type: 'image' },
-					multiple: true
+					multiple: false
 				} );
 				frame.on( 'open', function () {
 					var selection = frame.state().get( 'selection' );
@@ -107,7 +107,7 @@
 					} );
 				} );
 				frame.on( 'select', function () {
-					var picked = frame.state().get( 'selection' ).toJSON().slice( 0, 4 );
+					var picked = frame.state().get( 'selection' ).toJSON().slice( 0, 1 );
 					input.value = picked.map( function ( item ) {
 						return item.id;
 					} ).join( ',' );

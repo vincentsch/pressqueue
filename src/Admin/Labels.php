@@ -210,7 +210,7 @@ final class Labels {
 				'help'  => __( 'The social network may still show a link preview.', 'pressqueue' ),
 			),
 			'post_media'              => array(
-				'label' => __( 'Images chosen in each post', 'pressqueue' ),
+				'label' => __( 'Image chosen in each post', 'pressqueue' ),
 				'help'  => __( 'Writers pick the image in the post editor.', 'pressqueue' ),
 			),
 		);
@@ -228,7 +228,7 @@ final class Labels {
 			'featured_image_optional' => __( 'with the featured image when there is one', 'pressqueue' ),
 			'featured_image'          => __( 'with the featured image', 'pressqueue' ),
 			'none'                    => __( 'without an image', 'pressqueue' ),
-			'post_media'              => __( 'with the images chosen in the post', 'pressqueue' ),
+			'post_media'              => __( 'with the image chosen in the post', 'pressqueue' ),
 		);
 
 		return $phrases[ $mode ] ?? '';

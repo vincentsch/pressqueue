@@ -538,8 +538,8 @@ final class PostControlsController {
 			echo '<li>' . ( '' === $thumb ? esc_html( '#' . $attachment_id ) : $thumb ) . '</li>';
 		}
 		echo '</ul>';
-		echo '<button type="button" class="button" data-pq-media-pick>' . esc_html__( 'Choose images', 'pressqueue' ) . '</button>';
-		echo '<span class="pq-ed-help">' . esc_html__( 'Up to four images from the media library.', 'pressqueue' ) . '</span>';
+		echo '<button type="button" class="button" data-pq-media-pick>' . esc_html__( 'Choose an image', 'pressqueue' ) . '</button>';
+		echo '<span class="pq-ed-help">' . esc_html__( 'One image from the media library. Buffer shares one image per post.', 'pressqueue' ) . '</span>';
 		echo '</div>';
 
 		echo '</div></details>';
@@ -620,7 +620,7 @@ final class PostControlsController {
 			$options['featured_image'] = __( 'Featured image, hold the post back without one', 'pressqueue' );
 		}
 
-		$options['post_media'] = __( 'Choose images', 'pressqueue' );
+		$options['post_media'] = __( 'Choose an image', 'pressqueue' );
 
 		return $options;
 	}
@@ -768,7 +768,7 @@ final class PostControlsController {
 			$message = $throwable->getMessage();
 			$known   = array(
 				'explicit schedule' => __( 'Pick a valid date, time and time zone for sharing, or choose another timing.', 'pressqueue' ),
-				'media'             => __( 'One of the chosen images cannot be used. Choose up to four images from the media library, or pick another image setting.', 'pressqueue' ),
+				'media'             => __( 'The chosen image cannot be used. Choose one image from the media library, or pick another image setting.', 'pressqueue' ),
 				'message override'  => __( 'The custom message must be 2,000 characters or fewer.', 'pressqueue' ),
 				'channel'           => __( 'One of the chosen channels cannot be used. Reload the page and pick the channels again.', 'pressqueue' ),
 			);

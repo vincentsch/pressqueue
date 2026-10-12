@@ -438,7 +438,7 @@
 
 		if ( mode === 'post_media' ) {
 			box.hidden = false;
-			box.textContent = __( 'Images chosen in the post', 'pressqueue' );
+			box.textContent = __( 'Image chosen in the post', 'pressqueue' );
 			return '';
 		}
 

@@ -980,23 +980,23 @@
 			) : null,
 			MediaUpload ? el( MediaUpload, {
 				allowedTypes: [ 'image' ],
-				multiple: true,
+				multiple: false,
 				gallery: false,
-				value: ids,
-				title: __( 'Choose images to share', 'pressqueue' ),
+				value: ids[ 0 ],
+				title: __( 'Choose an image to share', 'pressqueue' ),
 				onSelect: function ( items ) {
 					var picked = ( Array.isArray( items ) ? items : [ items ] ).map( function ( item ) {
 						return parseInt( item && item.id, 10 );
 					} ).filter( function ( id ) {
 						return id > 0;
 					} );
-					props.onChange( picked.slice( 0, 4 ) );
+					props.onChange( picked.slice( 0, 1 ) );
 				},
 				render: function ( upload ) {
-					return el( Button, { variant: 'secondary', onClick: upload.open, disabled: props.disabled }, ids.length ? __( 'Change images', 'pressqueue' ) : __( 'Choose images', 'pressqueue' ) );
+					return el( Button, { variant: 'secondary', onClick: upload.open, disabled: props.disabled }, ids.length ? __( 'Change image', 'pressqueue' ) : __( 'Choose an image', 'pressqueue' ) );
 				}
 			} ) : null,
-			el( 'p', { className: 'pq-ed-help' }, __( 'Up to four images from the media library.', 'pressqueue' ) )
+			el( 'p', { className: 'pq-ed-help' }, __( 'One image from the media library. Buffer shares one image per post.', 'pressqueue' ) )
 		);
 	}
 

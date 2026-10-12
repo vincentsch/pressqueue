@@ -570,8 +570,8 @@ final class RuleSummary {
 				/* translators: %s: highlighted phrase "featured image". */
 				return sprintf( esc_html__( 'with the %s, and hold back posts without one', 'pressqueue' ), self::chip( __( 'featured image', 'pressqueue' ) ) );
 			case 'post_media':
-				/* translators: %s: highlighted phrase "images chosen in the post". */
-				return sprintf( esc_html__( 'with the %s', 'pressqueue' ), self::chip( __( 'images chosen in the post', 'pressqueue' ) ) );
+				/* translators: %s: highlighted phrase "image chosen in the post". */
+				return sprintf( esc_html__( 'with the %s', 'pressqueue' ), self::chip( __( 'image chosen in the post', 'pressqueue' ) ) );
 		}
 
 		return self::chip( __( 'without an image', 'pressqueue' ) );

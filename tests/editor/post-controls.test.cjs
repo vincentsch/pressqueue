@@ -262,7 +262,7 @@ function harness( options = {} ) {
 	};
 
 	vm.runInNewContext( SOURCE, {
-		window: { wp, pressqueuePostControls: Object.assign( { canAccess: true, canViewLog: true, schedules: { inherit: 'Use the rule', queue_end: 'Add to the end of the Buffer queue', explicit_time: 'Pick a date and time' }, images: { inherit: 'Use the rule', none: 'No image', post_media: 'Choose images' } }, options.config || {} ) },
+		window: { wp, pressqueuePostControls: Object.assign( { canAccess: true, canViewLog: true, schedules: { inherit: 'Use the rule', queue_end: 'Add to the end of the Buffer queue', explicit_time: 'Pick a date and time' }, images: { inherit: 'Use the rule', none: 'No image', post_media: 'Choose an image' } }, options.config || {} ) },
 		setTimeout: ( callback ) => {
 			timers.set( ++nextTimer, callback );
 			return nextTimer;

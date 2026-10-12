@@ -341,7 +341,7 @@ final class PostControlAuthorizationTest extends TestCase {
 	public function test_control_errors_explain_how_to_fix_them(): void {
 		self::assertStringContainsString( 'Reload the page', PostControlsController::control_error_message( new StaleRecordException( 'x' ) ) );
 		self::assertStringContainsString( 'Pick a valid date', PostControlsController::control_error_message( new ValidationException( 'PressQueue explicit schedule date is invalid.' ) ) );
-		self::assertStringContainsString( 'images', PostControlsController::control_error_message( new ValidationException( 'Selected media attachment is outside the authority boundary.' ) ) );
+		self::assertStringContainsString( 'Choose one image', PostControlsController::control_error_message( new ValidationException( 'Selected media attachment is outside the authority boundary.' ) ) );
 		self::assertSame( 'REST request body must be a JSON object.', PostControlsController::control_error_message( new ValidationException( 'REST request body must be a JSON object.' ) ) );
 		self::assertSame( 'PressQueue controls could not be saved.', PostControlsController::control_error_message( new ValidationException( 'Internal detail that must stay hidden.' ) ) );
 	}

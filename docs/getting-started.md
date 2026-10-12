@@ -42,7 +42,7 @@ To build your own, click **Add sharing rule**:
 - **Timing**: add it to the end of the Buffer queue, use the next free queue
   slot, post right away, or save it as a Buffer draft for review.
 - **Image**: the featured image when there is one, only posts that have a
-  featured image, no image, or images chosen in each post.
+  featured image, no image, or an image chosen in each post.
 
 Click **Save and test**. New and changed rules start switched off.
 
