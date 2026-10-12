@@ -18,6 +18,17 @@ First public release.
   a Buffer draft, or a date and time picked for one post.
 - Share old posts in reviewed batches, for the first time or again.
 
+### Social images
+
+- PressQueue can draw a social image for each post: the post title on a
+  background, in a style you pick once. 24 backgrounds and 6 fonts are
+  included, and you can use your own background image.
+- A rule or a single post can share with the social image. If the image
+  cannot be made, the post is shared with text and link as before.
+- The social image can also become the link preview image of your posts.
+  PressQueue hands it to The SEO Framework, Yoast SEO, Rank Math or
+  Jetpack, or adds the tags itself when no SEO plugin is active.
+
 ### Admin
 
 - An overview with a setup checklist, recent activity, a post check and a

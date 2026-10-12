@@ -27,7 +27,7 @@ final class PostControlMetadata {
 	private const CHANNEL_MODES     = array( 'inherit', 'override' );
 	private const MESSAGE_MODES     = array( 'inherit', 'override' );
 	private const SCHEDULE_MODES    = array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' );
-	private const MEDIA_MODES       = array( 'inherit', 'none', 'featured_image', 'featured_image_optional', 'post_media' );
+	private const MEDIA_MODES       = array( 'inherit', 'none', 'featured_image', 'featured_image_optional', 'post_media', 'social_card' );
 	private const MESSAGE_MAX_CHARS = 2000;
 	private const MESSAGE_MAX_BYTES = 16384;
 

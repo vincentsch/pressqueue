@@ -1,0 +1,170 @@
+[
+  {
+    "id": "midnight-navy",
+    "name": "Midnight Navy",
+    "group": "Gradients",
+    "text": "light",
+    "calm": "left"
+  },
+  {
+    "id": "coral-peach",
+    "name": "Coral and Peach",
+    "group": "Gradients",
+    "text": "dark",
+    "calm": "left"
+  },
+  {
+    "id": "mint-teal",
+    "name": "Mint and Teal",
+    "group": "Gradients",
+    "text": "dark",
+    "calm": "left"
+  },
+  {
+    "id": "violet-dusk",
+    "name": "Violet Dusk",
+    "group": "Gradients",
+    "text": "light",
+    "calm": "left"
+  },
+  {
+    "id": "warm-sand",
+    "name": "Warm Sand",
+    "group": "Gradients",
+    "text": "dark",
+    "calm": "center"
+  },
+  {
+    "id": "graphite-steel",
+    "name": "Graphite and Steel",
+    "group": "Gradients",
+    "text": "light",
+    "calm": "left"
+  },
+  {
+    "id": "edge-shape",
+    "name": "Apricot Edge",
+    "group": "Gradients",
+    "text": "dark",
+    "calm": "left"
+  },
+  {
+    "id": "diagonal-light",
+    "name": "Pale Blue Light",
+    "group": "Gradients",
+    "text": "dark",
+    "calm": "center"
+  },
+  {
+    "id": "soft-paper",
+    "name": "Soft Paper",
+    "group": "Textures",
+    "text": "dark",
+    "calm": "center"
+  },
+  {
+    "id": "kraft-paper",
+    "name": "Kraft Paper",
+    "group": "Textures",
+    "text": "dark",
+    "calm": "center"
+  },
+  {
+    "id": "fine-concrete",
+    "name": "Fine Concrete",
+    "group": "Textures",
+    "text": "dark",
+    "calm": "center"
+  },
+  {
+    "id": "natural-linen",
+    "name": "Natural Linen",
+    "group": "Textures",
+    "text": "dark",
+    "calm": "center"
+  },
+  {
+    "id": "layered-shapes",
+    "name": "Soft Terracotta Layers",
+    "group": "Shapes",
+    "text": "dark",
+    "calm": "left"
+  },
+  {
+    "id": "flowing-waves",
+    "name": "Petrol Waves",
+    "group": "Shapes",
+    "text": "light",
+    "calm": "left"
+  },
+  {
+    "id": "isometric-grid",
+    "name": "Fading Isometric Grid",
+    "group": "Shapes",
+    "text": "dark",
+    "calm": "left"
+  },
+  {
+    "id": "overlapping-circles",
+    "name": "Overlapping Circles",
+    "group": "Shapes",
+    "text": "dark",
+    "calm": "left"
+  },
+  {
+    "id": "city-bokeh",
+    "name": "City Lights",
+    "group": "Photo",
+    "text": "light",
+    "calm": "left"
+  },
+  {
+    "id": "misty-ridge",
+    "name": "Misty Dawn Ridge",
+    "group": "Photo",
+    "text": "dark",
+    "calm": "left"
+  },
+  {
+    "id": "ocean-horizon",
+    "name": "Quiet Ocean",
+    "group": "Photo",
+    "text": "dark",
+    "calm": "left"
+  },
+  {
+    "id": "forest-light",
+    "name": "Forest Light",
+    "group": "Photo",
+    "text": "light",
+    "calm": "left"
+  },
+  {
+    "id": "blueprint-grid",
+    "name": "Midnight Blueprint",
+    "group": "Tech",
+    "text": "light",
+    "calm": "left"
+  },
+  {
+    "id": "fading-circuits",
+    "name": "Fading Circuits",
+    "group": "Tech",
+    "text": "light",
+    "calm": "left"
+  },
+  {
+    "id": "faint-nebula",
+    "name": "Distant Nebula",
+    "group": "Tech",
+    "text": "light",
+    "calm": "left"
+  },
+  {
+    "id": "terminal-glow",
+    "name": "Terminal Green Glow",
+    "group": "Tech",
+    "text": "light",
+    "calm": "left"
+  }
+]

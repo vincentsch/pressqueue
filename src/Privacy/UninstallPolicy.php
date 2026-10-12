@@ -79,6 +79,7 @@ final class UninstallPolicy {
 			return;
 		}
 
+		\PressQueue\SocialCard\CardStore::delete_all();
 		self::delete_post_meta();
 		self::delete_options_and_transients();
 		self::drop_plugin_tables();

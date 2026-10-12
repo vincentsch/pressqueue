@@ -11,6 +11,7 @@ namespace PressQueue\Planning;
 
 use PressQueue\Provider\Capability\DeliveryCapability;
 use PressQueue\Editorial\PostControlMetadata;
+use PressQueue\SocialCard\CardStore;
 use PressQueue\Storage\CanonicalJson;
 use PressQueue\Storage\Record\RuleRecord;
 use PressQueue\Storage\ValidationException;
@@ -62,7 +63,7 @@ final class MediaResolver {
 		try {
 			$items = array();
 			foreach ( $policy->attachment_ids as $index => $attachment_id ) {
-				$items[] = $this->attachment_item( $event->post_id, $attachment_id, $index, $capability, $allow_probe, 'runtime' === $event->mode );
+				$items[] = $this->attachment_item( $event->post_id, $attachment_id, $index, $capability, $allow_probe, 'runtime' === $event->mode, 'social_card' === $policy->mode );
 			}
 
 			$snapshot = new MediaSnapshot(
@@ -78,6 +79,10 @@ final class MediaResolver {
 			}
 		} catch ( ValidationException $exception ) {
 			if ( 'featured_image_optional' === ( $rule->media_policy['mode'] ?? null ) && 'inherit' === ( $event->control_bundle['media']['mode'] ?? 'inherit' ) ) {
+				return MediaSnapshot::none();
+			}
+			if ( 'social_card' === $policy->mode ) {
+				// A social image is a nice extra. When it cannot be made or sent, share text and link.
 				return MediaSnapshot::none();
 			}
 			throw $exception;
@@ -104,6 +109,12 @@ final class MediaResolver {
 
 		if ( 'none' === $mode ) {
 			return new MediaPolicy( 'none' );
+		}
+
+		if ( 'social_card' === $mode ) {
+			$card = CardStore::for_post( $event->post_id );
+
+			return null === $card ? new MediaPolicy( 'none' ) : new MediaPolicy( 'social_card', array( $card['attachment_id'] ) );
 		}
 
 		if ( 'featured_image' === $mode || 'featured_image_optional' === $mode ) {
@@ -146,15 +157,20 @@ final class MediaResolver {
 	 * @param array<string,mixed> $capability Capability document.
 	 * @param bool                $allow_probe Whether probing is allowed.
 	 * @param bool                $runtime Whether resolving previously saved selections for runtime work.
+	 * @param bool                $own_card Whether the attachment is a social card PressQueue drew for this post.
 	 * @return array<string,mixed>
 	 */
-	private function attachment_item( int $post_id, int $attachment_id, int $index, array $capability, bool $allow_probe, bool $runtime ): array {
+	private function attachment_item( int $post_id, int $attachment_id, int $index, array $capability, bool $allow_probe, bool $runtime, bool $own_card = false ): array {
 		$attachment = function_exists( 'get_post' ) ? get_post( $attachment_id ) : null;
 		if ( ! $attachment instanceof \WP_Post || 'attachment' !== (string) $attachment->post_type ) {
 			throw new ValidationException( 'Selected media attachment does not exist.' );
 		}
 
-		if ( ! $this->can_use_attachment( $post_id, $attachment, $runtime ) ) {
+		if ( $own_card && ( (int) $attachment->post_parent !== $post_id || ! CardStore::is_card( $attachment_id ) ) ) {
+			throw new ValidationException( 'Social image does not belong to this post.' );
+		}
+
+		if ( ! $own_card && ! $this->can_use_attachment( $post_id, $attachment, $runtime ) ) {
 			throw new ValidationException( 'Selected media attachment is outside the authority boundary.' );
 		}
 
@@ -165,8 +181,9 @@ final class MediaResolver {
 
 		$known_facts     = $this->known_attachment_facts( $attachment_id, $attachment );
 		$capability_hash = DeliveryCapability::hash( $capability );
-		$probe           = $this->probe_for_attachment( $attachment_id, $url, (string) $attachment->post_modified_gmt, $capability_hash, $allow_probe, $known_facts );
-		$alt             = function_exists( 'get_post_meta' ) ? (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) : '';
+		// PressQueue wrote the card file itself, so its facts are known without fetching it.
+		$probe = $own_card ? $this->own_card_probe( $known_facts ) : $this->probe_for_attachment( $attachment_id, $url, (string) $attachment->post_modified_gmt, $capability_hash, $allow_probe, $known_facts );
+		$alt   = function_exists( 'get_post_meta' ) ? (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) : '';
 
 		return array(
 			'alt_text'                   => $alt,
@@ -193,6 +210,20 @@ final class MediaResolver {
 			'url'                        => $url,
 			'width'                      => (int) $probe['width'],
 		);
+	}
+
+	/**
+	 * Return probe facts for a card PressQueue drew.
+	 *
+	 * @param array<string,mixed> $known_facts Local attachment facts.
+	 * @return array<string,mixed>
+	 */
+	private function own_card_probe( array $known_facts ): array {
+		if ( ! $this->probe_has_required_facts( $known_facts ) ) {
+			throw new ValidationException( 'Social image file details are missing.' );
+		}
+
+		return $known_facts;
 	}
 
 	/**

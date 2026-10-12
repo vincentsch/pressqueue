@@ -193,6 +193,10 @@ final class Labels {
 	 */
 	public static function media_modes(): array {
 		return array(
+			'social_card'             => array(
+				'label' => __( 'Social image with the post title', 'pressqueue' ),
+				'help'  => __( 'PressQueue draws the image in the style you pick under Settings, Social images.', 'pressqueue' ),
+			),
 			'featured_image_optional' => array(
 				'label' => __( 'Featured image when there is one', 'pressqueue' ),
 				'help'  => __( 'Posts without a featured image are shared as text.', 'pressqueue' ),
@@ -220,6 +224,7 @@ final class Labels {
 	 */
 	public static function media_phrase( string $mode ): string {
 		$phrases = array(
+			'social_card'             => __( 'with a social image of the title', 'pressqueue' ),
 			'featured_image_optional' => __( 'with the featured image when there is one', 'pressqueue' ),
 			'featured_image'          => __( 'with the featured image', 'pressqueue' ),
 			'none'                    => __( 'without an image', 'pressqueue' ),

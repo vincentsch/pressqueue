@@ -560,6 +560,9 @@ final class RuleSummary {
 	 */
 	private function media_phrase( string $mode ): string {
 		switch ( $mode ) {
+			case 'social_card':
+				/* translators: %s: highlighted phrase "social image of the title". */
+				return sprintf( esc_html__( 'with a %s', 'pressqueue' ), self::chip( __( 'social image of the title', 'pressqueue' ) ) );
 			case 'featured_image_optional':
 				/* translators: %s: highlighted phrase "featured image when there is one". */
 				return sprintf( esc_html__( 'with the %s', 'pressqueue' ), self::chip( __( 'featured image when there is one', 'pressqueue' ) ) );

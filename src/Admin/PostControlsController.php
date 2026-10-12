@@ -612,6 +612,7 @@ final class PostControlsController {
 		$options = array(
 			'inherit'                 => __( 'Use the rule', 'pressqueue' ),
 			'none'                    => __( 'No image', 'pressqueue' ),
+			'social_card'             => __( 'Social image with the title', 'pressqueue' ),
 			'featured_image_optional' => __( 'Featured image', 'pressqueue' ),
 		);
 
@@ -1053,7 +1054,7 @@ final class PostControlsController {
 				'rule_relevant_metadata_keys' => self::rule_metadata_allowlist(),
 				'rule_relevant_taxonomies'    => self::rule_taxonomies(),
 				'selected_rule_destinations'  => self::selected_rule_destinations(),
-				'supported_media_modes'       => array( 'inherit', 'none', 'featured_image', 'featured_image_optional', 'post_media' ),
+				'supported_media_modes'       => array( 'inherit', 'none', 'featured_image', 'featured_image_optional', 'post_media', 'social_card' ),
 				'supported_schedule_modes'    => array( 'inherit', 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' ),
 			),
 			'supported_next_actions' => array(

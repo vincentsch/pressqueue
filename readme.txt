@@ -33,7 +33,11 @@ it would share and keeps a record of every share.
   see a live preview with a character count. The link is added for you.
 * Choose the timing: the end of your Buffer queue, the next free slot, right
   away, or a Buffer draft to review first.
-* Add the featured image when there is one.
+* Add the featured image when there is one, or a social image that PressQueue
+  draws from the post title in a style you pick: 24 backgrounds, 6 fonts, or
+  your own background.
+* Use the social image as the link preview of your posts too, with The SEO
+  Framework, Yoast SEO, Rank Math, Jetpack or no SEO plugin.
 
 **Decide what goes out**
 
@@ -171,6 +175,7 @@ Buffer privacy policy: https://buffer.com/legal#privacy-policy
 First public release.
 
 * Rules with conditions, message templates, timing and images.
+* Social images drawn from the post title, also usable as link previews.
 * "Never share" rules and a "Share this post" switch for each post.
 * One-step Buffer connection and channel switches.
 * Test mode, Live and Paused.

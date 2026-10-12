@@ -220,6 +220,7 @@ final class MessageComposer {
 				'terms'   => self::post_terms( $post ),
 				'url'     => is_string( $url ) ? $url : home_url( '/' ),
 				'image'   => is_string( $image ) ? $image : '',
+				'card'    => SocialCardsController::preview_url( array( 'post' => (int) $post->ID ) ),
 			);
 		}
 
@@ -234,6 +235,7 @@ final class MessageComposer {
 				'terms'   => array(),
 				'url'     => home_url( '/your-post/' ),
 				'image'   => '',
+				'card'    => SocialCardsController::preview_url( array( 'title' => __( 'Your post title', 'pressqueue' ) ) ),
 			);
 		}
 

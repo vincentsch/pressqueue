@@ -112,6 +112,7 @@ final class SettingsController {
 		);
 
 		if ( current_user_can( Capabilities::MANAGE_SETTINGS ) ) {
+			$tabs['social']  = array( __( 'Social images', 'pressqueue' ), Ui::url( SocialCardsController::SLUG ) );
 			$tabs['privacy'] = array( __( 'Data and privacy', 'pressqueue' ), Ui::url( Ui::PAGE_PRIVACY ) );
 		}
 

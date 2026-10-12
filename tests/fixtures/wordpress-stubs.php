@@ -537,6 +537,16 @@ function wp_get_referer() {
 }
 
 /**
+ * Strip tags for tests.
+ *
+ * @param mixed $text Input value.
+ * @return string
+ */
+function wp_strip_all_tags( $text ): string {
+	return trim( strip_tags( (string) $text ) );
+}
+
+/**
  * Sanitize a text field for tests.
  *
  * @param mixed $value Input value.

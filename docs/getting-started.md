@@ -90,6 +90,32 @@ Open **Customize for this post** in the editor panel to change the message,
 leave out channels, pick a date and time, or choose images for that post.
 A picked time must be at least 15 minutes ahead and no more than a year out.
 
+## Social images
+
+PressQueue can draw an image for each post: the post title on a background,
+plus your site name. Posts without a good photo still get a picture in the
+feed.
+
+1. Open **PressQueue > Settings > Social images**. Pick a background and a
+   font. The preview uses your latest post titles. You can also choose your
+   own background from the Media Library.
+2. Open a rule and set **Image** to "Social image with the post title". A
+   single post can choose it too, under **Customize for this post**.
+3. Under **Link previews**, choose "Use the social image for every post" so
+   the same picture appears when anyone shares the link, not only PressQueue.
+
+The image is made the first time a post needs it and saved in
+`wp-content/uploads/pressqueue/social`. It is made again when the title or
+style changes. Generated images do not show up in the Media Library and are
+deleted with their post. If the server cannot draw images (PHP needs GD with
+FreeType), posts are shared with text and link instead.
+
+Link previews work with The SEO Framework, Yoast SEO, Rank Math and Jetpack.
+An image you set for a single post in those plugins still wins. With no SEO
+plugin, PressQueue adds the preview tags itself. Other plugins that make
+preview images, such as MightyShare, can override PressQueue's image, so
+switch off their image output first.
+
 ## Sharing older posts
 
 **PressQueue > Share old posts** shares posts that are already published:

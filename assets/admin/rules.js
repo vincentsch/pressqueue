@@ -442,6 +442,12 @@
 			return '';
 		}
 
+		if ( mode === 'social_card' && post.card ) {
+			box.hidden = false;
+			box.style.backgroundImage = 'url("' + String( post.card ).replace( /["\\]/g, '' ) + '")';
+			return '';
+		}
+
 		if ( ( mode === 'featured_image_optional' || mode === 'featured_image' ) && post.image ) {
 			box.hidden = false;
 			box.style.backgroundImage = 'url("' + String( post.image ).replace( /["\\]/g, '' ) + '")';

@@ -30,7 +30,7 @@ final class StorageEnums {
 	public const SCHEDULE_SLOTS          = array( 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' );
 	public const RULE_SCHEDULE_SLOTS     = array( 'immediate', 'queue_next', 'queue_end', 'draft' );
 	public const SCHEDULE_POLICIES       = self::SCHEDULE_SLOTS;
-	public const MEDIA_MODES             = array( 'none', 'featured_image', 'featured_image_optional', 'post_media' );
+	public const MEDIA_MODES             = array( 'none', 'featured_image', 'featured_image_optional', 'post_media', 'social_card' );
 	public const SCOPE_TYPES             = array( 'global', 'channel' );
 	public const BATCH_TYPES             = array( 'bulk', 'repost' );
 	public const BATCH_STATUSES          = array( 'previewed', 'confirming', 'queueing', 'cancelled', 'handed_off', 'failed', 'expired' );

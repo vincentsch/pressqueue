@@ -52,6 +52,7 @@ final class AdminScreens {
 		TemplateController::register_hooks();
 		BatchController::register_hooks();
 		PrivacyController::register_hooks();
+		SocialCardsController::register_hooks();
 	}
 
 	/**
@@ -105,6 +106,7 @@ final class AdminScreens {
 		return array(
 			DeliveryDetailController::SLUG => array( __( 'Share details', 'pressqueue' ), Capabilities::VIEW_DELIVERIES, array( DeliveryDetailController::class, 'render_page' ) ),
 			Ui::PAGE_PRIVACY               => array( __( 'Data and privacy', 'pressqueue' ), Capabilities::MANAGE_SETTINGS, array( PrivacyController::class, 'render_page' ) ),
+			SocialCardsController::SLUG    => array( __( 'Social images', 'pressqueue' ), Capabilities::MANAGE_SETTINGS, array( SocialCardsController::class, 'render_page' ) ),
 			self::SLUG_PREVIEW             => array( __( 'Check a post', 'pressqueue' ), Capabilities::VIEW_DECISIONS, array( self::class, 'render_preview_page' ) ),
 			self::SLUG_DECISIONS           => array( __( 'Why posts were shared or skipped', 'pressqueue' ), Capabilities::VIEW_DECISIONS, array( DecisionsController::class, 'render_page' ) ),
 		);
@@ -125,6 +127,7 @@ final class AdminScreens {
 			DeliveryDetailController::SLUG => DeliveryListController::SLUG,
 			self::SLUG_DECISIONS           => DeliveryListController::SLUG,
 			Ui::PAGE_PRIVACY               => self::SLUG_SETTINGS,
+			SocialCardsController::SLUG    => self::SLUG_SETTINGS,
 			self::SLUG_PREVIEW             => self::SLUG_ROOT,
 		);
 

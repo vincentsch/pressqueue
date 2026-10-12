@@ -108,6 +108,7 @@ final class Plugin {
 		PostListColumn::register_hooks();
 		AttentionNotice::register_hooks();
 		PluginLinks::register_hooks();
+		\PressQueue\SocialCard\Hooks::register_hooks();
 		PersonalDataExporter::register_hooks();
 		PersonalDataEraser::register_hooks();
 		add_filter( 'wpmu_drop_tables', array( UninstallPolicy::class, 'site_deletion_tables' ), 10, 2 );
