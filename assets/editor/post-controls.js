@@ -574,6 +574,7 @@
 				status: editor.getEditedPostAttribute( 'status' ) || '',
 				scheduled: editor.isEditedPostBeingScheduled ? !! editor.isEditedPostBeingScheduled() : false,
 				password: editor.getEditedPostAttribute( 'password' ) || '',
+				author: String( editor.getEditedPostAttribute( 'author' ) || '' ),
 				coreSaving: !! ( editor.isSavingPost() && ! editor.isAutosavingPost() ),
 				title: rawText( editor.getEditedPostAttribute( 'title' ) ),
 				excerpt: rawText( editor.getEditedPostAttribute( 'excerpt' ) ),
@@ -647,7 +648,7 @@
 			return function () {
 				clearTimeout( timer );
 			};
-		}, [ active, key, postId, post.status, post.savedStatus, post.scheduled, post.title, post.excerpt, post.date, post.terms, post.meta, post.content ] );
+		}, [ active, key, postId, post.status, post.savedStatus, post.scheduled, post.author, post.title, post.excerpt, post.date, post.terms, post.meta, post.content ] );
 
 		useEffect( function () {
 			return function () {
@@ -697,7 +698,8 @@
 			return el( 'p', { className: 'pq-ed-muted' }, preview.error );
 		}
 
-		if ( ! display ) {
+		// A "not shared" answer for older post facts must not linger as an assurance while re-checking.
+		if ( ! display || ( preview.loading && ! display.will_share ) ) {
 			return el( 'p', { className: 'pq-ed-muted pq-ed-checking' }, Spinner ? el( Spinner ) : null, __( 'Checking where this post goes…', 'pressqueue' ) );
 		}
 
@@ -1034,9 +1036,9 @@
 							el( ChannelName, { channel: channel } )
 						);
 					} ),
-					el( 'p', { className: 'pq-ed-help' }, __( 'Untick a channel to leave it out for this post.', 'pressqueue' ) ),
-					channels.mode === 'override' ? el( Button, { variant: 'link', onClick: resetChannels, disabled: disabled }, __( 'Use the channels from the rule again', 'pressqueue' ) ) : null
+					el( 'p', { className: 'pq-ed-help' }, __( 'Untick a channel to leave it out for this post.', 'pressqueue' ) )
 				) : null,
+				channels.mode === 'override' ? el( Button, { variant: 'link', onClick: resetChannels, disabled: disabled }, __( 'Use the channels from the rule again', 'pressqueue' ) ) : null,
 				el( SelectControl, {
 					label: __( 'Timing', 'pressqueue' ),
 					value: schedule.mode,

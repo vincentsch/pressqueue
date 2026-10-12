@@ -480,11 +480,11 @@ final class PostControlsController {
 				echo '</label>';
 			}
 			echo '<span class="pq-ed-help">' . esc_html__( 'Untick a channel to leave it out for this post.', 'pressqueue' ) . '</span>';
-			if ( null !== $selected ) {
-				// A stored restriction only goes away when the writer asks for it explicitly.
-				echo '<label class="pq-ed-check"><input type="checkbox" name="pressqueue_channel_reset" value="1" /> ' . esc_html__( 'Use the channels from the rule again', 'pressqueue' ) . '</label>';
-			}
 			echo '</fieldset>';
+		}
+		if ( null !== $selected ) {
+			// A stored restriction only goes away when the writer asks for it explicitly, even when no channel is listed.
+			echo '<p class="pq-ed-field"><label class="pq-ed-check"><input type="checkbox" name="pressqueue_channel_reset" value="1" /> ' . esc_html__( 'Use the channels from the rule again', 'pressqueue' ) . '</label></p>';
 		}
 
 		// Timing.

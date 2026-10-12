@@ -201,7 +201,7 @@ function harness( options = {} ) {
 			excerpt: '',
 			categories: [ 4 ],
 			tags: [],
-			author: 1,
+			author: post.author || 1,
 			date: null,
 			meta: {},
 			password: post.password
@@ -493,6 +493,50 @@ test( 'a "never share" lock never outlives the post facts it was checked for', a
 	assert.equal( h.find( 'ToggleControl' ).props.disabled, false );
 	assert.equal( h.find( 'ToggleControl' ).props.checked, true );
 	assert.ok( h.text().includes( 'PressQueue could not check where this post goes: Server unavailable' ) );
+	h.unmount();
+} );
+
+test( 'changing the author checks the post again and never keeps an old lock or "not shared" answer', async () => {
+	const h = await loaded();
+	h.flushTimers();
+	h.request( request => request.path.endsWith( '/preview' ) ).resolve( keptOffResponse() );
+	await h.settle();
+	assert.equal( h.find( 'ToggleControl' ).props.disabled, true );
+
+	h.post.author = 7;
+	h.render();
+	h.render();
+	assert.equal( h.find( 'ToggleControl' ).props.disabled, false, 'author change releases the lock' );
+	assert.ok( h.text().includes( 'Checking where this post goes' ), 'no stale answer while checking' );
+
+	h.flushTimers();
+	const next = h.pending.filter( item => item.request.path.endsWith( '/preview' ) ).slice( 1 );
+	assert.equal( next.length, 1, 'a new check runs for the new author' );
+	assert.equal( next[ 0 ].request.data.editor_snapshot.author_id, 7 );
+	next[ 0 ].resolve( previewResponse() );
+	await h.settle();
+	assert.ok( h.text().includes( 'When you publish, PressQueue' ) );
+	h.unmount();
+} );
+
+test( 'a channel restriction stays until the writer resets it', async () => {
+	const restricted = controlsResponse();
+	restricted.controls.channels = { mode: 'override', channel_public_ids: [ 'CH1' ] };
+	const h = await loaded( {}, restricted );
+	const boxes = () => h.findAll( 'input' ).filter( node => node.props.type === 'checkbox' );
+	assert.equal( boxes().length, 2, 'Customize opens by itself when the post has a restriction' );
+	// Tick the second channel too: the restriction stays, now naming both.
+	boxes()[ 1 ].props.onChange( { target: { checked: true } } );
+	h.render();
+	assert.ok( h.find( 'Button', 'Use the channels from the rule again' ) );
+	h.find( 'Button', 'Use the channels from the rule again' ).props.onClick();
+	h.render();
+	const save = h.savePost( {} );
+	await new Promise( resolve => setImmediate( resolve ) );
+	assert.deepEqual( plain( h.pending.find( isPut ).request.data.controls.channels ), { mode: 'inherit' } );
+	h.pending.find( isPut ).resolve( controlsResponse() );
+	await save;
+	await h.settle();
 	h.unmount();
 } );
 
