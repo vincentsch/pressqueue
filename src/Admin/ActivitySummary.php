@@ -191,7 +191,7 @@ final class ActivitySummary {
 				'shares'       => $shares,
 				'rule'         => $rule_name,
 				'not_shared'   => array() === $shares ? $this->not_shared_reason( $event['decisions'] ) : '',
-				'blocked_kind' => array() === $shares ? self::blocked_kind( $event['decisions'] ) : '',
+				'blocked_kind' => array() === $shares ? self::not_shared_kind( $event['decisions'] ) : '',
 			);
 		}
 
@@ -277,15 +277,13 @@ final class ActivitySummary {
 	 * @return string
 	 */
 	public function not_shared_reason( array $decisions ): string {
-		foreach ( $decisions as $decision ) {
-			if ( 'excluded' !== $decision->result ) {
-				continue;
-			}
+		if ( 'switched_off' === self::not_shared_kind( $decisions ) ) {
+			return Labels::decision_result( 'switched_off' )['help'];
+		}
 
-			foreach ( $decision->reasons as $reason ) {
-				if ( is_array( $reason ) && 'explicit_post_exclusion' === ( $reason['code'] ?? null ) ) {
-					return Labels::reason( 'explicit_post_exclusion' );
-				}
+		foreach ( $decisions as $decision ) {
+			if ( 'excluded' !== $decision->result || self::is_switched_off( $decision ) ) {
+				continue;
 			}
 
 			$name = null === $decision->rule_public_id ? '' : $this->rule_name( $decision->rule_public_id );
@@ -333,18 +331,53 @@ final class ActivitySummary {
 	/**
 	 * Return the strongest non-share result for an event.
 	 *
+	 * An exclusion that only comes from the post's own "Share this post" switch is
+	 * reported as switched_off, so it is not shown like a "never share" rule.
+	 *
 	 * @param array<int,DecisionRecord> $decisions Decisions for one event.
-	 * @return string
+	 * @return string policy_error, excluded, switched_off or skipped.
 	 */
-	private static function blocked_kind( array $decisions ): string {
+	public static function not_shared_kind( array $decisions ): string {
 		foreach ( array( 'policy_error', 'excluded', 'skipped' ) as $result ) {
+			$found    = false;
+			$only_off = true;
+
 			foreach ( $decisions as $decision ) {
-				if ( $result === $decision->result ) {
-					return $result;
+				if ( $result !== $decision->result ) {
+					continue;
 				}
+
+				$found    = true;
+				$only_off = $only_off && self::is_switched_off( $decision );
+			}
+
+			if ( $found ) {
+				return 'excluded' === $result && $only_off ? 'switched_off' : $result;
 			}
 		}
 
 		return 'skipped';
+	}
+
+	/**
+	 * Check whether a decision only records that "Share this post" was switched off.
+	 *
+	 * Such a decision has no rule behind it. A "never share" rule always names its rule.
+	 *
+	 * @param DecisionRecord $decision Decision.
+	 * @return bool
+	 */
+	public static function is_switched_off( DecisionRecord $decision ): bool {
+		if ( 'excluded' !== $decision->result || null !== $decision->rule_public_id ) {
+			return false;
+		}
+
+		foreach ( $decision->reasons as $reason ) {
+			if ( is_array( $reason ) && 'explicit_post_exclusion' === ( $reason['code'] ?? null ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

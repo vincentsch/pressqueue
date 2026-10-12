@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Admin;
 
+use PressQueue\Batch\PostShareNowService;
 use PressQueue\Delivery\DeliveryQueryRepository;
 use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Editorial\PostControlPreviewService;
@@ -232,6 +233,7 @@ final class PostSharingSummary {
 
 		return array(
 			'activity_url'     => self::activity_url( $post_id ),
+			'can_share_now'    => PostShareNowService::current_user_can_share( $post_id ),
 			'channels'         => self::channels(),
 			'mode_note'        => self::mode_note( $mode ),
 			'new_post_sharing' => $new_posts,
@@ -693,7 +695,7 @@ final class PostSharingSummary {
 	 * @param string $name Display name.
 	 * @return array<string,string>
 	 */
-	private static function channel_identity( string $public_id, string $service, string $name ): array {
+	public static function channel_identity( string $public_id, string $service, string $name ): array {
 		$service = strtolower( $service );
 
 		return array(

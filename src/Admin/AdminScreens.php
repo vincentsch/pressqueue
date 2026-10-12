@@ -47,6 +47,7 @@ final class AdminScreens {
 		DeliveryActionController::register_hooks();
 		PostControlsController::register_hooks();
 		PostPreviewController::register_hooks();
+		PostShareNowController::register_hooks();
 		ConditionBuilderController::register_hooks();
 		TemplateController::register_hooks();
 		BatchController::register_hooks();

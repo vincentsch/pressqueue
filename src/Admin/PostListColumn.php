@@ -28,7 +28,9 @@ final class PostListColumn {
 	private static ?array $shares = null;
 
 	/**
-	 * Posts on the current list page whose latest decision was a "never share" rule.
+	 * Posts on the current list page that a "never share" rule kept from being shared.
+	 *
+	 * The post's own "Share this post" switch is not a rule and is read from the post instead.
 	 *
 	 * @var array<int,bool>
 	 */
@@ -106,9 +108,9 @@ final class PostListColumn {
 
 		if ( array() === $shares ) {
 			if ( isset( self::$excluded[ $post_id ] ) ) {
-				echo '<span class="pq-col-off">' . esc_html__( 'Never share', 'pressqueue' ) . '</span>';
+				echo '<span class="pq-col-off">' . esc_html( Labels::decision_result( 'excluded' )['label'] ) . '</span>';
 			} elseif ( self::sharing_switched_off( $post_id ) ) {
-				echo '<span class="pq-col-off">' . esc_html__( 'Sharing off', 'pressqueue' ) . '</span>';
+				echo '<span class="pq-col-off">' . esc_html( Labels::decision_result( 'switched_off' )['label'] ) . '</span>';
 			} else {
 				echo '<span class="screen-reader-text">' . esc_html__( 'Not shared', 'pressqueue' ) . '</span>';
 			}
@@ -182,7 +184,7 @@ final class PostListColumn {
 		);
 
 		$excluded = $database->get_results(
-			'SELECT DISTINCT post_id FROM `' . $database->table( Schema::DECISIONS ) . "` WHERE post_id IN ($placeholders) AND event_mode = 'runtime' AND result = 'excluded'",
+			'SELECT DISTINCT post_id FROM `' . $database->table( Schema::DECISIONS ) . "` WHERE post_id IN ($placeholders) AND event_mode = 'runtime' AND result = 'excluded' AND rule_public_id IS NOT NULL",
 			$ids
 		);
 		foreach ( $excluded as $row ) {

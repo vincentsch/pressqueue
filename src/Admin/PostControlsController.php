@@ -304,8 +304,9 @@ final class PostControlsController {
 			echo '<p class="pq-ed-switch"><label for="pressqueue-share"><input type="checkbox" id="pressqueue-share" name="pressqueue_share" value="1" data-pq-share ' . checked( $is_on, true, false ) . ' /> ' . esc_html__( 'Share this post', 'pressqueue' ) . '</label></p>';
 		}
 
+		$activity = $published ? PostSharingSummary::activity( $post_id ) : array();
 		if ( $published ) {
-			self::render_classic_activity( PostSharingSummary::activity( $post_id ), '' !== $kept_off );
+			self::render_classic_activity( $activity, '' !== $kept_off );
 		}
 
 		if ( '' === $kept_off ) {
@@ -320,6 +321,10 @@ final class PostControlsController {
 					: __( 'This post will not be shared. You can switch it on any time before publishing.', 'pressqueue' )
 			);
 			echo '</p>';
+
+			if ( $published ) {
+				PostShareNowController::render_classic( $post, $is_on, $activity );
+			}
 
 			if ( ! $published && '' !== (string) $context['opt_in_hint'] ) {
 				echo '<p class="pq-ed-hint">' . esc_html( (string) $context['opt_in_hint'] ) . '</p>';
@@ -982,7 +987,7 @@ final class PostControlsController {
 		wp_enqueue_script(
 			'pressqueue-post-controls-classic',
 			plugins_url( 'assets/editor/post-controls-classic.js', PRESSQUEUE_FILE ),
-			array( 'wp-i18n' ),
+			array( 'wp-api-fetch', 'wp-i18n' ),
 			Ui::asset_version( 'assets/editor/post-controls-classic.js' ),
 			true
 		);

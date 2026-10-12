@@ -212,7 +212,8 @@ function harness( options = {} ) {
 		isEditedPostBeingScheduled: () => false,
 		isEditedPostDateFloating: () => true,
 		isSavingPost: () => false,
-		isAutosavingPost: () => false
+		isAutosavingPost: () => false,
+		isEditedPostDirty: () => !! post.dirty
 	};
 	const coreStore = {
 		getEditedEntityRecord: () => post.record || ( post.record = { content: '<p>Hello</p>' } ),
@@ -829,5 +830,155 @@ test( 'the pre-publish sidebar repeats the switch and summary', async () => {
 	const h = await loaded( { prePublish: true } );
 	assert.ok( h.find( 'PrePublishPanel' ) );
 	assert.equal( h.findAll( 'ToggleControl' ).length, 2 );
+	h.unmount();
+} );
+
+function shareNowControls( policy = 'inherit' ) {
+	const response = controlsResponse( policy );
+	response.editor.can_share_now = true;
+	return response;
+}
+
+function emptyActivity() {
+	return { activity: { url: 'admin.php?page=pressqueue-deliveries&post_id=1', not_shared: '', not_shared_title: '', items: [] } };
+}
+
+function shareNowPreview( extra = {} ) {
+	return { share_now: Object.assign( {
+		batch_public_id: '01K3KGXB71P2MR4K9A7V6Q5C8D',
+		preview_snapshot_hash: 'a'.repeat( 64 ),
+		can_confirm: true,
+		heading: 'PressQueue sends this to Buffer for 1 channel:',
+		note: '',
+		problem: '',
+		shares: [ { public_id: 'CH1', service: 'linkedin', service_name: 'LinkedIn', monogram: 'in', name: 'Larkfield Bakery', text: 'We are hiring\n\nhttps://example.test/?p=1', when: 'End of the Buffer queue', image: 'Text and link' } ],
+		skipped: [ { public_id: 'CH2', service: 'twitter', service_name: 'X', monogram: 'X', name: '@larkfieldbakes', reason: 'The channel is switched off.' } ]
+	}, extra ) };
+}
+
+async function publishedNeverShared( response = shareNowControls(), post = {} ) {
+	const h = await loaded( { post: Object.assign( { status: 'publish', savedStatus: 'publish' }, post ) }, response );
+	h.request( request => request.path === '/pressqueue/v1/posts/1/activity' ).resolve( emptyActivity() );
+	await h.settle();
+	return h;
+}
+
+function isShareNow( suffix ) {
+	return request => request.path === '/pressqueue/v1/posts/1/share-now' + suffix && request.method === 'POST';
+}
+
+function sends( h ) {
+	return h.pending.filter( item => isShareNow( '' )( item.request ) ).length;
+}
+
+test( 'share now previews every channel and only sends after the confirm button', async () => {
+	const h = await publishedNeverShared();
+	const start = h.find( 'Button', 'Share now' );
+	assert.ok( start, 'a published post that was never shared offers Share now' );
+	assert.equal( start.props.disabled, false );
+	assert.ok( h.text().includes( 'You see what would be sent before anything goes out.' ) );
+
+	start.props.onClick();
+	h.render();
+	assert.ok( h.text().includes( 'Checking what would be sent' ) );
+	assert.equal( sends( h ), 0, 'nothing is sent by the first click' );
+	h.request( isShareNow( '/preview' ) ).resolve( shareNowPreview() );
+	await h.settle();
+
+	const text = h.text();
+	assert.ok( text.includes( 'PressQueue sends this to Buffer for 1 channel:' ) );
+	assert.ok( text.includes( 'Larkfield Bakery' ) );
+	assert.ok( text.includes( 'End of the Buffer queue' ) );
+	assert.ok( text.includes( 'We are hiring' ) );
+	assert.ok( text.includes( 'Not sent to @larkfieldbakes: The channel is switched off.' ) );
+	assert.equal( sends( h ), 0, 'still nothing sent while the preview is shown' );
+
+	h.find( 'Button', 'Confirm and share' ).props.onClick();
+	h.render();
+	const send = h.request( isShareNow( '' ) );
+	assert.ok( send, 'the confirm button sends' );
+	assert.deepEqual( plain( send.request.data ), { batch_public_id: '01K3KGXB71P2MR4K9A7V6Q5C8D', preview_snapshot_hash: 'a'.repeat( 64 ) } );
+	send.resolve( { activity: { url: 'admin.php?page=pressqueue-deliveries&post_id=1', not_shared: '', not_shared_title: '', items: [
+		{ public_id: 'CH1', service: 'linkedin', service_name: 'LinkedIn', monogram: 'in', name: 'Larkfield Bakery', state: 'queued', label: 'Waiting', tone: 'info', help: '', time: 'just now', time_full: '' }
+	] } } );
+	await h.settle();
+	assert.ok( h.text().includes( 'Waiting' ), 'the panel shows the sharing state as usual' );
+	assert.equal( h.find( 'Button', 'Share now' ), undefined );
+	assert.equal( h.find( 'Button', 'Confirm and share' ), undefined );
+	h.unmount();
+} );
+
+test( 'cancelling a share now preview sends nothing and drops the stored preview', async () => {
+	const h = await publishedNeverShared();
+	h.find( 'Button', 'Share now' ).props.onClick();
+	h.request( isShareNow( '/preview' ) ).resolve( shareNowPreview() );
+	await h.settle();
+	h.find( 'Button', 'Cancel' ).props.onClick();
+	await h.settle();
+	const cancel = h.request( isShareNow( '/cancel' ) );
+	assert.ok( cancel );
+	assert.equal( cancel.request.data.batch_public_id, '01K3KGXB71P2MR4K9A7V6Q5C8D' );
+	assert.equal( sends( h ), 0 );
+	assert.ok( h.find( 'Button', 'Share now' ) );
+	h.unmount();
+} );
+
+test( 'a preview that cannot be sent explains why and offers no confirm button', async () => {
+	const h = await publishedNeverShared();
+	h.find( 'Button', 'Share now' ).props.onClick();
+	h.request( isShareNow( '/preview' ) ).resolve( shareNowPreview( { can_confirm: false, shares: [], problem: 'The "never share" rule "Keep the journal private" matches this post.' } ) );
+	await h.settle();
+	assert.ok( h.text().includes( 'The "never share" rule "Keep the journal private" matches this post.' ) );
+	assert.equal( h.find( 'Button', 'Confirm and share' ), undefined );
+	assert.ok( h.find( 'Button', 'Close' ) );
+	h.unmount();
+} );
+
+test( 'share now respects the switch, unsaved changes and permissions', async () => {
+	const off = await publishedNeverShared( shareNowControls( 'exclude' ) );
+	assert.equal( off.find( 'Button', 'Share now' ), undefined, 'no send while sharing is switched off' );
+	assert.ok( off.text().includes( 'Switch sharing on and update the post to share it now.' ) );
+	off.unmount();
+
+	const dirty = await publishedNeverShared( shareNowControls(), { dirty: true } );
+	assert.equal( dirty.find( 'Button', 'Share now' ).props.disabled, true );
+	assert.ok( dirty.text().includes( 'Update the post first to share it now.' ) );
+	dirty.unmount();
+
+	const switchedOn = await publishedNeverShared( shareNowControls( 'exclude' ) );
+	switchedOn.find( 'ToggleControl', 'Share this post' ).props.onChange( true );
+	switchedOn.render();
+	assert.equal( switchedOn.find( 'Button', 'Share now' ).props.disabled, true, 'a switch that is on but not saved yet cannot share' );
+	switchedOn.unmount();
+
+	const noPermission = await publishedNeverShared( controlsResponse() );
+	assert.equal( noPermission.find( 'Button', 'Share now' ), undefined, 'hidden without the Share old posts permission' );
+	noPermission.unmount();
+
+	const draft = await loaded( {}, shareNowControls() );
+	assert.equal( draft.find( 'Button', 'Share now' ), undefined, 'drafts are shared by publishing' );
+	draft.unmount();
+} );
+
+test( 'share now is not offered once the post has shares', async () => {
+	const h = await loaded( { post: { status: 'publish', savedStatus: 'publish' } }, shareNowControls() );
+	h.request( request => request.path === '/pressqueue/v1/posts/1/activity' ).resolve( { activity: { url: '', not_shared: '', not_shared_title: '', items: [
+		{ public_id: 'CH1', service: 'linkedin', service_name: 'LinkedIn', monogram: 'in', name: 'Larkfield Bakery', state: 'accepted', label: 'Sent to Buffer', tone: 'ok', help: '', time: '5 mins ago', time_full: '' }
+	] } } );
+	await h.settle();
+	assert.equal( h.find( 'Button', 'Share now' ), undefined );
+	h.unmount();
+} );
+
+test( 'a failed share now shows the reason and keeps the button', async () => {
+	const h = await publishedNeverShared();
+	h.find( 'Button', 'Share now' ).props.onClick();
+	h.request( isShareNow( '/preview' ) ).resolve( shareNowPreview() );
+	await h.settle();
+	h.find( 'Button', 'Confirm and share' ).props.onClick();
+	h.request( isShareNow( '' ) ).reject( { code: 'changed', message: 'The post, a rule or a channel changed after the preview. Click Share now again to see what would be sent.' } );
+	await h.settle();
+	assert.ok( h.text().includes( 'changed after the preview' ) );
+	assert.ok( h.find( 'Button', 'Share now' ) );
 	h.unmount();
 } );

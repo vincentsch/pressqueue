@@ -173,6 +173,85 @@
 	color: var(--pq-text);
 }
 
+/* Share now: preview of what would be sent, then confirm. */
+
+.pq-editor .pq-ed-share-now,
+.pq-editor .pq-ed-share-now-start {
+	display: grid;
+	gap: 6px;
+}
+
+.pq-editor .pq-ed-share-now-preview {
+	display: grid;
+	gap: 8px;
+	padding: 10px 12px;
+	border: 1px solid var(--pq-line);
+	border-radius: 6px;
+}
+
+.pq-editor .pq-ed-share-now-list {
+	display: grid;
+	gap: 10px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pq-editor .pq-ed-share-now-list li {
+	display: grid;
+	gap: 4px;
+	margin: 0;
+	min-width: 0;
+}
+
+.pq-editor .pq-ed-share-now-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px 8px;
+	min-width: 0;
+}
+
+.pq-editor .pq-ed-share-text {
+	padding: 8px 10px;
+	border-radius: 4px;
+	background: var(--pq-subtle);
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+.pq-editor .pq-ed-share-image {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	height: auto;
+	margin-top: 6px;
+	border: 1px solid var(--pq-line);
+	border-radius: 4px;
+	aspect-ratio: 1200 / 630;
+	object-fit: cover;
+}
+
+.pq-editor .pq-ed-share-now-problem {
+	padding: 6px 10px;
+	border-left: 3px solid var(--pq-warn);
+	border-radius: 0 4px 4px 0;
+	background: var(--pq-warn-soft);
+	color: var(--pq-text);
+}
+
+.pq-editor .pq-ed-share-now-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.pq-editor .pq-ed-share-now-actions .components-button {
+	margin: 0;
+}
+
 /* A "never share" rule keeps the post off social media. */
 
 .pq-editor .pq-ed-toggle.is-kept-off .components-base-control__help,

@@ -358,7 +358,7 @@ final class DecisionsController {
 		echo '</div>';
 
 		$meta  = array( ucfirst( Labels::trigger_short( $event['trigger'] ) ) );
-		$rules = 'not_shared' === $kind ? array() : self::rule_names( $event['decisions'], $kind, $summary );
+		$rules = in_array( $kind, array( 'not_shared', 'switched_off' ), true ) ? array() : self::rule_names( $event['decisions'], $kind, $summary );
 		if ( array() !== $rules ) {
 			/* translators: %s: one or more rule names. */
 			$meta[] = sprintf( _n( 'Rule: %s', 'Rules: %s', count( $rules ), 'pressqueue' ), implode( ', ', $rules ) );
@@ -377,7 +377,7 @@ final class DecisionsController {
 		} else {
 			$result = Labels::decision_result( self::result_for_kind( $kind ) );
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
-			echo Ui::pill( $result['tone'], $result['label'] );
+			echo Ui::pill( $result['tone'], $result['label'], $result['help'] );
 		}
 		DeliveryListController::render_time( $event['created_at'] );
 		echo '</div>';
@@ -453,7 +453,7 @@ final class DecisionsController {
 	}
 
 	/**
-	 * Return the event outcome: shared, never, blocked or not_shared.
+	 * Return the event outcome: shared, never, switched_off, blocked or not_shared.
 	 *
 	 * @param array<int,DecisionRecord> $decisions Decisions.
 	 * @return string
@@ -465,15 +465,13 @@ final class DecisionsController {
 			return 'shared';
 		}
 
-		if ( in_array( 'policy_error', $results, true ) ) {
-			return 'blocked';
-		}
+		$map = array(
+			'excluded'     => 'never',
+			'policy_error' => 'blocked',
+			'switched_off' => 'switched_off',
+		);
 
-		if ( in_array( 'excluded', $results, true ) ) {
-			return 'never';
-		}
-
-		return 'not_shared';
+		return $map[ ActivitySummary::not_shared_kind( $decisions ) ] ?? 'not_shared';
 	}
 
 	/**
@@ -484,10 +482,11 @@ final class DecisionsController {
 	 */
 	private static function result_for_kind( string $kind ): string {
 		$map = array(
-			'shared'     => 'included',
-			'blocked'    => 'policy_error',
-			'never'      => 'excluded',
-			'not_shared' => 'skipped',
+			'shared'       => 'included',
+			'blocked'      => 'policy_error',
+			'never'        => 'excluded',
+			'switched_off' => 'switched_off',
+			'not_shared'   => 'skipped',
 		);
 
 		return $map[ $kind ] ?? 'skipped';
@@ -524,6 +523,10 @@ final class DecisionsController {
 
 		if ( ! $can_edit ) {
 			return Labels::reason( 'post_facts_redacted' );
+		}
+
+		if ( 'switched_off' === $kind ) {
+			return Labels::decision_result( 'switched_off' )['help'];
 		}
 
 		if ( 'never' === $kind ) {
@@ -901,17 +904,14 @@ final class DecisionsController {
 	 */
 	private static function exclusion_phrase( array $decisions, ActivitySummary $summary ): string {
 		foreach ( $decisions as $decision ) {
-			if ( 'excluded' !== $decision->result ) {
+			// The post's own switch is explained on its own, never as a "never share" rule.
+			if ( 'excluded' !== $decision->result || ActivitySummary::is_switched_off( $decision ) ) {
 				continue;
 			}
 
 			foreach ( $decision->reasons as $reason ) {
 				if ( ! is_array( $reason ) || ! is_string( $reason['code'] ?? null ) ) {
 					continue;
-				}
-
-				if ( 'explicit_post_exclusion' === $reason['code'] ) {
-					return __( 'sharing is switched off for this post.', 'pressqueue' );
 				}
 
 				if ( ! self::is_condition_reason( $reason ) || 'matched' !== ( $reason['condition_result'] ?? '' ) ) {

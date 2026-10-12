@@ -370,8 +370,9 @@ final class OverviewController {
 			echo '</div><div class="pq-list-meta">' . esc_html( $meta ) . '</div></div>';
 
 			if ( array() === $shares ) {
+				$result = Labels::decision_result( (string) $entry['blocked_kind'] );
 				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
-				echo 'excluded' === $entry['blocked_kind'] ? Ui::pill( 'bad', __( 'Never share', 'pressqueue' ) ) : ( 'policy_error' === $entry['blocked_kind'] ? Ui::pill( 'bad', __( 'Blocked', 'pressqueue' ) ) : Ui::pill( 'idle', __( 'Not shared', 'pressqueue' ) ) );
+				echo Ui::pill( $result['tone'], $result['label'], $result['help'] );
 			} else {
 				echo '<span class="pq-row" style="gap:8px">';
 				echo '<span class="pq-svcs">';

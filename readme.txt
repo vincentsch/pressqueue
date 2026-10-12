@@ -42,6 +42,8 @@ it would share and keeps a record of every share.
 * Each post has a "Share this post" switch in the editor, plus options to
   change the message, channels or timing for that post.
 * Make sharing opt-in, so new posts start switched off.
+* Share an older post from the editor with Share now, after a preview of
+  exactly what each channel gets.
 * Pause everything with one switch. Waiting shares are held until you resume.
 
 **Share older posts**

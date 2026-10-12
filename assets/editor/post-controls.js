@@ -237,7 +237,8 @@
 			saving: false,
 			saveError: '',
 			conflict: false,
-			activity: null
+			activity: null,
+			sharedNow: false
 		};
 	}
 
@@ -450,6 +451,16 @@
 			reload: function () {
 				load( true );
 			},
+			// Share now succeeded: show the new state and check again shortly for progress.
+			markShared: function ( activity ) {
+				update( function ( state ) {
+					return { activity: activity || state.activity, sharedNow: true };
+				} );
+				clearTimeout( activityTimer.current );
+				activityTimer.current = setTimeout( function () {
+					loadActivity( true );
+				}, ACTIVITY_REFRESH_DELAY );
+			},
 			save: save,
 			setControls: function ( controls ) {
 				if ( latest.current.loaded ) {
@@ -576,6 +587,7 @@
 				password: editor.getEditedPostAttribute( 'password' ) || '',
 				author: String( editor.getEditedPostAttribute( 'author' ) || '' ),
 				coreSaving: !! ( editor.isSavingPost() && ! editor.isAutosavingPost() ),
+				dirty: editor.isEditedPostDirty ? !! editor.isEditedPostDirty() : false,
 				title: rawText( editor.getEditedPostAttribute( 'title' ) ),
 				excerpt: rawText( editor.getEditedPostAttribute( 'excerpt' ) ),
 				date: String( editor.getEditedPostAttribute( 'date' ) || '' ),
@@ -779,6 +791,124 @@
 			{ className: 'pq-ed-activity' },
 			body,
 			activity.url && config.canViewLog ? el( 'p', { className: 'pq-ed-small' }, el( 'a', { href: activity.url }, __( 'See in Activity', 'pressqueue' ) ) ) : null
+		);
+	}
+
+	function shareNowError( error ) {
+		return error && error.message ? error.message : __( 'PressQueue could not do that. Check your connection and try again.', 'pressqueue' );
+	}
+
+	// "Share now" for a published post that was never shared. It first shows exactly what
+	// would be sent, per channel, and only sends when the confirm button is clicked.
+	function ShareNow( props ) {
+		var pair = useState( { step: 'idle', preview: null, error: '' } );
+		var state = pair[ 0 ];
+		var setState = pair[ 1 ];
+		var path = '/pressqueue/v1/posts/' + props.postId + '/share-now';
+		var preview = state.preview;
+
+		function forget( current ) {
+			if ( current && current.batch_public_id ) {
+				wp.apiFetch( { path: path + '/cancel', method: 'POST', data: { batch_public_id: current.batch_public_id } } ).catch( function () {} );
+			}
+		}
+
+		// A preview describes the saved post. Once the post has unsaved changes it is dropped.
+		useEffect( function () {
+			if ( props.blocked && preview ) {
+				forget( preview );
+				setState( { step: 'idle', preview: null, error: '' } );
+			}
+			return undefined;
+		}, [ props.blocked ] );
+
+		function start() {
+			setState( { step: 'loading', preview: null, error: '' } );
+			wp.apiFetch( { path: path + '/preview', method: 'POST', data: {} } ).then( function ( response ) {
+				var next = response && response.share_now ? response.share_now : null;
+				setState( next ? { step: 'review', preview: next, error: '' } : { step: 'idle', preview: null, error: shareNowError( null ) } );
+			}, function ( error ) {
+				setState( { step: 'idle', preview: null, error: shareNowError( error ) } );
+			} );
+		}
+
+		function confirm() {
+			if ( ! preview || state.step === 'sending' ) {
+				return;
+			}
+			setState( { step: 'sending', preview: preview, error: '' } );
+			wp.apiFetch( {
+				path: path,
+				method: 'POST',
+				data: { batch_public_id: preview.batch_public_id, preview_snapshot_hash: preview.preview_snapshot_hash }
+			} ).then( function ( response ) {
+				setState( { step: 'idle', preview: null, error: '' } );
+				props.onShared( response && response.activity ? response.activity : null );
+			}, function ( error ) {
+				setState( { step: 'idle', preview: null, error: shareNowError( error ) } );
+			} );
+		}
+
+		function cancel() {
+			forget( preview );
+			setState( { step: 'idle', preview: null, error: '' } );
+		}
+
+		if ( ! props.on ) {
+			return el( 'p', { className: 'pq-ed-help' }, __( 'Switch sharing on and update the post to share it now.', 'pressqueue' ) );
+		}
+
+		var errorNotice = state.error ? el( 'p', { className: 'pq-ed-share-now-problem', role: 'alert' }, state.error ) : null;
+
+		if ( state.step === 'loading' ) {
+			return el( 'p', { className: 'pq-ed-muted pq-ed-checking' }, Spinner ? el( Spinner ) : null, __( 'Checking what would be sent…', 'pressqueue' ) );
+		}
+
+		if ( ( state.step === 'review' || state.step === 'sending' ) && preview ) {
+			var sending = state.step === 'sending';
+			return el(
+				'div',
+				{ className: 'pq-ed-share-now-preview', 'aria-live': 'polite' },
+				el( 'p', { className: 'pq-ed-small pq-ed-muted' }, preview.heading ),
+				( preview.shares || [] ).length ? el(
+					'ul',
+					{ className: 'pq-ed-share-now-list' },
+					preview.shares.map( function ( share ) {
+						return el(
+							'li',
+							{ key: share.public_id },
+							el( 'div', { className: 'pq-ed-share-now-head' }, el( ChannelName, { channel: share } ), el( 'span', { className: 'pq-ed-small pq-ed-muted' }, share.when ) ),
+							el( 'p', { className: 'pq-ed-share-text' }, share.text ),
+							share.image_url ? el( 'img', { className: 'pq-ed-share-image', src: share.image_url, alt: '', loading: 'lazy' } ) : null,
+							el( 'p', { className: 'pq-ed-small pq-ed-muted' }, share.image )
+						);
+					} )
+				) : null,
+				( preview.skipped || [] ).map( function ( channel ) {
+					return el( 'p', { key: 'skip-' + channel.public_id, className: 'pq-ed-small pq-ed-muted' }, sprintf(
+						/* translators: 1: channel name, 2: reason. */
+						__( 'Not sent to %1$s: %2$s', 'pressqueue' ),
+						channel.name,
+						channel.reason
+					) );
+				} ),
+				preview.note ? el( 'p', { className: 'pq-ed-small pq-ed-muted' }, preview.note ) : null,
+				preview.problem ? el( 'p', { className: 'pq-ed-share-now-problem' }, preview.problem ) : null,
+				el(
+					'div',
+					{ className: 'pq-ed-share-now-actions' },
+					preview.can_confirm ? el( Button, { variant: 'primary', isBusy: sending, disabled: sending, onClick: confirm }, sending ? __( 'Sharing…', 'pressqueue' ) : __( 'Confirm and share', 'pressqueue' ) ) : null,
+					el( Button, { variant: 'tertiary', disabled: sending, onClick: cancel }, preview.can_confirm ? __( 'Cancel', 'pressqueue' ) : __( 'Close', 'pressqueue' ) )
+				)
+			);
+		}
+
+		return el(
+			'div',
+			{ className: 'pq-ed-share-now' },
+			errorNotice,
+			el( Button, { variant: 'secondary', disabled: props.blocked, onClick: start }, __( 'Share now', 'pressqueue' ) ),
+			el( 'p', { className: 'pq-ed-help' }, props.blocked ? __( 'Update the post first to share it now.', 'pressqueue' ) : __( 'You see what would be sent before anything goes out.', 'pressqueue' ) )
 		);
 	}
 
@@ -1181,6 +1311,16 @@
 		var activityItems = data.activity && data.activity.items ? data.activity.items : [];
 		// When a "never share" rule matches, the switch already says why nothing was shared.
 		var showActivity = !! data.activity && ( ! keptOff || activityItems.length > 0 );
+		// Share now is offered for published posts that were never shared.
+		var shareNow = null;
+		if ( published && editor.can_share_now && ! keptOff && ! post.password && post.status !== 'private' && data.activity && activityItems.length === 0 ) {
+			shareNow = data.sharedNow ? el( 'p', { className: 'pq-ed-muted' }, __( 'Shared. It shows up here in a moment.', 'pressqueue' ) ) : el( ShareNow, {
+				postId: props.postId,
+				on: on,
+				blocked: disabled || sharing.dirty || post.dirty,
+				onShared: sharing.markShared
+			} );
+		}
 
 		useEffect( function () {
 			if ( ! data.loaded || ! published ) {
@@ -1228,6 +1368,7 @@
 				{ className: 'pq-ed-muted' },
 				published ? __( 'Sharing is off for this post. Updates and Share old posts leave it out.', 'pressqueue' ) : __( 'This post will not be shared. You can switch it on any time before publishing.', 'pressqueue' )
 			) ),
+			shareNow,
 			! keptOff && ! published && editor.opt_in_hint ? el( 'p', { className: 'pq-ed-hint' }, editor.opt_in_hint ) : null,
 			el( ModeNote, { editor: editor } ),
 			keptOff ? null : el( Customize, {

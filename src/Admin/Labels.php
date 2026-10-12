@@ -259,22 +259,28 @@ final class Labels {
 	}
 
 	/**
-	 * Map a decision result to a label and tone.
+	 * Map a decision result to a label, tone and explanation.
 	 *
-	 * @param string $result Decision result.
-	 * @return array{label:string,tone:string}
+	 * Besides the stored results, "switched_off" names an exclusion that comes only from
+	 * the post's own "Share this post" switch. It is a choice, not a problem, so it reads
+	 * calmly instead of like a "never share" rule.
+	 *
+	 * @param string $result Decision result, or switched_off.
+	 * @return array{label:string,tone:string,help:string}
 	 */
 	public static function decision_result( string $result ): array {
 		$results = array(
-			'included'     => array( __( 'Matched', 'pressqueue' ), 'ok' ),
-			'excluded'     => array( __( 'Never share', 'pressqueue' ), 'bad' ),
-			'skipped'      => array( __( 'Not shared', 'pressqueue' ), 'idle' ),
-			'policy_error' => array( __( 'Blocked by an error', 'pressqueue' ), 'bad' ),
+			'included'     => array( __( 'Matched', 'pressqueue' ), 'ok', __( 'A sharing rule matched this post.', 'pressqueue' ) ),
+			'excluded'     => array( __( 'Never share', 'pressqueue' ), 'bad', __( 'A "never share" rule matches this post.', 'pressqueue' ) ),
+			'switched_off' => array( __( 'Sharing off', 'pressqueue' ), 'idle', __( '"Share this post" was switched off for this post.', 'pressqueue' ) ),
+			'skipped'      => array( __( 'Not shared', 'pressqueue' ), 'idle', __( 'PressQueue checked this post and did not share it.', 'pressqueue' ) ),
+			'policy_error' => array( __( 'Blocked by an error', 'pressqueue' ), 'bad', __( 'A rule has a problem, so the post was stopped to be safe.', 'pressqueue' ) ),
 		);
 
-		$entry = $results[ $result ] ?? array( $result, 'idle' );
+		$entry = $results[ $result ] ?? array( $result, 'idle', '' );
 
 		return array(
+			'help'  => $entry[2],
 			'label' => $entry[0],
 			'tone'  => $entry[1],
 		);
@@ -290,7 +296,7 @@ final class Labels {
 	public static function reason( string $code, string $fallback = '' ): string {
 		$reasons = array(
 			'explicit_post_exclusion'                 => __( 'Sharing is switched off for this post.', 'pressqueue' ),
-			'backdated_publication'                   => __( 'The post is dated more than a day in the past, so it is not shared automatically. Use Share old posts instead.', 'pressqueue' ),
+			'backdated_publication'                   => __( 'The post is dated more than a day in the past, so it is not shared automatically. Share it with Share now in the post editor, or with Share old posts.', 'pressqueue' ),
 			'no_enabled_rules'                        => __( 'No rule is switched on for this kind of event.', 'pressqueue' ),
 			'no_matching_rules'                       => __( 'No sharing rule matches this post.', 'pressqueue' ),
 			'empty_destination_set'                   => __( 'The matching rule has no channels selected.', 'pressqueue' ),

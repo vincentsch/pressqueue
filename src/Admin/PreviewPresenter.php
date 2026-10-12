@@ -51,6 +51,8 @@ final class PreviewPresenter {
 				'schedule_slot'     => (string) ( $payload['schedule_slot'] ?? '' ),
 				'scheduled_for_utc' => is_string( $payload['scheduled_for_utc'] ?? null ) ? $payload['scheduled_for_utc'] : '',
 				'image_count'       => count( $media_items ),
+				'image_mode'        => (string) ( $media['mode'] ?? 'none' ),
+				'image_url'         => (string) ( $media_items[0]['url'] ?? '' ),
 				'rule_name'         => '' === $rule_public ? '' : $summary->rule_name( $rule_public ),
 			);
 		}
@@ -178,7 +180,7 @@ final class PreviewPresenter {
 	 * @param array<string,mixed> $share Share summary.
 	 * @return string
 	 */
-	private static function timing_text( array $share ): string {
+	public static function timing_text( array $share ): string {
 		$slot = (string) $share['schedule_slot'];
 
 		if ( 'explicit_time' === $slot && '' !== $share['scheduled_for_utc'] ) {

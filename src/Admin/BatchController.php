@@ -1277,11 +1277,13 @@ final class BatchController {
 	/**
 	 * Return the plain-language reason a share was skipped or stopped.
 	 *
+	 * Also used by Share now in the post editor, which reviews the same batch items.
+	 *
 	 * @param BatchItemRecord $item Item.
 	 * @param bool            $can_read_post Whether post-specific facts may show.
 	 * @return string
 	 */
-	private static function item_reason( BatchItemRecord $item, bool $can_read_post ): string {
+	public static function item_reason( BatchItemRecord $item, bool $can_read_post ): string {
 		$reason = $item->reason;
 		$code   = is_string( $reason['code'] ?? null ) ? $reason['code'] : '';
 
@@ -1292,6 +1294,9 @@ final class BatchController {
 			case 'repost_without_prior_acceptance':
 				return self::repost_gap_text( $item );
 			case 'global_exclusion':
+				if ( self::is_switched_off( $item ) ) {
+					return Labels::reason( 'explicit_post_exclusion' );
+				}
 				$rule_id = $item->preview_item['decision']['rule_public_id'] ?? null;
 				$name    = is_string( $rule_id ) ? self::rule_name( $rule_id ) : '';
 				return '' === $name
@@ -1326,12 +1331,33 @@ final class BatchController {
 		}
 
 		if ( 'excluded' === $item->state ) {
-			return __( 'A "never share" rule matches this post.', 'pressqueue' );
+			return self::is_switched_off( $item ) ? Labels::reason( 'explicit_post_exclusion' ) : __( 'A "never share" rule matches this post.', 'pressqueue' );
 		}
 
 		$label = Labels::reason( $code, '' );
 
 		return '' === $label || $label === $code ? __( 'This share cannot be added.', 'pressqueue' ) : $label;
+	}
+
+	/**
+	 * Check whether an item was skipped only because "Share this post" is switched off.
+	 *
+	 * @param BatchItemRecord $item Item.
+	 * @return bool
+	 */
+	private static function is_switched_off( BatchItemRecord $item ): bool {
+		$decision = $item->preview_item['decision'] ?? null;
+		if ( ! is_array( $decision ) || 'excluded' !== ( $decision['result'] ?? null ) || null !== ( $decision['rule_public_id'] ?? null ) ) {
+			return false;
+		}
+
+		foreach ( is_array( $decision['reasons'] ?? null ) ? $decision['reasons'] : array() as $reason ) {
+			if ( is_array( $reason ) && 'explicit_post_exclusion' === ( $reason['code'] ?? null ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -1465,6 +1491,10 @@ final class BatchController {
 		);
 
 		$entry = $states[ $item->state ] ?? array( $item->state, 'idle', '' );
+		if ( 'excluded' === $item->state && self::is_switched_off( $item ) ) {
+			$off   = Labels::decision_result( 'switched_off' );
+			$entry = array( $off['label'], $off['tone'], $off['help'] );
+		}
 
 		return array(
 			'help'  => $entry[2],
@@ -2305,10 +2335,12 @@ final class BatchController {
 	/**
 	 * Map a failure to a plain error code.
 	 *
+	 * Share now in the post editor maps the same failures to its own words.
+	 *
 	 * @param Throwable $throwable Failure.
 	 * @return string
 	 */
-	private static function error_code( Throwable $throwable ): string {
+	public static function error_code( Throwable $throwable ): string {
 		if ( $throwable instanceof DomainException ) {
 			return isset( self::error_messages()[ $throwable->getMessage() ] ) ? $throwable->getMessage() : 'unknown';
 		}
