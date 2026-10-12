@@ -23,9 +23,10 @@ final class CardStore {
 	public const META_KEY = '_pressqueue_social_card';
 
 	/**
-	 * Superseded cards are kept this long so posts already queued with them still work.
+	 * Superseded cards are kept this long, because Buffer fetches the image by its URL
+	 * when a queued post goes out, which can be days after it was queued.
 	 */
-	private const KEEP_SUPERSEDED_SECONDS = 2 * 86400;
+	private const KEEP_SUPERSEDED_SECONDS = 30 * 86400;
 
 	private const UPLOAD_SUBDIR = 'pressqueue/social';
 
