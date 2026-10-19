@@ -149,6 +149,7 @@ final class CardStore {
 					'post_status'            => 'any',
 					'post_type'              => 'attachment',
 					'posts_per_page'         => 100,
+					// phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.SuppressFilters_suppress_filters -- PressQueue's own image attachments; other plugins' query filters must not hide them from lookups and cleanup.
 					'suppress_filters'       => true,
 					'update_post_term_cache' => false,
 				)
@@ -191,6 +192,7 @@ final class CardStore {
 				'post_status'            => 'inherit',
 				'post_type'              => 'attachment',
 				'posts_per_page'         => 1,
+				// phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.SuppressFilters_suppress_filters -- PressQueue's own image attachments; other plugins' query filters must not hide them from lookups and cleanup.
 				'suppress_filters'       => true,
 				'update_post_term_cache' => false,
 			)
@@ -332,6 +334,7 @@ final class CardStore {
 					'post_status'            => 'any',
 					'post_type'              => 'attachment',
 					'posts_per_page'         => 50,
+					// phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.SuppressFilters_suppress_filters -- PressQueue's own image attachments; other plugins' query filters must not hide them from lookups and cleanup.
 					'suppress_filters'       => true,
 					'update_post_term_cache' => false,
 				)
