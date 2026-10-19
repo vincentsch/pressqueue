@@ -748,6 +748,10 @@ final class PostSharingSummary {
 			return sprintf( _n( 'with %d chosen image', 'with %d chosen images', count( $items ), 'pressqueue' ), count( $items ) );
 		}
 
+		if ( 'social_card' === $mode ) {
+			return Labels::media_phrase( 'social_card' );
+		}
+
 		return Labels::media_phrase( 'featured_image' );
 	}
 

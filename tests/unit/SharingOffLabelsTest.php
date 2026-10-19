@@ -20,6 +20,7 @@ use PressQueue\Storage\Record\DecisionRecord;
 /**
  * @covers \PressQueue\Admin\ActivitySummary
  * @covers \PressQueue\Admin\Labels
+ * @covers \PressQueue\Admin\PostSharingSummary
  * @covers \PressQueue\Batch\PostShareNowService
  */
 final class SharingOffLabelsTest extends TestCase {
@@ -33,6 +34,16 @@ final class SharingOffLabelsTest extends TestCase {
 		self::assertSame( 'Never share', $never['label'] );
 		self::assertSame( 'bad', $never['tone'] );
 		self::assertSame( 'unknown', Labels::decision_result( 'unknown' )['label'] );
+	}
+
+	public function test_the_editor_summary_names_the_image_each_share_gets(): void {
+		$image_text = new \ReflectionMethod( \PressQueue\Admin\PostSharingSummary::class, 'image_text' );
+		$image      = array( 'url' => 'https://example.com/image.jpg' );
+
+		self::assertSame( 'with a social image of the title', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'social_card', 'items' => array( $image ) ) ) ) );
+		self::assertSame( 'with the featured image', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'featured_image_optional', 'items' => array( $image ) ) ) ) );
+		self::assertSame( 'with 1 chosen image', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'post_media', 'items' => array( $image ) ) ) ) );
+		self::assertSame( 'without an image', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'social_card', 'items' => array() ) ) ) );
 	}
 
 	public function test_only_an_exclusion_without_a_rule_counts_as_the_post_switch(): void {
