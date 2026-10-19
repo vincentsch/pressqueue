@@ -1,72 +1,60 @@
 # PressQueue
 
-PressQueue is a WordPress plugin that shares your posts on LinkedIn, X,
-Bluesky, Mastodon, Threads and Facebook through your Buffer account. It is
-free and open source.
+![License: MIT](https://img.shields.io/badge/license-MIT-3858e9)
+![WordPress 6.8 or newer](https://img.shields.io/badge/WordPress-6.8%2B-21759b)
+![PHP 8.1 or newer](https://img.shields.io/badge/PHP-8.1%2B-777bb4)
 
-You make rules that say which posts go where and what the message says. When
-you publish a post, PressQueue checks it against your rules and hands it to
-Buffer in the background. PressQueue starts in test mode. It shows what it
-would share and sends nothing until you switch it to Live. Every share leaves
-a record.
+PressQueue is a free WordPress plugin for Buffer. When you publish a post,
+PressQueue adds it to your Buffer queue with the message and image your rules
+set, and Buffer posts it on LinkedIn, X, Bluesky, Mastodon, Threads and
+Facebook.
+
+It is open source and has no Pro version, no license key and no account to
+create. The plugin runs on your own server and talks to Buffer directly.
+
+Website and documentation: [pressqueue.com](https://www.pressqueue.com)
 
 ![The PressQueue overview in the WordPress admin](docs/images/overview.png)
 
-## Try it
+## Features
 
-1. Download the plugin ZIP from the releases page and upload it under
-   **Plugins > Add New > Upload Plugin**. Activate it.
+- **Rules.** Pick posts by type, category, tag, author or custom field. Write
+  the message with the title, excerpt and other parts of the post, with a
+  different version for each network if you like. The live preview counts the
+  characters, and the link is added for you.
+- **Timing.** Add posts to the end of your Buffer queue or the next free slot,
+  post them right away, save them as Buffer drafts, or pick a date and time
+  for one post.
+- **Social images.** PressQueue draws an image for each post from its title,
+  in a style you pick once: 24 backgrounds, 6 fonts or your own background.
+  The same image can be the link preview of the post, with The SEO
+  Framework, Yoast SEO, Rank Math, Jetpack or no SEO plugin.
+- **A switch in the editor.** Each post has a "Share this post" switch and a
+  summary of where it goes. You can change the message, channels or timing for
+  one post, or make sharing opt-in so new posts start switched off.
+- **Share now and Share old posts.** Share a published post from the editor
+  after a preview of what each channel gets, or pick up to 100 older posts and
+  spread them across your Buffer queue.
+- **"Never share" rules.** Keep a category, tag or author off social media.
+  These rules win over every sharing rule.
+- **Test mode, Live and Paused.** PressQueue starts in test mode and records
+  what it would share without sending anything. Paused holds everything that
+  is waiting until you resume.
+- **Activity.** See what was sent, what is waiting and why a post was skipped.
+  Every share has a stable identity, so saving a post again never posts it
+  twice.
+
+## Getting started
+
+1. Download `pressqueue.zip` from the
+   [latest release](https://github.com/vincentsch/pressqueue/releases/latest)
+   and upload it under **Plugins > Add New > Upload Plugin**. Activate it.
 2. Open **PressQueue** in the admin menu. The checklist on the Overview takes
    you through connecting Buffer, making a rule and going live.
 
-The [getting started guide](docs/getting-started.md) explains each step. To
-run PressQueue from a Git checkout, run `composer install --no-dev` in the
-plugin folder before you activate it.
-
-## How it works
-
-1. **Connect Buffer.** Create an API key in Buffer and paste it into
-   PressQueue. Your Buffer channels show up. Switch on the ones you want to
-   use.
-2. **Make a rule.** A rule says which posts to share, where to send them,
-   what the message says and when it goes out. "Share every new post to all
-   my channels" is one click.
-3. **Test it.** The rule editor runs a rule against your recent posts and
-   shows where each one would go. In test mode, PressQueue also records what
-   it would share for each post you publish, and sends nothing.
-4. **Go live.** From then on, publishing a matching post adds it to your
-   Buffer queue, posts it right away or saves it as a Buffer draft, whichever
-   the rule says.
-
-## What you get
-
-- **Rules.** Pick posts by type, category, tag, author or custom field. Write
-  the message with placeholders like the title or excerpt, and see a live
-  preview with a character count. The link is added for you.
-- **"Never share" rules.** Keep a category, tag or author off social media.
-  These rules win over every sharing rule. If one cannot be checked, the post
-  is not shared.
-- **A switch in the editor.** Each post has a "Share this post" switch and a
-  short summary of where it will go. You can change the message, channels or
-  timing for one post. You can also make sharing opt-in, so new posts start
-  switched off. **Share now** shares a published post that was never shared,
-  after a preview of what each channel gets.
-- **Social images.** PressQueue can draw an image for each post from its
-  title, in a style you pick once. 24 backgrounds and 6 fonts are included,
-  and you can use your own background. The same image can be the link
-  preview of your posts, with The SEO Framework, Yoast SEO, Rank Math,
-  Jetpack or no SEO plugin.
-- **Share old posts.** Pick older posts, review the list and share them
-  spread across your Buffer queue. PressQueue will not share the same post
-  to the same channel twice by accident.
-- **An activity log.** See what was sent, what is waiting and what needs a
-  look. When Buffer's answer is unclear, PressQueue stops and asks you to
-  check Buffer instead of risking a double post.
-- **Test mode, Live and Paused.** One switch for the whole plugin. Pausing
-  holds everything that is waiting until you resume.
-
-PressQueue has no hosted service, account or tracking. It talks to Buffer
-from your own server.
+The [getting started guide](https://www.pressqueue.com/docs/getting-started/)
+explains each step. To run PressQueue from a Git checkout, run
+`composer install --no-dev` in the plugin folder before you activate it.
 
 ## Screenshots
 
@@ -100,30 +88,30 @@ from your own server.
 
 ## Requirements
 
-- WordPress 6.8 or newer and PHP 8.1 or newer, with the Sodium extension
-  (standard in PHP since 7.2).
+- WordPress 6.8 or newer and PHP 8.1 or newer, with PHP's Sodium extension,
+  which PHP includes by default.
 - MySQL 5.7.8 or MariaDB 10.2.3 or newer.
-- A Buffer account. Free plans work. Buffer's own limits apply, for example
-  how many posts a free plan can queue.
-- Images must be public HTTPS URLs. Video posts, Instagram, TikTok, YouTube
-  and Pinterest are not supported yet.
-- Social images need the PHP GD extension with FreeType. Without it, posts
-  are shared with text and link.
+- A Buffer account. Buffer's free plan works.
+- For social images, the PHP GD extension with FreeType, which most hosts
+  have.
+
+PressQueue shares text, a link and one image. Instagram, TikTok, YouTube,
+Pinterest and video posts are not supported yet.
 
 ## Why an API key and not "Log in with Buffer"?
 
-Buffer's login flow needs every website's address registered with Buffer in
+Buffer's login button needs every website's address registered with Buffer in
 advance. That does not work for a plugin anyone can install on their own
 site. You create a personal API key in Buffer's settings instead, and
 PressQueue stores it encrypted with your site's security keys.
 
 ## Privacy
 
-PressQueue keeps its rules and history in your WordPress database. It only
-talks to Buffer and, when a rule uses images, to the image's host to check
-the file. Deactivating keeps your data. Uninstalling keeps it too, unless
-you switch on deletion under **Settings > Data and privacy**. See
-[Privacy and data](docs/privacy.md) for the details.
+PressQueue keeps its rules and history in your WordPress database and sends
+nothing to anyone but Buffer. When a rule uses images, it also checks the image
+file on its host. Uninstalling keeps your data unless you switch on deletion
+under **Settings > Data and privacy**. [Privacy and data](docs/privacy.md) has
+the details.
 
 ## For developers
 
@@ -164,10 +152,8 @@ PressQueue's code is MIT licensed. The installable ZIP bundles Action
 Scheduler, which is GPL-3.0-or-later, so the ZIP as a whole is distributed
 under GPL-3.0-or-later. See [third-party notices](THIRD_PARTY_NOTICES.md).
 
-PressQueue is an independent project. It is not affiliated with Buffer or
-any other social publishing plugin.
-
 ## Help
 
-Bug reports and questions go in the repository's issues. To report a
+Questions and bug reports go in the
+[issues](https://github.com/vincentsch/pressqueue/issues). To report a
 security issue, read [SECURITY.md](SECURITY.md).

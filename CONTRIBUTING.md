@@ -33,7 +33,7 @@ These rules hold in every change:
 
 Use HTTP fakes for provider tests. Never put live API keys, private site
 settings, database exports or provider transcripts in code, issues or test
-fixtures. Do not copy code or assets from proprietary plugins.
+fixtures.
 
 Write documentation in everyday words and keep it factual. Say what the user
 needs to do and what happens. Keep internal project names and implementation
