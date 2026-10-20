@@ -133,4 +133,6 @@ Stable error codes are documented in the JSON schemas under
 
 Command output never includes credential envelopes, raw credentials,
 Authorization headers, raw HTTP request arguments, raw provider responses,
-rendered post bodies, media URLs, full provider payloads or PHP traces.
+full provider payloads or PHP traces. The `preview` commands show the message
+PressQueue would send, so their output can contain post text, the author's
+name and image addresses. Treat it like the post itself.

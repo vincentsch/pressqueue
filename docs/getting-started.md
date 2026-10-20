@@ -8,7 +8,10 @@ Nothing is sent to Buffer until the last step.
 Open **PressQueue > Channels**.
 
 1. Click **Open Buffer API settings**. Buffer opens in a new tab.
-2. In Buffer, click **New API key**, name it "PressQueue" and copy the key.
+2. In Buffer, open the **Personal Access** tab and click **+ New Key**. Name
+   the key "PressQueue", leave all permissions ticked and pick **1 year** as
+   the expiry, the longest Buffer offers (the default is 30 days). Click
+   **Generate API Key** and copy the key.
 3. Back in WordPress, paste the key and click **Connect**.
 
 PressQueue checks the key, finds your Buffer organization and lists its
@@ -39,10 +42,11 @@ To build your own, click **Add sharing rule**:
 - **Message**: the text before the link. Use the buttons to insert the title,
   excerpt, author, categories or tags. The link to the post is added at the
   end automatically. The preview counts characters against the channel's limit.
-- **Timing**: add it to the end of the Buffer queue, use the next free queue
-  slot, post right away, or save it as a Buffer draft for review.
+- **Timing**: add it to the end of the Buffer queue, put it at the top of the
+  Buffer queue, post right away, or save it as a Buffer draft for review.
 - **Image**: the featured image when there is one, only posts that have a
-  featured image, no image, or an image chosen in each post.
+  featured image, no image, an image chosen in each post, or the social image
+  drawn from the post title.
 
 Click **Save and test**. New and changed rules start switched off.
 

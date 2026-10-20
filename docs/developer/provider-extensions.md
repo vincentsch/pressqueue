@@ -1,8 +1,11 @@
 # Provider extensions
 
 Provider adapters are registered through the `pressqueue_provider_adapters`
-filter. PressQueue builds the registry the first time a request needs it and
-keeps it for the rest of that request. A provider registered after that point
+filter. The filter starts with an empty array: Buffer is built in and always
+comes first, and a descriptor whose provider key is already registered,
+including `buffer`, is skipped. If a callback on the filter throws, no add-on
+providers are loaded for that request. PressQueue builds the registry the
+first time a request needs it and keeps it for the rest of that request. A provider registered after that point
 shows up on the next request. The label shown for a provider is derived from
 its provider key.
 
