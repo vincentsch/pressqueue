@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-20)
 
 First public release.
 
@@ -14,8 +14,8 @@ First public release.
   rule. If one cannot be checked, the post is not shared.
 - Messages use placeholders such as the title or excerpt, can differ per
   network, and can start from saved templates.
-- Timing can be the end of the Buffer queue, the next free slot, right away,
-  a Buffer draft, or a date and time picked for one post.
+- Timing can be the end or the top of the Buffer queue, right away, a Buffer
+  draft, or a date and time picked for one post.
 - Share old posts in reviewed batches, for the first time or again.
 
 ### Social images
@@ -26,14 +26,14 @@ First public release.
 - A rule or a single post can share with the social image. If the image
   cannot be made, the post is shared with text and link as before.
 - The social image can also become the link preview image of your posts.
-  PressQueue hands it to The SEO Framework, Yoast SEO, Rank Math or
+  PressQueue hands it to Yoast SEO, Rank Math, The SEO Framework or
   Jetpack, or adds the tags itself when no SEO plugin is active.
 
 ### Admin
 
 - An overview with a setup checklist, recent activity, a post check and a
   warning when background tasks are not running.
-- Connect Buffer by pasting an API key. Channels appear with on/off switches.
+- Connect Buffer by pasting an API key. Channels appear with on and off switches.
 - A rule editor with ordinary form fields, a live message preview and a test
   against recent posts before a rule is switched on.
 - Test mode, Live and Paused as one switch.
@@ -51,9 +51,10 @@ First public release.
 ### Safety
 
 - New rules and channels start switched off, and PressQueue starts in test mode.
-- Every share has a stable identity, so repeated WordPress events never create
-  duplicate posts.
+- Repeated WordPress events never create duplicate posts.
 - Uncertain Buffer replies are never retried automatically.
+- Social images are drawn only for published posts, so a draft title never
+  ends up in a public file.
 - Posts are checked again right before they are sent. Changes to the post,
   rule or settings hold the share.
 - The Buffer key is stored encrypted and never exported.

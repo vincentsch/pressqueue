@@ -22,13 +22,13 @@ Website and documentation: [pressqueue.com](https://www.pressqueue.com)
   the message with the title, excerpt and other parts of the post, with a
   different version for each network if you like. The live preview counts the
   characters, and the link is added for you.
-- **Timing.** Add posts to the end of your Buffer queue or the next free slot,
-  post them right away, save them as Buffer drafts, or pick a date and time
-  for one post.
+- **Timing.** Add posts to the end or the top of your Buffer queue, post them
+  right away, save them as Buffer drafts, or pick a date and time for one
+  post.
 - **Social images.** PressQueue draws an image for each post from its title,
   in a style you pick once: 24 backgrounds, 6 fonts or your own background.
-  The same image can be the link preview of the post, with The SEO
-  Framework, Yoast SEO, Rank Math, Jetpack or no SEO plugin.
+  The same image can be the link preview of the post, with Yoast SEO, Rank
+  Math, The SEO Framework, Jetpack or no SEO plugin.
 - **A switch in the editor.** Each post has a "Share this post" switch and a
   summary of where it goes. You can change the message, channels or timing for
   one post, or make sharing opt-in so new posts start switched off.
@@ -41,14 +41,14 @@ Website and documentation: [pressqueue.com](https://www.pressqueue.com)
   what it would share without sending anything. Paused holds everything that
   is waiting until you resume.
 - **Activity.** See what was sent, what is waiting and why a post was skipped.
-  Every share has a stable identity, so saving a post again never posts it
-  twice.
+  Saving a post again never posts it twice.
 
 ## Getting started
 
 1. Download `pressqueue.zip` from the
    [latest release](https://github.com/vincentsch/pressqueue/releases/latest)
-   and upload it under **Plugins > Add New > Upload Plugin**. Activate it.
+   (not GitHub's "Source code" file) and upload it under **Plugins > Add
+   Plugin > Upload Plugin**. Activate it.
 2. Open **PressQueue** in the admin menu. The checklist on the Overview takes
    you through connecting Buffer, making a rule and going live.
 
@@ -89,21 +89,23 @@ explains each step. To run PressQueue from a Git checkout, run
 ## Requirements
 
 - WordPress 6.8 or newer and PHP 8.1 or newer, with PHP's Sodium extension,
-  which PHP includes by default.
+  which has been part of PHP since 7.2.
 - MySQL 5.7.8 or MariaDB 10.2.3 or newer.
 - A Buffer account. Buffer's free plan works.
 - For social images, the PHP GD extension with FreeType, which most hosts
   have.
 
-PressQueue shares text, a link and one image. Instagram, TikTok, YouTube,
-Pinterest and video posts are not supported yet.
+PressQueue shares text, a link and one image. Instagram, Pinterest, TikTok,
+YouTube, Google Business and video posts are not supported.
 
 ## Why an API key and not "Log in with Buffer"?
 
-Buffer's login button needs every website's address registered with Buffer in
-advance. That does not work for a plugin anyone can install on their own
-site. You create a personal API key in Buffer's settings instead, and
-PressQueue stores it encrypted with your site's security keys.
+Buffer's login button needs each website's address registered with Buffer in
+advance. That does not work for a plugin people install on their own sites.
+You create a personal API key in Buffer's settings and paste it into
+PressQueue, which stores it encrypted with your site's security keys. Pick
+the longest expiry when you create the key, since Buffer's default is 30
+days.
 
 ## Privacy
 
@@ -155,5 +157,6 @@ under GPL-3.0-or-later. See [third-party notices](THIRD_PARTY_NOTICES.md).
 ## Help
 
 Questions and bug reports go in the
-[issues](https://github.com/vincentsch/pressqueue/issues). To report a
-security issue, read [SECURITY.md](SECURITY.md).
+[issues](https://github.com/vincentsch/pressqueue/issues), or write to
+hello@pressqueue.com. To report a security issue, read
+[SECURITY.md](SECURITY.md).

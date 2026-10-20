@@ -3,7 +3,7 @@
 PressQueue is a WordPress plugin that shares posts to social networks through
 Buffer, following rules the site owner sets. Buffer is the first provider.
 Provider adapters handle requests to the outside service. The shared code owns
-rules, exclusions ("never share" rules), credentials, queue state and retries.
+rules, "never share" rules, credentials, queue state and retries.
 
 ## Local development
 
