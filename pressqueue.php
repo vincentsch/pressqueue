@@ -1,12 +1,15 @@
 <?php
 /**
  * Plugin Name: PressQueue
- * Description: Send WordPress posts to Buffer using rules, previews, and a delivery log.
+ * Plugin URI: https://www.pressqueue.com
+ * Description: Share your WordPress posts through Buffer, with rules for which posts go where, message previews and an image made from each title.
  * Version: 0.1.0
  * Requires at least: 6.8
  * Requires PHP: 8.1
  * Author: Vincent Schmalbach
+ * Author URI: https://www.vincentschmalbach.com
  * License: MIT
+ * License URI: https://opensource.org/license/mit
  * Text Domain: pressqueue
  * Domain Path: /languages
  *

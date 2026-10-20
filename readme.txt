@@ -1,5 +1,5 @@
 === PressQueue ===
-Contributors: vincentsch
+Contributors: webtq
 Tags: social media, buffer, auto post, share, scheduling
 Requires at least: 6.8
 Tested up to: 7.1
@@ -162,11 +162,12 @@ Buffer privacy policy: https://buffer.com/legal#privacy-policy
 
 == Screenshots ==
 
-1. The overview with the setup checklist and recent activity.
-2. Connecting Buffer and switching channels on.
-3. A rule in the rule editor, with the message preview.
-4. The Social sharing panel in the post editor.
-5. Activity, with a plain explanation for each share.
+1. The overview: recent shares and a quick check of what would happen to any post.
+2. Connect Buffer once and switch on the channels PressQueue may post to.
+3. A rule in the rule editor, with a preview of the post on Bluesky.
+4. The Social sharing panel in the post editor shows where a post goes when you publish it.
+5. Activity lists every share and its status.
+6. Pick the look of the social image, with a live preview.
 
 == Changelog ==
 
