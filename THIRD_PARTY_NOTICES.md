@@ -23,7 +23,7 @@ original copyright notice, sits next to it as `OFL-<name>.txt`. PressQueue
 ships trimmed static copies: one weight cut from the variable font, with
 unused characters removed.
 
-- Inter, copyright 2020 The Inter Project Authors.
+- Inter, copyright 2016 The Inter Project Authors.
 - Space Grotesk, copyright 2020 The Space Grotesk Project Authors.
 - Bricolage Grotesque, copyright 2022 The Bricolage Grotesque Project Authors.
 - JetBrains Mono, copyright 2020 The JetBrains Mono Project Authors.
@@ -32,7 +32,7 @@ unused characters removed.
   Playfair Display is a Reserved Font Name, so the modified copy uses
   another name.
 - "Sturdy Serif" (`SturdySerif-ExtraBold.ttf`) is a modified version of
-  Merriweather, copyright The Merriweather Project Authors. Merriweather is a
+  Merriweather, copyright 2024 The Merriweather Project Authors. Merriweather is a
   Reserved Font Name, so the modified copy uses another name.
 
 ## Background images for social images
