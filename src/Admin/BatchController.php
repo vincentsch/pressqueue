@@ -680,7 +680,7 @@ final class BatchController {
 	/**
 	 * Render step 3.
 	 *
-	 * Post right away and Next free queue slot only work for a single share, so
+	 * Post right away and Top of the Buffer queue only work for a single share, so
 	 * they are switched off once a preview shows more than one share.
 	 *
 	 * @param array<string,mixed>                 $form Form values.
@@ -1240,13 +1240,13 @@ final class BatchController {
 			$problems[] = sprintf(
 				/* translators: 1: timing such as "Post right away", 2: number of shares in the batch. */
 				_n( '%1$s only works when the batch has one share. This batch has %2$d share. Pick another timing below, such as Spread across the Buffer queue, and update the preview.', '%1$s only works when the batch has one share. This batch has %2$d shares. Pick another timing below, such as Spread across the Buffer queue, and update the preview.', (int) $review['share_count'], 'pressqueue' ),
-				'immediate' === $review['single_timing'] ? __( 'Post right away', 'pressqueue' ) : __( 'Next free queue slot', 'pressqueue' ),
+				'immediate' === $review['single_timing'] ? __( 'Post right away', 'pressqueue' ) : __( 'Top of the Buffer queue', 'pressqueue' ),
 				(int) $review['share_count']
 			);
 		}
 
 		if ( $review['invalid_schedule'] ) {
-			$problems[] = __( 'A rule in this batch posts right away or in the next free queue slot. That only works for a single share. Pick another timing below, such as Spread across the Buffer queue, and update the preview.', 'pressqueue' );
+			$problems[] = __( 'A rule in this batch posts right away or at the top of the Buffer queue. That only works for a single share. Pick another timing below, such as Spread across the Buffer queue, and update the preview.', 'pressqueue' );
 		}
 
 		if ( array() !== $review['draft_conflicts'] ) {
@@ -1728,7 +1728,7 @@ final class BatchController {
 			case 'draft':
 				return __( 'They are saved as Buffer drafts. Nothing goes public until you schedule them in Buffer.', 'pressqueue' );
 			case 'queue_next':
-				return __( 'It goes to the next free slot in your Buffer queue.', 'pressqueue' );
+				return __( 'It goes to the top of your Buffer queue.', 'pressqueue' );
 			case 'immediate':
 				return __( 'It is posted right away.', 'pressqueue' );
 			case 'staggered_explicit_time':
@@ -2316,7 +2316,7 @@ final class BatchController {
 			'post_type'       => __( 'Pick a post type from the list.', 'pressqueue' ),
 			'repost_days'     => __( 'Enter a number of days between 1 and 3650, or leave it empty.', 'pressqueue' ),
 			'runtime'         => __( 'Background sharing is stopped, so batches cannot run right now. Open Settings, then Data and privacy, to see why.', 'pressqueue' ),
-			'single_timing'   => __( 'Post right away and Next free queue slot only work when the batch has one share. Pick another timing and preview again.', 'pressqueue' ),
+			'single_timing'   => __( 'Post right away and Top of the Buffer queue only work when the batch has one share. Pick another timing and preview again.', 'pressqueue' ),
 			'start_far'       => __( 'The last share would be more than a year away. Pick an earlier start or a shorter gap.', 'pressqueue' ),
 			'start_invalid'   => __( 'Enter a valid date and time for the first share.', 'pressqueue' ),
 			'start_soon'      => __( 'Pick a first share time at least 15 minutes from now.', 'pressqueue' ),
@@ -2487,7 +2487,7 @@ final class BatchController {
 			),
 			'queue_next'              => array(
 				'help'  => __( 'Goes ahead of everything waiting in your Buffer queue. Only works when the batch has one share.', 'pressqueue' ),
-				'label' => __( 'Next free queue slot', 'pressqueue' ),
+				'label' => __( 'Top of the Buffer queue', 'pressqueue' ),
 			),
 			'immediate'               => array(
 				'help'  => __( 'Buffer publishes it within a few minutes. Only works when the batch has one share.', 'pressqueue' ),

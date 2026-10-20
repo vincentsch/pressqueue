@@ -512,7 +512,7 @@ final class Planner {
 						array_merge(
 							$entry['reasons'],
 							array(
-								ReasonFactory::make( 'render_policy_error', SafeOperatorError::message( $exception ), 'error', 'payload', 'render', $rule->public_id, null ),
+								ReasonFactory::make( 'render_policy_error', SafeOperatorError::stored_label( $exception ), 'error', 'payload', 'render', $rule->public_id, null ),
 							)
 						),
 						$destination['destination'],
@@ -780,7 +780,7 @@ final class Planner {
 				$evaluated[] = array(
 					'condition_result' => 'error',
 					'reasons'          => array(
-						ReasonFactory::make( 'malformed_rule', SafeOperatorError::message( $exception ), 'error', 'rule', 'valid_document', $rule->public_id, null ),
+						ReasonFactory::make( 'malformed_rule', SafeOperatorError::stored_label( $exception ), 'error', 'rule', 'valid_document', $rule->public_id, null ),
 					),
 					'rule'             => $rule,
 				);

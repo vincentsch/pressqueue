@@ -213,7 +213,7 @@ function pressqueue_load_autoloader(): bool {
 
 	if ( ! file_exists( $autoload ) ) {
 		pressqueue_register_admin_notice(
-			__( 'PressQueue could not load its Composer autoloader. Run composer install before activating.', 'pressqueue' )
+			__( 'This copy of PressQueue is incomplete. Download pressqueue.zip from https://www.pressqueue.com/download/ and upload that file instead. If you are working from the source code, run composer install first.', 'pressqueue' )
 		);
 
 		return false;
@@ -248,7 +248,7 @@ function pressqueue_activate( $network_wide ): void {
 
 	if ( ! pressqueue_load_autoloader() ) {
 		pressqueue_fail_activation(
-			__( 'PressQueue could not load its Composer autoloader. Run composer install before activating.', 'pressqueue' )
+			__( 'This copy of PressQueue is incomplete. Download pressqueue.zip from https://www.pressqueue.com/download/ and upload that file instead. If you are working from the source code, run composer install first.', 'pressqueue' )
 		);
 		return;
 	}

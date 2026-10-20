@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-12T08:48:26+00:00\n"
+"POT-Creation-Date: 2026-10-20T19:31:08+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: pressqueue\n"
@@ -25,9 +25,14 @@ msgstr ""
 msgid "PressQueue"
 msgstr ""
 
+#. Plugin URI of the plugin
+#: pressqueue.php
+msgid "https://www.pressqueue.com"
+msgstr ""
+
 #. Description of the plugin
 #: pressqueue.php
-msgid "Send WordPress posts to Buffer using rules, previews, and a delivery log."
+msgid "Share your WordPress posts through Buffer, with rules for which posts go where, message previews and an image made from each title."
 msgstr ""
 
 #. Author of the plugin
@@ -35,24 +40,29 @@ msgstr ""
 msgid "Vincent Schmalbach"
 msgstr ""
 
-#: pressqueue.php:81
+#. Author URI of the plugin
+#: pressqueue.php
+msgid "https://www.vincentschmalbach.com"
+msgstr ""
+
+#: pressqueue.php:84
 msgid "PressQueue requires PHP 8.1 or newer."
 msgstr ""
 
-#: pressqueue.php:90
+#: pressqueue.php:93
 msgid "PressQueue requires WordPress 6.8 or newer."
 msgstr ""
 
-#: pressqueue.php:94
+#: pressqueue.php:97
 msgid "PressQueue does not support network activation yet. Activate it per site."
 msgstr ""
 
-#: pressqueue.php:213
-#: pressqueue.php:248
-msgid "PressQueue could not load its Composer autoloader. Run composer install before activating."
+#: pressqueue.php:216
+#: pressqueue.php:251
+msgid "This copy of PressQueue is incomplete. Download pressqueue.zip from https://www.pressqueue.com/download/ and upload that file instead. If you are working from the source code, run composer install first."
 msgstr ""
 
-#: pressqueue.php:261
+#: pressqueue.php:264
 msgid "PressQueue could not complete activation setup."
 msgstr ""
 
@@ -122,9 +132,9 @@ msgstr ""
 #: src/Admin/DecisionsController.php:419
 #: src/Admin/DeliveryExplainer.php:187
 #: src/Admin/DeliveryExplainer.php:196
-#: src/Admin/PostControlsController.php:478
+#: src/Admin/PostControlsController.php:483
 #: src/Admin/RuleEditor.php:466
-#: assets/editor/post-controls.js:1153
+#: assets/editor/post-controls.js:1162
 msgid "Channels"
 msgstr ""
 
@@ -147,7 +157,7 @@ msgid "PressQueue Settings"
 msgstr ""
 
 #: src/Admin/AdminScreens.php:80
-#: src/Admin/PluginLinks.php:54
+#: src/Admin/PluginLinks.php:58
 #: src/Admin/PrivacyController.php:96
 #: src/Admin/SettingsController.php:47
 #: src/Admin/SettingsController.php:88
@@ -175,7 +185,7 @@ msgid "Social images"
 msgstr ""
 
 #: src/Admin/AdminScreens.php:110
-#: src/Admin/OverviewController.php:482
+#: src/Admin/OverviewController.php:485
 msgid "Check a post"
 msgstr ""
 
@@ -194,7 +204,7 @@ msgstr ""
 #: src/Admin/AdminScreens.php:275
 #: src/Admin/DeliveryDetailController.php:798
 #: src/Admin/OverviewController.php:32
-#: src/Admin/RulesController.php:901
+#: src/Admin/RulesController.php:955
 msgid "You are not allowed to use this PressQueue screen."
 msgstr ""
 
@@ -416,9 +426,9 @@ msgstr[1] ""
 #: src/Admin/BatchController.php:694
 #: src/Admin/DeliveryDetailController.php:423
 #: src/Admin/DeliveryDetailController.php:425
-#: src/Admin/PostControlsController.php:497
+#: src/Admin/PostControlsController.php:502
 #: src/Admin/RuleEditor.php:504
-#: assets/editor/post-controls.js:1173
+#: assets/editor/post-controls.js:1182
 msgid "Timing"
 msgstr ""
 
@@ -544,7 +554,7 @@ msgstr ""
 
 #: src/Admin/BatchController.php:872
 #: src/Admin/BatchController.php:1029
-#: src/Admin/ChannelsPage.php:899
+#: src/Admin/ChannelsPage.php:903
 #: src/Admin/DeliveryDetailController.php:354
 #: src/Admin/DeliveryListController.php:523
 msgid "Status"
@@ -602,8 +612,8 @@ msgstr ""
 
 #: src/Admin/BatchController.php:1025
 #: src/Admin/BatchController.php:2289
-#: src/Admin/ChannelsPage.php:892
-#: src/Admin/ChannelsPage.php:1071
+#: src/Admin/ChannelsPage.php:896
+#: src/Admin/ChannelsPage.php:1075
 #: src/Admin/DeliveryDetailController.php:567
 #: src/Admin/PrivacyController.php:624
 #: src/Admin/RuleEditor.php:573
@@ -669,11 +679,11 @@ msgstr ""
 #: src/Admin/BatchController.php:1243
 #: src/Admin/BatchController.php:2490
 #: src/Admin/Labels.php:157
-msgid "Next free queue slot"
+msgid "Top of the Buffer queue"
 msgstr ""
 
 #: src/Admin/BatchController.php:1249
-msgid "A rule in this batch posts right away or in the next free queue slot. That only works for a single share. Pick another timing below, such as Spread across the Buffer queue, and update the preview."
+msgid "A rule in this batch posts right away or at the top of the Buffer queue. That only works for a single share. Pick another timing below, such as Spread across the Buffer queue, and update the preview."
 msgstr ""
 
 #. translators: %s: rule names.
@@ -686,13 +696,13 @@ msgstr ""
 #: src/Admin/BatchController.php:1334
 #: src/Admin/BatchController.php:1487
 #: src/Admin/Labels.php:279
-#: src/Admin/PostSharingSummary.php:544
+#: src/Admin/PostSharingSummary.php:551
 msgid "A \"never share\" rule matches this post."
 msgstr ""
 
 #. translators: %s: rule name.
 #: src/Admin/BatchController.php:1305
-#: src/Admin/PostSharingSummary.php:548
+#: src/Admin/PostSharingSummary.php:555
 #, php-format
 msgid "The \"never share\" rule \"%s\" matches this post."
 msgstr ""
@@ -1042,7 +1052,7 @@ msgid "They are saved as Buffer drafts. Nothing goes public until you schedule t
 msgstr ""
 
 #: src/Admin/BatchController.php:1731
-msgid "It goes to the next free slot in your Buffer queue."
+msgid "It goes to the top of your Buffer queue."
 msgstr ""
 
 #: src/Admin/BatchController.php:1733
@@ -1146,7 +1156,7 @@ msgid "Background sharing is stopped, so batches cannot run right now. Open Sett
 msgstr ""
 
 #: src/Admin/BatchController.php:2319
-msgid "Post right away and Next free queue slot only work when the batch has one share. Pick another timing and preview again."
+msgid "Post right away and Top of the Buffer queue only work when the batch has one share. Pick another timing and preview again."
 msgstr ""
 
 #: src/Admin/BatchController.php:2320
@@ -1348,8 +1358,8 @@ msgstr ""
 
 #. translators: 1: channel name, 2: social network name.
 #: src/Admin/ChannelController.php:43
-#: src/Admin/ChannelsPage.php:848
-#: src/Admin/ChannelsPage.php:859
+#: src/Admin/ChannelsPage.php:852
+#: src/Admin/ChannelsPage.php:863
 #, php-format
 msgid "Post to %1$s on %2$s"
 msgstr ""
@@ -1394,748 +1404,765 @@ msgstr ""
 msgid "Create an API key in Buffer"
 msgstr ""
 
-#. translators: %s: the "New API key" button label in Buffer.
+#. translators: 1: the "Personal Access" tab in Buffer, 2: the "+ New Key" button in Buffer, 3: the "1 year" expiry choice in Buffer, 4: the "Generate API Key" button in Buffer.
 #: src/Admin/ChannelsPage.php:244
 #, php-format
-msgid "In Buffer, click %s, name it PressQueue and copy it."
+msgid "In Buffer, open the %1$s tab and click %2$s. Name the key PressQueue, leave all permissions ticked and pick %3$s as the expiry, the longest Buffer offers. Then click %4$s and copy the key."
 msgstr ""
 
 #: src/Admin/ChannelsPage.php:245
-msgid "New API key"
+msgid "Personal Access"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:249
-#: src/Admin/ChannelsPage.php:615
+#: src/Admin/ChannelsPage.php:246
+msgid "+ New Key"
+msgstr ""
+
+#: src/Admin/ChannelsPage.php:247
+msgid "1 year"
+msgstr ""
+
+#: src/Admin/ChannelsPage.php:248
+msgid "Generate API Key"
+msgstr ""
+
+#: src/Admin/ChannelsPage.php:251
+msgid "When the key expires, PressQueue tells you here, and you paste a new one."
+msgstr ""
+
+#: src/Admin/ChannelsPage.php:253
+#: src/Admin/ChannelsPage.php:619
 msgid "Open Buffer API settings"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:254
+#: src/Admin/ChannelsPage.php:258
 msgid "Step 2"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:256
 #: src/Admin/ChannelsPage.php:260
+#: src/Admin/ChannelsPage.php:264
 msgid "Paste the key here"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:262
+#: src/Admin/ChannelsPage.php:266
 msgid "Paste your Buffer API key"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:263
+#: src/Admin/ChannelsPage.php:267
 msgid "Connecting..."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:263
+#: src/Admin/ChannelsPage.php:267
 msgid "Connect"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:265
+#: src/Admin/ChannelsPage.php:269
 msgid "Stored encrypted on this site. It is only sent to Buffer."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:293
-#: src/Admin/ChannelsPage.php:306
+#: src/Admin/ChannelsPage.php:297
+#: src/Admin/ChannelsPage.php:310
+#: src/Admin/PluginLinks.php:111
 msgid "(opens in a new tab)"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:303
-#: src/Admin/ChannelsPage.php:1108
+#: src/Admin/ChannelsPage.php:307
+#: src/Admin/ChannelsPage.php:1112
 msgid "PressQueue cannot store a Buffer key on this server yet."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:306
+#: src/Admin/ChannelsPage.php:310
 msgid "Generate new keys and salts"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:319
+#: src/Admin/ChannelsPage.php:323
 msgid "PressQueue encrypts the key with the PHP Sodium extension, and this server does not have it turned on. Ask your host to enable the sodium extension for PHP, then reload this page."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:322
+#: src/Admin/ChannelsPage.php:326
 msgid "PressQueue encrypts the key with the security keys and salts in wp-config.php, and they are missing or still set to the placeholder text. Add unique values for all eight keys and salts, then reload this page. Changing them signs everyone out once."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:359
+#: src/Admin/ChannelsPage.php:363
 msgid "Refreshing..."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:359
+#: src/Admin/ChannelsPage.php:363
 msgid "Refresh channels"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:363
-#: src/Admin/Ui.php:263
+#: src/Admin/ChannelsPage.php:367
+#: src/Admin/Ui.php:307
 msgid "Turn on"
 msgstr ""
 
 #. translators: %s: Buffer account name.
-#: src/Admin/ChannelsPage.php:390
+#: src/Admin/ChannelsPage.php:394
 #, php-format
 msgid "Buffer account: %s"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:396
+#: src/Admin/ChannelsPage.php:400
 msgid "Key checked just now"
 msgstr ""
 
 #. translators: %s: relative time such as "5 mins ago" or a date.
-#: src/Admin/ChannelsPage.php:398
+#: src/Admin/ChannelsPage.php:402
 #, php-format
 msgid "Key last checked %s"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:403
-#: src/Admin/ChannelsPage.php:1025
+#: src/Admin/ChannelsPage.php:407
+#: src/Admin/ChannelsPage.php:1029
 #: src/Admin/ConnectionController.php:617
 #: src/Admin/ConnectionController.php:673
 msgid "Buffer"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:418
+#: src/Admin/ChannelsPage.php:422
 msgid "Connected"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:419
+#: src/Admin/ChannelsPage.php:423
 msgid "Turned off"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:420
+#: src/Admin/ChannelsPage.php:424
 msgid "Key no longer works"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:421
+#: src/Admin/ChannelsPage.php:425
 msgid "Loading channels"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:422
+#: src/Admin/ChannelsPage.php:426
 msgid "Setup not finished"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:423
+#: src/Admin/ChannelsPage.php:427
 msgid "Choose an organization"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:424
+#: src/Admin/ChannelsPage.php:428
 #: src/Admin/DeliveryListController.php:86
-#: src/Admin/OverviewController.php:440
+#: src/Admin/OverviewController.php:443
 msgid "Needs attention"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:446
+#: src/Admin/ChannelsPage.php:450
 msgid "Sharing still uses the channels loaded before. Click Refresh channels to try again."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:450
+#: src/Admin/ChannelsPage.php:454
 msgid "This account is turned off. Its channels do not share until you turn it back on. The saved key and your channel switches stay as they are."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:455
+#: src/Admin/ChannelsPage.php:459
 msgid "Buffer no longer accepts the saved key, so nothing is shared through this account."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:456
-msgid "This happens when the key is deleted in Buffer. Create a new key in Buffer and paste it below. Your channels and rules stay as they are."
-msgstr ""
-
-#: src/Admin/ChannelsPage.php:462
-msgid "PressQueue is loading the channels for this account. Reload the page in a moment."
+#: src/Admin/ChannelsPage.php:460
+msgid "This happens when the key expires or is deleted in Buffer. To fix it, create a new key in Buffer or regenerate the old one there, then paste it below. Your channels and rules stay as they are."
 msgstr ""
 
 #: src/Admin/ChannelsPage.php:466
+msgid "PressQueue is loading the channels for this account. Reload the page in a moment."
+msgstr ""
+
+#: src/Admin/ChannelsPage.php:470
 msgid "Setup is not finished. PressQueue still needs to check the key with Buffer and load your channels."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:468
+#: src/Admin/ChannelsPage.php:472
 msgid "Finish setup"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:473
+#: src/Admin/ChannelsPage.php:477
 msgid "The Buffer organization this account used is no longer available to the key. Choose which organization PressQueue should use now."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:474
-#: src/Admin/ChannelsPage.php:739
+#: src/Admin/ChannelsPage.php:478
+#: src/Admin/ChannelsPage.php:743
 msgid "Use this organization"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:479
+#: src/Admin/ChannelsPage.php:483
 msgid "PressQueue could not finish loading the channels for this account."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:481
-#: assets/editor/post-controls.js:1343
+#: src/Admin/ChannelsPage.php:485
+#: assets/editor/post-controls.js:1352
 msgid "Try again"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:498
+#: src/Admin/ChannelsPage.php:502
 msgid "The last refresh failed because Buffer did not accept the key."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:499
+#: src/Admin/ChannelsPage.php:503
 msgid "The last refresh failed because Buffer refused access."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:500
+#: src/Admin/ChannelsPage.php:504
 msgid "The last refresh failed because this site could not reach Buffer."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:501
+#: src/Admin/ChannelsPage.php:505
 msgid "The last refresh failed because Buffer asked PressQueue to slow down."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:504
+#: src/Admin/ChannelsPage.php:508
 msgid "The last refresh did not finish."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:517
+#: src/Admin/ChannelsPage.php:521
 msgid "More"
 msgstr ""
 
 #. translators: %s: Buffer organization name.
-#: src/Admin/ChannelsPage.php:519
+#: src/Admin/ChannelsPage.php:523
 #, php-format
 msgid "options for %s"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:531
+#: src/Admin/ChannelsPage.php:535
 msgid "Switch"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:537
-#: src/Admin/ChannelsPage.php:544
-#: src/Admin/Ui.php:263
+#: src/Admin/ChannelsPage.php:541
+#: src/Admin/ChannelsPage.php:548
+#: src/Admin/Ui.php:307
 msgid "Turn off"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:538
+#: src/Admin/ChannelsPage.php:542
 msgid "Pause sharing through this account. The key and your channel switches stay saved."
 msgstr ""
 
 #. translators: %s: Buffer organization name.
-#: src/Admin/ChannelsPage.php:547
+#: src/Admin/ChannelsPage.php:551
 #, php-format
 msgid "Turn off %s? Its channels stop sharing and rules skip them until you turn it back on."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:554
-#: src/Admin/ChannelsPage.php:561
+#: src/Admin/ChannelsPage.php:558
+#: src/Admin/ChannelsPage.php:565
 msgid "Disconnect"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:555
+#: src/Admin/ChannelsPage.php:559
 msgid "Deletes the saved key. Connecting the same Buffer account again brings its channels back."
 msgstr ""
 
 #. translators: %s: Buffer organization name.
-#: src/Admin/ChannelsPage.php:564
+#: src/Admin/ChannelsPage.php:568
 #, php-format
 msgid "Disconnect %s? PressQueue deletes the saved key. Its channels stop and rules skip them until you connect this Buffer account again."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:608
+#: src/Admin/ChannelsPage.php:612
 msgid "Paste a new API key"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:608
+#: src/Admin/ChannelsPage.php:612
 msgid "Replace API key"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:610
+#: src/Admin/ChannelsPage.php:614
 msgid "Paste a new Buffer API key"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:611
+#: src/Admin/ChannelsPage.php:615
 msgid "Checking the key..."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:611
+#: src/Admin/ChannelsPage.php:615
 msgid "Replace key and reconnect"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:611
+#: src/Admin/ChannelsPage.php:615
 msgid "Replace"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:614
+#: src/Admin/ChannelsPage.php:618
 msgid "Use a key from the same Buffer account. Channels and rules stay as they are."
 msgstr ""
 
 #. translators: %s: current Buffer organization name.
-#: src/Admin/ChannelsPage.php:634
+#: src/Admin/ChannelsPage.php:638
 #, php-format
 msgid "Switch organization? Channels from %s stop, and rules that use them skip them. Channels from the new organization start switched off."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:641
+#: src/Admin/ChannelsPage.php:645
 msgid "Switch organization"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:641
-#: src/Admin/ChannelsPage.php:718
+#: src/Admin/ChannelsPage.php:645
+#: src/Admin/ChannelsPage.php:722
 msgid "Buffer organization"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:652
+#: src/Admin/ChannelsPage.php:656
 msgid "in use now"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:652
+#: src/Admin/ChannelsPage.php:656
 msgid "already connected"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:658
-#: src/Admin/ChannelsPage.php:739
+#: src/Admin/ChannelsPage.php:662
+#: src/Admin/ChannelsPage.php:743
 msgid "Loading channels..."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:660
+#: src/Admin/ChannelsPage.php:664
 msgid "Channels from the new organization start switched off."
 msgstr ""
 
 #. translators: %d: number of channels in a Buffer organization.
-#: src/Admin/ChannelsPage.php:675
+#: src/Admin/ChannelsPage.php:679
 #, php-format
 msgid "%d channel"
 msgid_plural "%d channels"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/ChannelsPage.php:716
+#: src/Admin/ChannelsPage.php:720
 msgid "Which Buffer organization should PressQueue use?"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:717
+#: src/Admin/ChannelsPage.php:721
 msgid "Your key works and can see more than one Buffer organization. Pick the one whose channels PressQueue should post to. You can switch later."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:733
+#: src/Admin/ChannelsPage.php:737
 msgid "Already connected"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:740
+#: src/Admin/ChannelsPage.php:744
 #: assets/editor/post-controls-classic.js:248
-#: assets/editor/post-controls.js:901
+#: assets/editor/post-controls.js:910
 msgid "Cancel"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:776
+#: src/Admin/ChannelsPage.php:780
 msgid "Your channels"
 msgstr ""
 
 #. translators: %s: Buffer organization name.
-#: src/Admin/ChannelsPage.php:778
+#: src/Admin/ChannelsPage.php:782
 #, php-format
 msgid "Channels in %s"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:780
+#: src/Admin/ChannelsPage.php:784
 msgid "Switch on the channels PressQueue may post to. New channels start switched off. Rules then choose which posts go where."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:785
+#: src/Admin/ChannelsPage.php:789
 msgid "No channels yet"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:786
+#: src/Admin/ChannelsPage.php:790
 msgid "This Buffer organization has no channels. Add a social account in Buffer, then click Refresh channels."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:827
+#: src/Admin/ChannelsPage.php:831
 msgid "Skipped until it works again"
 msgstr ""
 
 #. translators: %d: number of rules.
-#: src/Admin/ChannelsPage.php:831
+#: src/Admin/ChannelsPage.php:835
 #, php-format
 msgid "Used by %d rule"
 msgid_plural "Used by %d rules"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/ChannelsPage.php:833
+#: src/Admin/ChannelsPage.php:837
 msgid "Add it to a rule to share posts here."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:834
+#: src/Admin/ChannelsPage.php:838
 msgid "Not in a rule yet"
 msgstr ""
 
 #. translators: %d: number of rules.
-#: src/Admin/ChannelsPage.php:837
+#: src/Admin/ChannelsPage.php:841
 #, php-format
 msgid "Off, %d rule skips it"
 msgid_plural "Off, %d rules skip it"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/ChannelsPage.php:839
+#: src/Admin/ChannelsPage.php:843
 #: src/Admin/RuleEditor.php:61
 #: src/Admin/RulesController.php:298
 msgid "Off"
 msgstr ""
 
 #. translators: 1: channel name, 2: social network name.
-#: src/Admin/ChannelsPage.php:851
+#: src/Admin/ChannelsPage.php:855
 #, php-format
 msgid "Switch off %1$s on %2$s? Rules that use this channel will skip it until you switch it back on."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:873
+#: src/Admin/ChannelsPage.php:877
 msgid "Add another Buffer account"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:894
+#: src/Admin/ChannelsPage.php:898
 msgid "IDs for support requests and WP-CLI. Disconnected accounts stay listed here so their channels can come back when you connect the same account again."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:897
+#: src/Admin/ChannelsPage.php:901
 msgid "Buffer connections"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:899
+#: src/Admin/ChannelsPage.php:903
 msgid "Connection"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:899
-#: src/Admin/ChannelsPage.php:925
+#: src/Admin/ChannelsPage.php:903
+#: src/Admin/ChannelsPage.php:929
 msgid "PressQueue ID"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:899
+#: src/Admin/ChannelsPage.php:903
 msgid "Buffer account ID"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:899
-#: src/Admin/ChannelsPage.php:925
+#: src/Admin/ChannelsPage.php:903
+#: src/Admin/ChannelsPage.php:929
 msgid "Buffer organization ID"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:906
-#: src/Admin/ChannelsPage.php:933
+#: src/Admin/ChannelsPage.php:910
+#: src/Admin/ChannelsPage.php:937
 msgid "on"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:906
-#: src/Admin/ChannelsPage.php:933
+#: src/Admin/ChannelsPage.php:910
+#: src/Admin/ChannelsPage.php:937
 msgid "off"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:923
+#: src/Admin/ChannelsPage.php:927
 msgid "Buffer channels"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:925
+#: src/Admin/ChannelsPage.php:929
 #: src/Admin/DeliveryListController.php:416
 #: src/Admin/DeliveryListController.php:522
 msgid "Channel"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:925
+#: src/Admin/ChannelsPage.php:929
 msgid "Availability"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:925
+#: src/Admin/ChannelsPage.php:929
 msgid "Buffer channel ID"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:954
+#: src/Admin/ChannelsPage.php:958
 msgid "none"
 msgstr ""
 
 #. translators: %s: fixed error code such as network_failure.
-#: src/Admin/ChannelsPage.php:1036
+#: src/Admin/ChannelsPage.php:1040
 #, php-format
 msgid "Buffer request failed with code %s."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1086
+#: src/Admin/ChannelsPage.php:1090
 msgid "Paste your Buffer API key first, then click Connect."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1088
+#: src/Admin/ChannelsPage.php:1092
 msgid "Buffer did not accept this key. Copy it again from Buffer's API settings and paste the whole key."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1090
+#: src/Admin/ChannelsPage.php:1094
 msgid "Buffer accepted the key but would not let PressQueue read this account. Create a new key in Buffer's API settings and try again."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1092
+#: src/Admin/ChannelsPage.php:1096
 msgid "This site could not reach Buffer. Your server needs to allow outgoing HTTPS connections to api.buffer.com. Try again in a moment, or ask your host to check it."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1094
+#: src/Admin/ChannelsPage.php:1098
 msgid "Buffer is limiting requests from this key right now. Wait a few minutes, then try again."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1096
+#: src/Admin/ChannelsPage.php:1100
 msgid "This Buffer account has no organization yet. Finish setting up your account in Buffer, then try again."
 msgstr ""
 
 #. translators: %s: Buffer organization name.
-#: src/Admin/ChannelsPage.php:1099
+#: src/Admin/ChannelsPage.php:1103
 #, php-format
 msgid "%s is already connected. To use a new key for it, open More next to it and choose Replace API key."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1101
+#: src/Admin/ChannelsPage.php:1105
 msgid "Every Buffer organization this key can see is already connected."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1103
+#: src/Admin/ChannelsPage.php:1107
 msgid "That Buffer organization is not available to this key anymore. Pick another one."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1105
+#: src/Admin/ChannelsPage.php:1109
 msgid "This key belongs to a different Buffer account. Use a key from the account you connected, or add the other account with Add another Buffer account."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1110
+#: src/Admin/ChannelsPage.php:1114
 msgid "PressQueue can no longer read the saved key. This happens when the security keys in wp-config.php change. Replace the API key to fix it."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1112
+#: src/Admin/ChannelsPage.php:1116
 msgid "Something changed while you were working. The page now shows the latest state. Please try again."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1114
+#: src/Admin/ChannelsPage.php:1118
 msgid "PressQueue is already loading channels for this account. Wait a moment, then reload the page."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1116
+#: src/Admin/ChannelsPage.php:1120
 msgid "Refresh channels first. PressQueue can turn an account on only after it has loaded its channels."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1118
+#: src/Admin/ChannelsPage.php:1122
 msgid "This account has no saved key. Connect it again with a key from Buffer."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1120
+#: src/Admin/ChannelsPage.php:1124
 msgid "This channel cannot be switched on right now. Click Refresh channels to check it again."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1122
+#: src/Admin/ChannelsPage.php:1126
 msgid "Buffer answered in a way PressQueue did not expect. Try again in a few minutes."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1124
-#: src/Admin/ChannelsPage.php:1188
+#: src/Admin/ChannelsPage.php:1128
+#: src/Admin/ChannelsPage.php:1192
 msgid "PressQueue could not finish this change. Try again."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1141
+#: src/Admin/ChannelsPage.php:1145
 msgid "The channel"
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1147
+#: src/Admin/ChannelsPage.php:1151
 msgid "Buffer connected."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1148
+#: src/Admin/ChannelsPage.php:1152
 msgid "Buffer connected. Switch on the channels you want to use."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1150
+#: src/Admin/ChannelsPage.php:1154
 msgid "Buffer reconnected. Channels you had switched on are on again."
 msgstr ""
 
 #. translators: %s: Buffer organization name.
-#: src/Admin/ChannelsPage.php:1153
+#: src/Admin/ChannelsPage.php:1157
 #, php-format
 msgid "Now using %s. Switch on the channels you want to use."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1155
+#: src/Admin/ChannelsPage.php:1159
 msgid "Channels refreshed."
 msgstr ""
 
 #. translators: %s: channel, such as LinkedIn.
-#: src/Admin/ChannelsPage.php:1159
+#: src/Admin/ChannelsPage.php:1163
 #, php-format
 msgid "%s is on. Add it to a rule to share posts there."
 msgstr ""
 
 #. translators: %s: channel, such as LinkedIn.
-#: src/Admin/ChannelsPage.php:1161
+#: src/Admin/ChannelsPage.php:1165
 #, php-format
 msgid "%s is on."
 msgstr ""
 
 #. translators: %s: channel, such as LinkedIn.
-#: src/Admin/ChannelsPage.php:1165
+#: src/Admin/ChannelsPage.php:1169
 #, php-format
 msgid "%s is off."
 msgstr ""
 
 #. translators: %s: channel, such as LinkedIn.
-#: src/Admin/ChannelsPage.php:1167
+#: src/Admin/ChannelsPage.php:1171
 #, php-format
 msgid "%s is off. Rules that use it skip it until you switch it back on."
 msgstr ""
 
 #. translators: %s: Buffer organization name.
-#: src/Admin/ChannelsPage.php:1170
+#: src/Admin/ChannelsPage.php:1174
 #, php-format
 msgid "%s is turned on."
 msgstr ""
 
 #. translators: %s: Buffer organization name.
-#: src/Admin/ChannelsPage.php:1173
+#: src/Admin/ChannelsPage.php:1177
 #, php-format
 msgid "%s is turned off. Its channels stop sharing until you turn it back on."
 msgstr ""
 
 #. translators: %s: Buffer organization name.
-#: src/Admin/ChannelsPage.php:1176
+#: src/Admin/ChannelsPage.php:1180
 #, php-format
 msgid "%s is disconnected and its saved key is deleted."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1178
+#: src/Admin/ChannelsPage.php:1182
 msgid "Setup cancelled. The key was deleted from this site."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1180
+#: src/Admin/ChannelsPage.php:1184
 msgid "API key replaced."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1182
+#: src/Admin/ChannelsPage.php:1186
 msgid "API key replaced. The account is connected again."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1184
+#: src/Admin/ChannelsPage.php:1188
 msgid "Buffer accepted the saved key."
 msgstr ""
 
-#: src/Admin/ChannelsPage.php:1186
+#: src/Admin/ChannelsPage.php:1190
 msgid "Key saved. Finish the setup below."
 msgstr ""
 
 #. translators: 1: social network name, 2: channel name.
 #. translators: 1: channel name, 2: service name such as LinkedIn.
 #. translators: 1: network name such as LinkedIn, 2: account or page name.
-#: src/Admin/ChannelsPage.php:1216
-#: src/Admin/DeliveryListController.php:928
+#: src/Admin/ChannelsPage.php:1220
+#: src/Admin/DeliveryListController.php:940
 #: src/Admin/Labels.php:82
 #, php-format
 msgid "%1$s (%2$s)"
 msgstr ""
 
 #. translators: %d: maximum number of characters, including the post link.
-#: src/Admin/ChannelStatus.php:127
+#: src/Admin/ChannelStatus.php:122
 #, php-format
 msgid "up to %d characters with the link"
 msgstr ""
 
 #. translators: %d: number of images.
-#: src/Admin/ChannelStatus.php:134
+#: src/Admin/ChannelStatus.php:129
 #, php-format
 msgid "%d image"
 msgid_plural "%d images"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/ChannelStatus.php:136
+#: src/Admin/ChannelStatus.php:131
 msgid "text only"
 msgstr ""
 
-#. translators: %d: PressQueue's own character ceiling.
-#: src/Admin/ChannelStatus.php:143
+#. translators: %d: Buffer's default Mastodon character limit.
+#: src/Admin/ChannelStatus.php:138
 #, php-format
 msgid "PressQueue uses the lower of the server limit and %d."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:165
+#: src/Admin/ChannelStatus.php:160
 msgid "Not in Buffer"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:165
+#: src/Admin/ChannelStatus.php:160
 msgid "Buffer no longer lists this channel. Add it back in Buffer, then refresh channels."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:169
+#: src/Admin/ChannelStatus.php:164
 msgid "Not checked yet"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:169
+#: src/Admin/ChannelStatus.php:164
 msgid "PressQueue has not checked this channel yet. Refresh channels to check it."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:173
+#: src/Admin/ChannelStatus.php:168
 msgid "Other organization"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:173
+#: src/Admin/ChannelStatus.php:168
 msgid "This channel belongs to another Buffer organization."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:177
-#: src/Admin/ChannelStatus.php:208
+#: src/Admin/ChannelStatus.php:172
+#: src/Admin/ChannelStatus.php:203
 msgid "Not supported"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:184
+#: src/Admin/ChannelStatus.php:179
 msgid "Status unknown"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:184
+#: src/Admin/ChannelStatus.php:179
 msgid "Buffer did not report whether this channel is ready, so PressQueue keeps it off to be safe. Refresh channels to check again."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:189
+#: src/Admin/ChannelStatus.php:184
 msgid "Reconnect in Buffer"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:189
+#: src/Admin/ChannelStatus.php:184
 msgid "Buffer lost its connection to this channel. Reconnect it in Buffer, then refresh channels."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:193
+#: src/Admin/ChannelStatus.php:188
 msgid "Locked in Buffer"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:193
+#: src/Admin/ChannelStatus.php:188
 msgid "Buffer has locked this channel, usually because of your Buffer plan. Unlock it in Buffer, then refresh channels."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:197
+#: src/Admin/ChannelStatus.php:192
 msgid "Queue paused"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:197
+#: src/Admin/ChannelStatus.php:192
 msgid "The Buffer queue for this channel is paused. Resume it in Buffer, then refresh channels."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:201
+#: src/Admin/ChannelStatus.php:196
 msgid "Limit unknown"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:201
+#: src/Admin/ChannelStatus.php:196
 msgid "Buffer did not report this Mastodon server's character limit, so PressQueue keeps it off. Refresh channels to try again."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:205
+#: src/Admin/ChannelStatus.php:200
 msgid "No permission"
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:205
+#: src/Admin/ChannelStatus.php:200
 msgid "Your Buffer key is not allowed to post to this channel. Check your access to it in Buffer, then refresh channels."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:208
+#: src/Admin/ChannelStatus.php:203
 msgid "PressQueue cannot post to this channel yet."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:235
+#: src/Admin/ChannelStatus.php:230
 msgid "Needs image-first posts, which PressQueue does not send yet."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:239
+#: src/Admin/ChannelStatus.php:234
 msgid "Needs video posts, which PressQueue does not send."
 msgstr ""
 
-#: src/Admin/ChannelStatus.php:242
+#: src/Admin/ChannelStatus.php:237
 msgid "PressQueue does not post to this network yet."
 msgstr ""
 
@@ -2497,12 +2524,12 @@ msgid "Showing %1$s to %2$s of %3$s"
 msgstr ""
 
 #: src/Admin/DecisionsController.php:1084
-#: src/Admin/DeliveryListController.php:789
+#: src/Admin/DeliveryListController.php:801
 msgid "Previous"
 msgstr ""
 
 #: src/Admin/DecisionsController.php:1088
-#: src/Admin/DeliveryListController.php:793
+#: src/Admin/DeliveryListController.php:805
 msgid "Next"
 msgstr ""
 
@@ -2637,10 +2664,10 @@ msgstr ""
 
 #: src/Admin/DeliveryDetailController.php:302
 #: src/Admin/MessageComposer.php:54
-#: src/Admin/PostControlsController.php:470
+#: src/Admin/PostControlsController.php:475
 #: src/Admin/RuleEditor.php:483
 #: src/Admin/TemplateController.php:383
-#: assets/editor/post-controls.js:1136
+#: assets/editor/post-controls.js:1145
 msgid "Message"
 msgstr ""
 
@@ -2930,8 +2957,8 @@ msgid "PressQueue delivery events"
 msgstr ""
 
 #: src/Admin/DeliveryDetailController.php:692
-#: src/Admin/PostControlsController.php:509
-#: assets/editor/post-controls.js:1198
+#: src/Admin/PostControlsController.php:514
+#: assets/editor/post-controls.js:1207
 msgid "Time"
 msgstr ""
 
@@ -3212,14 +3239,14 @@ msgstr ""
 
 #. translators: short date format for dates in the current year, see https://www.php.net/manual/datetime.format.php
 #: src/Admin/DeliveryExplainer.php:460
-#: src/Admin/RuleTestView.php:841
-#: src/Admin/Ui.php:371
+#: src/Admin/RuleTestView.php:845
+#: src/Admin/Ui.php:415
 msgid "M j"
 msgstr ""
 
 #. translators: short date format with the year, see https://www.php.net/manual/datetime.format.php
 #: src/Admin/DeliveryExplainer.php:463
-#: src/Admin/RuleTestView.php:841
+#: src/Admin/RuleTestView.php:845
 msgid "M j, Y"
 msgstr ""
 
@@ -3381,7 +3408,7 @@ msgid "Buffer may have received this, but the reply was cut off."
 msgstr ""
 
 #: src/Admin/DeliveryExplainer.php:682
-msgid "Buffer said the API key is no longer valid."
+msgid "Buffer said the API key is no longer valid. It may have expired or been deleted in Buffer."
 msgstr ""
 
 #: src/Admin/DeliveryExplainer.php:683
@@ -3590,6 +3617,7 @@ msgstr ""
 #: src/Admin/DeliveryListController.php:336
 #: src/Admin/OverviewController.php:194
 #: src/Admin/OverviewController.php:249
+#: src/Admin/RulesController.php:877
 msgid "Go live"
 msgstr ""
 
@@ -3755,7 +3783,7 @@ msgstr ""
 #. translators: %s: date and time such as "today, 11:05" or "Oct 12, 11:05".
 #. translators: %s: date and time.
 #: src/Admin/DeliveryListController.php:630
-#: src/Admin/OverviewController.php:351
+#: src/Admin/OverviewController.php:354
 #, php-format
 msgid "Scheduled for %s"
 msgstr ""
@@ -3780,81 +3808,87 @@ msgstr ""
 msgid "Try a shorter part of the title, another channel or a wider date range."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:728
+#: src/Admin/DeliveryListController.php:726
+msgid "Social sharing is not set up yet. Once a sharing rule is on, the posts it shares show up here."
+msgstr ""
+
+#: src/Admin/DeliveryListController.php:730
 msgid "Nothing is waiting"
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:728
+#: src/Admin/DeliveryListController.php:730
 msgid "Shares show up here while PressQueue sends them to Buffer. Most take less than a minute."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:732
+#: src/Admin/DeliveryListController.php:734
 msgid "Nothing is on hold"
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:732
+#: src/Admin/DeliveryListController.php:734
 msgid "Shares wait here when PressQueue is paused or something changes before they are sent."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:736
+#: src/Admin/DeliveryListController.php:738
 msgid "Nothing needs attention"
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:736
+#: src/Admin/DeliveryListController.php:738
 msgid "Shares that Buffer did not accept, or that may have reached Buffer without confirmation, show up here."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:741
+#: src/Admin/DeliveryListController.php:743
 msgid "Nothing sent to Buffer yet"
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:742
+#: src/Admin/DeliveryListController.php:744
 msgid "PressQueue is in test mode, so nothing is sent. Test runs show what PressQueue would have sent."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:742
+#: src/Admin/DeliveryListController.php:744
 msgid "When Buffer accepts a share, it shows up here."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:748
+#: src/Admin/DeliveryListController.php:750
+#: src/Admin/DeliveryListController.php:755
 msgid "No test runs yet"
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:749
+#: src/Admin/DeliveryListController.php:756
 msgid "Test runs show what PressQueue would have sent. Publish or update a post to see one."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:749
+#: src/Admin/DeliveryListController.php:756
 msgid "Test runs show what PressQueue would have sent. They are recorded while PressQueue is in test mode."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:754
+#: src/Admin/DeliveryListController.php:761
 msgid "Nothing was cancelled"
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:754
+#: src/Admin/DeliveryListController.php:761
 msgid "Shares you cancel stay here so you can see what was not sent."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:759
+#: src/Admin/DeliveryListController.php:766
+#: src/Admin/DeliveryListController.php:771
 msgid "No shares yet"
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:760
+#: src/Admin/DeliveryListController.php:772
 #: src/Admin/OverviewController.php:325
 msgid "Publish or update a post and PressQueue records here what it would share. In test mode nothing is sent."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:760
+#: src/Admin/DeliveryListController.php:772
 msgid "When you publish a post that matches a rule, its shares show up here."
 msgstr ""
 
-#: src/Admin/DeliveryListController.php:777
+#: src/Admin/DeliveryListController.php:789
 msgid "Share pages"
 msgstr ""
 
 #. translators: 1: first row number, 2: last row number, 3: total number of shares.
-#: src/Admin/DeliveryListController.php:781
+#: src/Admin/DeliveryListController.php:793
 #, php-format
 msgid "Showing %1$s to %2$s of %3$s share"
 msgid_plural "Showing %1$s to %2$s of %3$s shares"
@@ -3862,7 +3896,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %s: number of shares.
-#: src/Admin/DeliveryListController.php:784
+#: src/Admin/DeliveryListController.php:796
 #, php-format
 msgid "%s share"
 msgid_plural "%s shares"
@@ -3949,7 +3983,7 @@ msgid "Buffer posts it in your next free time slot after everything already queu
 msgstr ""
 
 #: src/Admin/Labels.php:158
-msgid "Goes ahead of posts already waiting in your Buffer queue."
+msgid "Buffer posts it in your next free time slot, ahead of posts already waiting."
 msgstr ""
 
 #: src/Admin/Labels.php:162
@@ -3970,8 +4004,10 @@ msgstr ""
 msgid "end of the Buffer queue"
 msgstr ""
 
+#. translators: 1: channel names, 2: highlighted phrase "top of the Buffer queue".
 #: src/Admin/Labels.php:180
-msgid "next free Buffer queue slot"
+#: src/Admin/RuleSummary.php:542
+msgid "top of the Buffer queue"
 msgstr ""
 
 #. translators: 1: channel names, 2: highlighted phrase "right away".
@@ -4015,7 +4051,7 @@ msgid "A post without a usable featured image is held back."
 msgstr ""
 
 #: src/Admin/Labels.php:209
-#: src/Admin/PostControlsController.php:614
+#: src/Admin/PostControlsController.php:619
 msgid "No image"
 msgstr ""
 
@@ -4024,11 +4060,11 @@ msgid "The social network may still show a link preview."
 msgstr ""
 
 #: src/Admin/Labels.php:213
-msgid "Images chosen in each post"
+msgid "Image chosen in each post"
 msgstr ""
 
 #: src/Admin/Labels.php:214
-msgid "Writers pick the image in the post editor."
+msgid "The image is picked in the Social sharing panel of each post."
 msgstr ""
 
 #: src/Admin/Labels.php:227
@@ -4049,7 +4085,7 @@ msgid "without an image"
 msgstr ""
 
 #: src/Admin/Labels.php:231
-msgid "with the images chosen in the post"
+msgid "with the image chosen in the post"
 msgstr ""
 
 #: src/Admin/Labels.php:245
@@ -4281,8 +4317,8 @@ msgstr ""
 #: src/Admin/RuleSummary.php:333
 #: src/Admin/RuleSummary.php:366
 #: src/Admin/RuleSummary.php:492
-#: src/Admin/RuleTestView.php:758
 #: src/Admin/RuleTestView.php:762
+#: src/Admin/RuleTestView.php:766
 msgid "or"
 msgstr ""
 
@@ -4485,97 +4521,117 @@ msgid "See all"
 msgstr ""
 
 #: src/Admin/OverviewController.php:323
-msgid "Nothing yet"
+msgid "Social sharing is not set up yet. Once a sharing rule is on, the posts it checks show up here."
 msgstr ""
 
-#: src/Admin/OverviewController.php:326
+#: src/Admin/OverviewController.php:327
 msgid "When you publish a post that matches a rule, it shows up here."
 msgstr ""
 
+#: src/Admin/OverviewController.php:330
+msgid "Nothing yet"
+msgstr ""
+
 #. translators: %s: date and time.
-#: src/Admin/OverviewController.php:351
+#: src/Admin/OverviewController.php:354
 #, php-format
 msgid "test run, scheduled for %s"
 msgstr ""
 
 #. translators: %s: schedule phrase such as "end of the Buffer queue".
-#: src/Admin/OverviewController.php:354
+#: src/Admin/OverviewController.php:357
 #, php-format
 msgid "test run, would go to the %s"
 msgstr ""
 
-#: src/Admin/OverviewController.php:428
+#: src/Admin/OverviewController.php:431
 msgid "Would share this week"
 msgstr ""
 
-#: src/Admin/OverviewController.php:430
+#: src/Admin/OverviewController.php:433
 msgid "Sent this week"
 msgstr ""
 
-#: src/Admin/OverviewController.php:431
+#: src/Admin/OverviewController.php:434
 msgid "Waiting now"
 msgstr ""
 
-#: src/Admin/OverviewController.php:435
+#: src/Admin/OverviewController.php:438
 msgid "Not shared this week"
 msgstr ""
 
-#: src/Admin/OverviewController.php:445
+#: src/Admin/OverviewController.php:448
 msgid "In test mode nothing reaches Buffer."
 msgstr ""
 
-#: src/Admin/OverviewController.php:482
+#: src/Admin/OverviewController.php:485
 msgid "See what would happen if this post were published now."
 msgstr ""
 
-#: src/Admin/OverviewController.php:485
-#: src/Admin/RuleTestView.php:488
+#: src/Admin/OverviewController.php:488
+#: src/Admin/RuleTestView.php:492
 msgid "Find a post by title"
 msgstr ""
 
-#: src/Admin/OverviewController.php:486
-#: src/Admin/RuleTestView.php:489
+#: src/Admin/OverviewController.php:489
+#: src/Admin/RuleTestView.php:493
 msgid "Type part of a post title"
 msgstr ""
 
-#: src/Admin/OverviewController.php:487
-#: src/Admin/RuleTestView.php:490
+#: src/Admin/OverviewController.php:490
+#: src/Admin/RuleTestView.php:494
 msgid "Find"
 msgstr ""
 
-#: src/Admin/OverviewController.php:529
-#: src/Admin/RuleTestView.php:510
+#: src/Admin/OverviewController.php:532
+#: src/Admin/RuleTestView.php:514
 msgid "No posts found. Try a shorter part of the title."
 msgstr ""
 
-#: src/Admin/OverviewController.php:554
+#: src/Admin/OverviewController.php:557
 msgid "You cannot check this post."
 msgstr ""
 
-#: src/Admin/OverviewController.php:567
+#: src/Admin/OverviewController.php:570
 msgid "This post type cannot be shared."
 msgstr ""
 
 #. translators: %s: publication date.
-#: src/Admin/OverviewController.php:577
+#: src/Admin/OverviewController.php:580
 #, php-format
 msgid "Published on %s. Shown as if it were published today; existing posts are only shared through Share old posts."
 msgstr ""
 
-#: src/Admin/OverviewController.php:584
+#: src/Admin/OverviewController.php:587
 msgid "This post could not be checked."
 msgstr ""
 
-#: src/Admin/PluginLinks.php:52
-#: src/Admin/PluginLinks.php:76
+#: src/Admin/PluginLinks.php:56
+#: src/Admin/PluginLinks.php:130
 msgid "Get started"
 msgstr ""
 
-#: src/Admin/PluginLinks.php:74
+#: src/Admin/PluginLinks.php:76
+#: src/Admin/PluginLinks.php:98
+msgid "Docs"
+msgstr ""
+
+#: src/Admin/PluginLinks.php:77
+#: src/Admin/PluginLinks.php:99
+msgid "Support"
+msgstr ""
+
+#. translators: %s: PressQueue version number.
+#: src/Admin/PluginLinks.php:95
+#, php-format
+msgid "PressQueue %s"
+msgstr ""
+
+#: src/Admin/PluginLinks.php:128
 msgid "PressQueue is ready to set up."
 msgstr ""
 
-#: src/Admin/PluginLinks.php:75
+#: src/Admin/PluginLinks.php:129
 msgid "Connect Buffer, pick your channels and create a rule. Nothing is shared until you go live."
 msgstr ""
 
@@ -4588,15 +4644,15 @@ msgid "You are not allowed to read PressQueue activity for this post."
 msgstr ""
 
 #: src/Admin/PostControlsController.php:234
-#: src/Admin/PostControlsController.php:783
+#: src/Admin/PostControlsController.php:788
 msgid "PressQueue controls could not be saved."
 msgstr ""
 
 #: src/Admin/PostControlsController.php:255
 #: src/Admin/PostListColumn.php:80
 #: src/Admin/PostListColumn.php:85
-#: assets/editor/post-controls.js:1410
-#: assets/editor/post-controls.js:1418
+#: assets/editor/post-controls.js:1419
+#: assets/editor/post-controls.js:1427
 msgid "Social sharing"
 msgstr ""
 
@@ -4606,17 +4662,17 @@ msgstr ""
 
 #: src/Admin/PostControlsController.php:301
 #: src/Admin/PostControlsController.php:304
-#: assets/editor/post-controls.js:1248
+#: assets/editor/post-controls.js:1257
 msgid "Share this post"
 msgstr ""
 
 #: src/Admin/PostControlsController.php:320
-#: assets/editor/post-controls.js:1369
+#: assets/editor/post-controls.js:1378
 msgid "Sharing is off for this post. Updates and Share old posts leave it out."
 msgstr ""
 
 #: src/Admin/PostControlsController.php:321
-#: assets/editor/post-controls.js:1369
+#: assets/editor/post-controls.js:1378
 msgid "This post will not be shared. You can switch it on any time before publishing."
 msgstr ""
 
@@ -4639,150 +4695,188 @@ msgstr ""
 msgid "Updating this post does not share it again."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:372
-#: assets/editor/post-controls.js:725
+#: src/Admin/PostControlsController.php:373
+#: assets/editor/post-controls.js:728
 msgid "Not shared when you publish."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:373
-#: src/Admin/PostControlsController.php:402
+#: src/Admin/PostControlsController.php:375
+#: src/Admin/Ui.php:185
+#: assets/editor/post-controls.js:733
+msgid "Set up sharing"
+msgstr ""
+
+#: src/Admin/PostControlsController.php:378
+#: src/Admin/PostControlsController.php:407
 msgid "Based on the last saved version of this post."
 msgstr ""
 
 #. translators: 1: channel name, 2: reason.
-#: src/Admin/PostControlsController.php:399
+#: src/Admin/PostControlsController.php:404
 #: assets/editor/post-controls-classic.js:237
-#: assets/editor/post-controls.js:749
-#: assets/editor/post-controls.js:890
+#: assets/editor/post-controls.js:758
+#: assets/editor/post-controls.js:899
 #, php-format,js-format
 msgid "Not sent to %1$s: %2$s"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:440
-#: assets/editor/post-controls.js:787
+#: src/Admin/PostControlsController.php:445
+#: assets/editor/post-controls.js:796
 msgid "PressQueue has not shared this post."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:444
-#: assets/editor/post-controls.js:793
+#: src/Admin/PostControlsController.php:449
+#: assets/editor/post-controls.js:802
 msgid "See in Activity"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:466
-#: assets/editor/post-controls.js:1131
+#: src/Admin/PostControlsController.php:471
+#: assets/editor/post-controls.js:1140
 msgid "Customize for this post"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:472
-#: assets/editor/post-controls.js:1144
+#: src/Admin/PostControlsController.php:477
+#: assets/editor/post-controls.js:1153
 msgid "Leave empty to use the rule's message."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:487
-#: assets/editor/post-controls.js:1169
+#: src/Admin/PostControlsController.php:492
+#: assets/editor/post-controls.js:1178
 msgid "Untick a channel to leave it out for this post."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:492
-#: assets/editor/post-controls.js:1171
+#: src/Admin/PostControlsController.php:497
+#: assets/editor/post-controls.js:1180
 msgid "Use the channels from the rule again"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:508
-#: assets/editor/post-controls.js:1188
+#: src/Admin/PostControlsController.php:513
+#: assets/editor/post-controls.js:1197
 msgid "Date"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:510
-#: assets/editor/post-controls.js:1209
+#: src/Admin/PostControlsController.php:515
+#: assets/editor/post-controls.js:1218
 msgid "Time zone"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:524
+#: src/Admin/PostControlsController.php:529
 #: src/Admin/RuleEditor.php:526
-#: assets/editor/post-controls.js:1221
+#: assets/editor/post-controls.js:1230
 msgid "Image"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:541
-#: src/Admin/PostControlsController.php:623
-#: assets/editor/post-controls.js:996
-msgid "Choose images"
+#: src/Admin/PostControlsController.php:546
+#: src/Admin/PostControlsController.php:628
+#: src/Admin/SocialCardsController.php:197
+#: assets/editor/post-controls.js:1005
+msgid "Choose an image"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:542
-#: assets/editor/post-controls.js:999
-msgid "Up to four images from the media library."
+#: src/Admin/PostControlsController.php:547
+#: assets/editor/post-controls.js:1008
+msgid "One image from the media library. Buffer shares one image per post."
 msgstr ""
 
 #. translators: %s: setting used by the matching rule, for example "Add to the end of the Buffer queue".
-#: src/Admin/PostControlsController.php:584
-#: assets/editor/post-controls.js:1099
+#: src/Admin/PostControlsController.php:589
+#: assets/editor/post-controls.js:1108
 #, php-format,js-format
 msgid "From the rule: %s"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:596
-#: src/Admin/PostControlsController.php:613
+#: src/Admin/PostControlsController.php:601
+#: src/Admin/PostControlsController.php:618
 msgid "Use the rule"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:601
+#: src/Admin/PostControlsController.php:606
 msgid "Pick a date and time"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:615
+#: src/Admin/PostControlsController.php:620
 msgid "Social image with the title"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:616
+#: src/Admin/PostControlsController.php:621
 #: assets/admin/rules.js:454
 msgid "Featured image"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:620
+#: src/Admin/PostControlsController.php:625
 msgid "Featured image, hold the post back without one"
 msgstr ""
 
 #. translators: %s: site time zone, for example Europe/Berlin.
-#: src/Admin/PostControlsController.php:638
-#: assets/editor/post-controls.js:917
+#: src/Admin/PostControlsController.php:643
+#: assets/editor/post-controls.js:926
 #, php-format,js-format
 msgid "Site time zone (%s)"
 msgstr ""
 
 #. translators: %s: reason the sharing settings could not be saved.
-#: src/Admin/PostControlsController.php:740
+#: src/Admin/PostControlsController.php:745
 #, php-format
 msgid "The post was not saved because its social sharing settings could not be saved: %s Go back, check the Social sharing box, and save again."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:744
+#: src/Admin/PostControlsController.php:749
 msgid "Social sharing settings not saved"
 msgstr ""
 
-#: src/Admin/PostControlsController.php:764
+#: src/Admin/PostControlsController.php:769
 msgid "Someone changed the sharing settings for this post while you were editing it. Reload the page to see them."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:770
+#: src/Admin/PostControlsController.php:775
 msgid "Pick a valid date, time and time zone for sharing, or choose another timing."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:771
-msgid "One of the chosen images cannot be used. Choose up to four images from the media library, or pick another image setting."
+#: src/Admin/PostControlsController.php:776
+msgid "The chosen image cannot be used. Choose one image from the media library, or pick another image setting."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:772
+#: src/Admin/PostControlsController.php:777
 msgid "The custom message must be 2,000 characters or fewer."
 msgstr ""
 
-#: src/Admin/PostControlsController.php:773
+#: src/Admin/PostControlsController.php:778
 msgid "One of the chosen channels cannot be used. Reload the page and pick the channels again."
+msgstr ""
+
+#: src/Admin/PostControlsController.php:1080
+#: src/Admin/PostPreviewController.php:60
+#: src/Admin/PostShareNowController.php:76
+msgid "You are logged out. Log in again, then try again."
+msgstr ""
+
+#: src/Admin/PostControlsController.php:1084
+#: src/Admin/PostPreviewController.php:64
+#: src/Admin/PostShareNowController.php:80
+msgid "This post no longer exists."
+msgstr ""
+
+#: src/Admin/PostControlsController.php:1088
+#: src/Admin/PostPreviewController.php:68
+#: src/Admin/PostShareNowController.php:84
+msgid "PressQueue does not share this kind of post."
+msgstr ""
+
+#: src/Admin/PostControlsController.php:1092
+msgid "You are not allowed to change social sharing for this post."
+msgstr ""
+
+#: src/Admin/PostPreviewController.php:72
+msgid "You are not allowed to check where this post is shared."
 msgstr ""
 
 #: src/Admin/PostPreviewController.php:115
 msgid "PressQueue preview could not be created."
+msgstr ""
+
+#: src/Admin/PostShareNowController.php:88
+#: src/Admin/PostShareNowController.php:339
+msgid "You are not allowed to share this post now."
 msgstr ""
 
 #: src/Admin/PostShareNowController.php:171
@@ -4790,7 +4884,7 @@ msgid "No rule takes part in Share old posts yet. Tick \"I pick old posts in Sha
 msgstr ""
 
 #: src/Admin/PostShareNowController.php:203
-msgid "\"Post right away\" and \"Next free queue slot\" only work for one channel at a time."
+msgid "\"Post right away\" and \"Top of the Buffer queue\" only work for one channel at a time."
 msgstr ""
 
 #: src/Admin/PostShareNowController.php:205
@@ -4826,22 +4920,22 @@ msgid "With image"
 msgstr ""
 
 #: src/Admin/PostShareNowController.php:262
-#: assets/editor/post-controls.js:910
+#: assets/editor/post-controls.js:919
 msgid "Share now"
 msgstr ""
 
 #: src/Admin/PostShareNowController.php:263
-#: assets/editor/post-controls.js:911
+#: assets/editor/post-controls.js:920
 msgid "You see what would be sent before anything goes out."
 msgstr ""
 
 #: src/Admin/PostShareNowController.php:264
-#: assets/editor/post-controls.js:911
+#: assets/editor/post-controls.js:920
 msgid "Update the post first to share it now."
 msgstr ""
 
 #: src/Admin/PostShareNowController.php:267
-#: assets/editor/post-controls.js:858
+#: assets/editor/post-controls.js:867
 msgid "Switch sharing on and update the post to share it now."
 msgstr ""
 
@@ -4885,10 +4979,6 @@ msgstr ""
 msgid "This preview expired or was already used. Click Share now again."
 msgstr ""
 
-#: src/Admin/PostShareNowController.php:339
-msgid "You are not allowed to share this post now."
-msgstr ""
-
 #: src/Admin/PostShareNowController.php:340
 msgid "This post changed or is no longer published. Reload the page."
 msgstr ""
@@ -4898,7 +4988,7 @@ msgid "Background sharing is stopped, so nothing can be shared right now. Open S
 msgstr ""
 
 #: src/Admin/PostShareNowController.php:342
-msgid "\"Post right away\" and \"Next free queue slot\" only work for one channel at a time. Pick another timing under Customize for this post, update the post, then try again."
+msgid "\"Post right away\" and \"Top of the Buffer queue\" only work for one channel at a time. Pick another timing under Customize for this post, update the post, then try again."
 msgstr ""
 
 #: src/Admin/PostShareNowController.php:343
@@ -4909,80 +4999,84 @@ msgstr ""
 msgid "PressQueue could not do that. Try again. If it keeps failing, check Activity."
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:240
+#: src/Admin/PostSharingSummary.php:137
+msgid "Social sharing is not set up yet."
+msgstr ""
+
+#: src/Admin/PostSharingSummary.php:247
 msgid "On this site, new posts start with sharing off."
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:295
+#: src/Admin/PostSharingSummary.php:302
 msgid "Test mode is on. Nothing is sent to Buffer yet."
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:299
+#: src/Admin/PostSharingSummary.php:306
 msgid "Sharing is paused. Nothing is sent to Buffer until it is resumed in PressQueue settings."
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:367
+#: src/Admin/PostSharingSummary.php:374
 msgid "Not shared when it was last updated."
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:368
+#: src/Admin/PostSharingSummary.php:375
 msgid "Not shared when it was published."
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:459
+#: src/Admin/PostSharingSummary.php:466
 msgid "When the post goes live as scheduled, PressQueue would send it to:"
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:463
+#: src/Admin/PostSharingSummary.php:470
 msgid "When you update this post, PressQueue would send it to:"
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:466
+#: src/Admin/PostSharingSummary.php:473
 msgid "When you publish, PressQueue would send it to:"
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:471
+#: src/Admin/PostSharingSummary.php:478
 msgid "When the post goes live as scheduled, PressQueue holds it for these channels until sharing resumes:"
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:475
+#: src/Admin/PostSharingSummary.php:482
 msgid "When you update this post, PressQueue holds it for these channels until sharing resumes:"
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:478
+#: src/Admin/PostSharingSummary.php:485
 msgid "When you publish, PressQueue holds it for these channels until sharing resumes:"
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:482
+#: src/Admin/PostSharingSummary.php:489
 msgid "When the post goes live as scheduled, PressQueue sends it to:"
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:486
+#: src/Admin/PostSharingSummary.php:493
 msgid "When you update this post, PressQueue sends it to:"
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:489
+#: src/Admin/PostSharingSummary.php:496
 msgid "When you publish, PressQueue sends it to:"
 msgstr ""
 
-#: src/Admin/PostSharingSummary.php:507
+#: src/Admin/PostSharingSummary.php:514
 msgid "Kept off social media by a \"never share\" rule."
 msgstr ""
 
 #. translators: %s: rule name.
-#: src/Admin/PostSharingSummary.php:511
+#: src/Admin/PostSharingSummary.php:518
 #, php-format
 msgid "Kept off social media by the \"never share\" rule \"%s\"."
 msgstr ""
 
 #. translators: %s: local date and time.
-#: src/Admin/PostSharingSummary.php:722
+#: src/Admin/PostSharingSummary.php:758
 #, php-format
 msgid "On %s"
 msgstr ""
 
 #. translators: %d: number of images.
-#: src/Admin/PostSharingSummary.php:748
+#: src/Admin/PostSharingSummary.php:785
 #, php-format
 msgid "with %d chosen image"
 msgid_plural "with %d chosen images"
@@ -5828,136 +5922,139 @@ msgid "It may have been deleted. Go back to Rules to see the rules you have."
 msgstr ""
 
 #: src/Admin/RulesController.php:386
-#: src/Admin/RulesController.php:452
-#: src/Admin/RulesController.php:484
-#: src/Admin/RulesController.php:500
-#: src/Admin/RulesController.php:529
-#: src/Admin/RulesController.php:554
-#: src/Admin/RulesController.php:617
+#: src/Admin/RulesController.php:457
+#: src/Admin/RulesController.php:489
+#: src/Admin/RulesController.php:505
+#: src/Admin/RulesController.php:534
+#: src/Admin/RulesController.php:559
+#: src/Admin/RulesController.php:622
 msgid "You are not allowed to manage PressQueue rules."
 msgstr ""
 
-#: src/Admin/RulesController.php:587
+#: src/Admin/RulesController.php:592
 msgid "Share new posts"
 msgstr ""
 
-#: src/Admin/RulesController.php:814
+#: src/Admin/RulesController.php:825
 msgid "Saved. The rule is on."
 msgstr ""
 
-#: src/Admin/RulesController.php:815
+#: src/Admin/RulesController.php:826
 msgid "Saved. The rule stays off until you test it and switch it on."
 msgstr ""
 
-#: src/Admin/RulesController.php:816
+#: src/Admin/RulesController.php:827
 msgid "Saved. Check the test below, then turn the rule on."
 msgstr ""
 
-#: src/Admin/RulesController.php:817
+#: src/Admin/RulesController.php:828
 msgid "Saved. Changing what the rule does switched it off. Check the test below, then turn it on again."
 msgstr ""
 
-#: src/Admin/RulesController.php:818
+#: src/Admin/RulesController.php:829
 msgid "Rule created. It is off for now. Check the test below, then turn it on."
 msgstr ""
 
-#: src/Admin/RulesController.php:819
+#: src/Admin/RulesController.php:830
 msgid "Before this rule goes on, check what it would share. If it looks right, turn it on below."
 msgstr ""
 
-#: src/Admin/RulesController.php:820
+#: src/Admin/RulesController.php:831
 msgid "Test finished."
 msgstr ""
 
-#: src/Admin/RulesController.php:821
+#: src/Admin/RulesController.php:832
 msgid "The rule is on."
 msgstr ""
 
-#: src/Admin/RulesController.php:822
+#: src/Admin/RulesController.php:833
 msgid "The rule is off."
 msgstr ""
 
-#: src/Admin/RulesController.php:823
+#: src/Admin/RulesController.php:834
 msgid "Rule deleted."
 msgstr ""
 
-#: src/Admin/RulesController.php:824
+#: src/Admin/RulesController.php:835
 msgid "The rule could not be deleted."
 msgstr ""
 
-#: src/Admin/RulesController.php:825
+#: src/Admin/RulesController.php:836
 msgid "Turn the rule off before you delete it."
 msgstr ""
 
-#: src/Admin/RulesController.php:826
+#: src/Admin/RulesController.php:837
 msgid "This rule still has shares that are waiting, sending or need a check in Buffer. Finish or cancel them in Activity, then delete the rule."
 msgstr ""
 
-#: src/Admin/RulesController.php:827
+#: src/Admin/RulesController.php:838
 msgid "Switch on at least one channel in Channels first."
 msgstr ""
 
-#: src/Admin/RulesController.php:828
+#: src/Admin/RulesController.php:839
 msgid "The rule was not saved. Fix the problem marked below and save again."
 msgstr ""
 
-#: src/Admin/RulesController.php:829
+#: src/Admin/RulesController.php:840
 msgid "That rule no longer exists."
 msgstr ""
 
-#: src/Admin/RulesController.php:830
+#: src/Admin/RulesController.php:841
 msgid "The rule could not be changed."
 msgstr ""
 
-#: src/Admin/RulesController.php:831
+#: src/Admin/RulesController.php:842
 msgid "The test could not run."
 msgstr ""
 
-#: src/Admin/RulesController.php:832
+#: src/Admin/RulesController.php:843
 msgid "The template was copied into this rule. Test the rule before you switch it on again."
 msgstr ""
 
-#: src/Admin/RulesController.php:833
-#: src/Admin/RulesController.php:834
+#: src/Admin/RulesController.php:844
+#: src/Admin/RulesController.php:845
 msgid "The template is no longer offered in rules."
 msgstr ""
 
-#: src/Admin/RulesController.php:835
+#: src/Admin/RulesController.php:846
 msgid "The template is now offered in rules."
 msgstr ""
 
-#: src/Admin/RulesController.php:836
+#: src/Admin/RulesController.php:847
 msgid "The template could not be changed."
 msgstr ""
 
-#: src/Admin/RulesController.php:837
+#: src/Admin/RulesController.php:848
 msgid "Template saved."
 msgstr ""
 
-#: src/Admin/RulesController.php:838
+#: src/Admin/RulesController.php:849
 msgid "Template saved. Switch it on to offer it when you edit a rule."
 msgstr ""
 
-#: src/Admin/RulesController.php:856
+#: src/Admin/RulesController.php:873
+msgid "PressQueue is still in test mode, so nothing goes to Buffer yet."
+msgstr ""
+
+#: src/Admin/RulesController.php:912
 msgid "Test the rule first."
 msgstr ""
 
-#: src/Admin/RulesController.php:857
-#: src/Admin/RulesController.php:858
-#: src/Admin/RulesController.php:859
-#: src/Admin/RulesController.php:861
+#: src/Admin/RulesController.php:913
+#: src/Admin/RulesController.php:914
+#: src/Admin/RulesController.php:915
 msgid "The rule changed in another window. Reload the page and try again."
 msgstr ""
 
-#: src/Admin/RulesController.php:860
+#: src/Admin/RulesController.php:916
 msgid "The rule no longer exists."
 msgstr ""
 
-#: src/Admin/RulesController.php:863
+#: src/Admin/RulesController.php:917
 msgid "You cannot edit that post, so it cannot be tested."
 msgstr ""
 
-#: src/Admin/RulesController.php:864
+#: src/Admin/RulesController.php:918
 msgid "That post cannot be shared, for example because it is in the trash or private."
 msgstr ""
 
@@ -6085,7 +6182,7 @@ msgstr ""
 #. translators: %s: category names.
 #. translators: %s: human-readable time difference such as "5 mins".
 #: src/Admin/RuleSummary.php:383
-#: src/Admin/Ui.php:355
+#: src/Admin/Ui.php:399
 #, php-format
 msgid "in %s"
 msgstr ""
@@ -6188,15 +6285,10 @@ msgstr ""
 msgid "send it to %1$s, add it to the %2$s"
 msgstr ""
 
-#. translators: 1: channel names, 2: highlighted phrase "next free queue slot".
+#. translators: 1: channel names, 2: highlighted phrase "top of the Buffer queue".
 #: src/Admin/RuleSummary.php:542
 #, php-format
-msgid "send it to %1$s, put it in the %2$s"
-msgstr ""
-
-#. translators: 1: channel names, 2: highlighted phrase "next free queue slot".
-#: src/Admin/RuleSummary.php:542
-msgid "next free queue slot"
+msgid "send it to %1$s, put it at the %2$s"
 msgstr ""
 
 #. translators: 1: channel names, 2: highlighted phrase "Buffer draft for review".
@@ -6229,7 +6321,7 @@ msgid "social image of the title"
 msgstr ""
 
 #. translators: %s: highlighted phrase "featured image when there is one".
-#. translators: %s: highlighted phrase "images chosen in the post".
+#. translators: %s: highlighted phrase "image chosen in the post".
 #: src/Admin/RuleSummary.php:568
 #: src/Admin/RuleSummary.php:574
 #, php-format
@@ -6252,9 +6344,9 @@ msgstr ""
 msgid "featured image"
 msgstr ""
 
-#. translators: %s: highlighted phrase "images chosen in the post".
+#. translators: %s: highlighted phrase "image chosen in the post".
 #: src/Admin/RuleSummary.php:574
-msgid "images chosen in the post"
+msgid "image chosen in the post"
 msgstr ""
 
 #. translators: %s: rule name.
@@ -6299,56 +6391,56 @@ msgstr ""
 msgid "Matching posts are shared as shown below."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:249
+#: src/Admin/RuleTestView.php:253
 msgid "This rule is off"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:249
+#: src/Admin/RuleTestView.php:253
 msgid "Run the test first. When the result looks right, you can turn the rule on."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:250
+#: src/Admin/RuleTestView.php:254
 msgid "Run the test"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:256
+#: src/Admin/RuleTestView.php:260
 msgid "Ready to turn on"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:256
+#: src/Admin/RuleTestView.php:260
 msgid "Once it is on, posts that match are never shared."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:256
+#: src/Admin/RuleTestView.php:260
 msgid "Once it is on, new posts that match are shared as shown below. Your current sharing mode still applies, so in test mode nothing is sent to Buffer."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:267
+#: src/Admin/RuleTestView.php:271
 msgid "Turn on this rule"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:292
+#: src/Admin/RuleTestView.php:296
 msgid "Test the"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:298
+#: src/Admin/RuleTestView.php:302
 msgid "most recent posts as if"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:304
+#: src/Admin/RuleTestView.php:308
 msgid "Run test"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:304
+#: src/Admin/RuleTestView.php:308
 msgid "Run again"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:332
+#: src/Admin/RuleTestView.php:336
 msgid "No posts to test yet. Write a post or pick one below."
 msgstr ""
 
 #. translators: 1: number of posts this rule blocks, 2: number of posts tested.
-#: src/Admin/RuleTestView.php:338
+#: src/Admin/RuleTestView.php:342
 #, php-format
 msgid "%1$d of %2$d post would never be shared because of this rule."
 msgid_plural "%1$d of %2$d posts would never be shared because of this rule."
@@ -6356,7 +6448,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: number of posts shared, 2: number of posts tested.
-#: src/Admin/RuleTestView.php:340
+#: src/Admin/RuleTestView.php:344
 #, php-format
 msgid "%1$d of %2$d post would be shared."
 msgid_plural "%1$d of %2$d posts would be shared."
@@ -6364,53 +6456,53 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %s: relative time such as "2 minutes ago".
-#: src/Admin/RuleTestView.php:346
+#: src/Admin/RuleTestView.php:350
 #, php-format
 msgid "Tested %s."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:387
+#: src/Admin/RuleTestView.php:391
 msgid "Would be shared"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:388
+#: src/Admin/RuleTestView.php:392
 msgid "Never shared because of this rule"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:389
+#: src/Admin/RuleTestView.php:393
 msgid "Not affected by this rule"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:390
+#: src/Admin/RuleTestView.php:394
 msgid "Too old to share automatically"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:391
+#: src/Admin/RuleTestView.php:395
 msgid "Stopped by an error"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:393
+#: src/Admin/RuleTestView.php:397
 msgid "Would not be shared"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:407
+#: src/Admin/RuleTestView.php:411
 msgid "Draft"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:408
+#: src/Admin/RuleTestView.php:412
 msgid "Pending review"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:409
+#: src/Admin/RuleTestView.php:413
 msgid "Scheduled"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:410
+#: src/Admin/RuleTestView.php:414
 msgid "Private"
 msgstr ""
 
 #. translators: 1: number of channels, 2: channel names.
-#: src/Admin/RuleTestView.php:434
+#: src/Admin/RuleTestView.php:438
 #, php-format
 msgid "Would share to %1$d channel: %2$s"
 msgid_plural "Would share to %1$d channels: %2$s"
@@ -6418,120 +6510,152 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %s: short publication date such as "Oct 2".
-#: src/Admin/RuleTestView.php:448
+#: src/Admin/RuleTestView.php:452
 #, php-format
 msgid "Published on %s. Tested as if it were published today."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:455
+#: src/Admin/RuleTestView.php:459
 msgid "Show messages"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:455
+#: src/Admin/RuleTestView.php:459
 msgid "Show channels"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:483
+#: src/Admin/RuleTestView.php:487
 msgid "Test with a specific post"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:483
+#: src/Admin/RuleTestView.php:487
 msgid "Find a post by its title and test the rule with just that post."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:528
+#: src/Admin/RuleTestView.php:532
 msgid "Test this post"
 msgstr ""
 
-#: src/Admin/RuleTestView.php:572
+#: src/Admin/RuleTestView.php:576
 msgid "This post cannot be shared, for example because it is private or in the trash."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:589
+#: src/Admin/RuleTestView.php:593
 msgid "This post could not be tested."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:629
+#: src/Admin/RuleTestView.php:633
 msgid "This rule keeps it from being shared."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:636
+#: src/Admin/RuleTestView.php:640
 msgid "A \"never share\" rule keeps it from being shared."
 msgstr ""
 
 #. translators: %s: rule name.
-#: src/Admin/RuleTestView.php:638
+#: src/Admin/RuleTestView.php:642
 #, php-format
 msgid "Blocked by the \"never share\" rule \"%s\"."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:649
+#: src/Admin/RuleTestView.php:653
 msgid "Not affected by this rule."
 msgstr ""
 
 #. translators: %s: post type name such as "Page".
-#: src/Admin/RuleTestView.php:694
+#: src/Admin/RuleTestView.php:698
 #, php-format
 msgid "It is a %s, and this rule covers other kinds of posts."
 msgstr ""
 
 #. translators: %s: author name.
-#: src/Admin/RuleTestView.php:699
+#: src/Admin/RuleTestView.php:703
 #, php-format
 msgid "It is by %s, and this rule covers other authors."
 msgstr ""
 
 #. translators: %s: custom field name.
-#: src/Admin/RuleTestView.php:708
+#: src/Admin/RuleTestView.php:712
 #, php-format
 msgid "Its custom field %s does not match."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:712
+#: src/Admin/RuleTestView.php:716
 msgid "Its status does not match this rule."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:715
-#: src/Admin/RuleTestView.php:718
+#: src/Admin/RuleTestView.php:719
+#: src/Admin/RuleTestView.php:722
 msgid "It does not match this rule's conditions."
 msgstr ""
 
 #. translators: 1: taxonomy label followed by a space, or nothing for categories, 2: term names.
-#: src/Admin/RuleTestView.php:748
+#: src/Admin/RuleTestView.php:752
 #, php-format
 msgid "It is in %1$s%2$s, which this rule leaves out."
 msgstr ""
 
 #. translators: 1: taxonomy label followed by a space, or nothing for categories, 2: term names.
-#: src/Admin/RuleTestView.php:753
+#: src/Admin/RuleTestView.php:757
 #, php-format
 msgid "It is not in all of %1$s%2$s."
 msgstr ""
 
 #. translators: %s: tag names.
-#: src/Admin/RuleTestView.php:758
+#: src/Admin/RuleTestView.php:762
 #, php-format
 msgid "It is not tagged %s."
 msgstr ""
 
 #. translators: 1: taxonomy label followed by a space, or nothing for categories, 2: term names.
-#: src/Admin/RuleTestView.php:762
+#: src/Admin/RuleTestView.php:766
 #, php-format
 msgid "It is not in %1$s%2$s."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:815
+#: src/Admin/RuleTestView.php:819
 msgid "Already published posts are tested as if they were published today. A \"never share\" rule also keeps matching posts out of updates and Share old posts."
 msgstr ""
 
 #. translators: %s: name of the Share old posts trigger, for example "Old posts are picked in Share old posts".
-#: src/Admin/RuleTestView.php:821
+#: src/Admin/RuleTestView.php:825
 #, php-format
 msgid "Already published posts are tested as if they were published today. To see what this rule does when you pick them in Share old posts, test as \"%s\"."
 msgstr ""
 
-#: src/Admin/RuleTestView.php:826
+#: src/Admin/RuleTestView.php:830
 msgid "Already published posts are tested as if they were published today. To share older posts with this rule, tick \"I pick old posts in Share old posts\" when you edit it, then pick the posts in Share old posts."
+msgstr ""
+
+#: src/Admin/RuntimeNotice.php:95
+msgid "PressQueue could not finish updating its database, so it is not sharing posts right now."
+msgstr ""
+
+#: src/Admin/RuntimeNotice.php:95
+msgid "See what to do"
+msgstr ""
+
+#: src/Admin/RuntimeNotice.php:99
+msgid "PressQueue stopped sharing posts because some of its saved settings are damaged. Open Data and privacy and save the settings there to start sharing again."
+msgstr ""
+
+#: src/Admin/RuntimeNotice.php:99
+msgid "Open Data and privacy"
+msgstr ""
+
+#. translators: %s: post title.
+#: src/Admin/RuntimeNotice.php:136
+#, php-format
+msgid "PressQueue could not check \"%s\" against your sharing rules, even after trying again five times. To share it, open the post and use Share now in the Social sharing panel."
+msgstr ""
+
+#. translators: %s: post title.
+#: src/Admin/RuntimeNotice.php:139
+#, php-format
+msgid "PressQueue could not check \"%s\" against your sharing rules. It tries again by itself, up to five times. If the post is still not shared after that, open it and use Share now in the Social sharing panel."
+msgstr ""
+
+#: src/Admin/RuntimeNotice.php:145
+msgid "Open the post"
 msgstr ""
 
 #: src/Admin/SchedulerHealth.php:41
@@ -6590,7 +6714,7 @@ msgid "Share automatically when a rule matches"
 msgstr ""
 
 #: src/Admin/SettingsController.php:72
-msgid "Writers can switch sharing off for a single post in the editor."
+msgid "Administrators can switch sharing off for a single post in the editor. Other roles can when their role has PressQueue's post sharing permission."
 msgstr ""
 
 #: src/Admin/SettingsController.php:73
@@ -6737,10 +6861,6 @@ msgstr ""
 #: src/Admin/SocialCardsController.php:197
 #: assets/admin/social.js:133
 msgid "Choose another image"
-msgstr ""
-
-#: src/Admin/SocialCardsController.php:197
-msgid "Choose an image"
 msgstr ""
 
 #: src/Admin/SocialCardsController.php:199
@@ -7018,54 +7138,40 @@ msgstr ""
 msgid "You are not allowed to manage PressQueue templates."
 msgstr ""
 
-#: src/Admin/Ui.php:88
+#: src/Admin/Ui.php:89
 msgid "Back"
 msgstr ""
 
-#: src/Admin/Ui.php:126
+#: src/Admin/Ui.php:127
 msgid "Sections"
 msgstr ""
 
-#: src/Admin/Ui.php:345
+#: src/Admin/Ui.php:389
 msgid "Just now"
 msgstr ""
 
 #. translators: %s: human-readable time difference such as "5 mins".
-#: src/Admin/Ui.php:350
+#: src/Admin/Ui.php:394
 #, php-format
 msgid "%s ago"
 msgstr ""
 
 #. translators: %d: post ID.
-#: src/Admin/Ui.php:406
+#: src/Admin/Ui.php:450
 #, php-format
 msgid "Deleted post #%d"
 msgstr ""
 
 #. translators: %d: post ID.
-#: src/Admin/Ui.php:411
+#: src/Admin/Ui.php:455
 #, php-format
 msgid "Post #%d"
 msgstr ""
 
 #. translators: %d: post ID.
-#: src/Admin/Ui.php:418
+#: src/Admin/Ui.php:462
 #, php-format
 msgid "(no title) #%d"
-msgstr ""
-
-#: src/Plugin.php:169
-msgid "PressQueue could not finish its database upgrade. Delivery remains disabled. Check the migration status in PressQueue settings."
-msgstr ""
-
-#. translators: %d: WordPress post ID.
-#: src/Plugin.php:202
-#, php-format
-msgid "PressQueue could not finish planning post #%d. Open that post and preview it before sending a manual batch. Temporary failures are retried up to five times."
-msgstr ""
-
-#: src/Plugin.php:213
-msgid "Stored PressQueue runtime or privacy state is invalid. Runtime delivery remains disabled until the stored option is repaired."
 msgstr ""
 
 #: src/Privacy/PersonalDataEraser.php:105
@@ -7096,8 +7202,34 @@ msgstr ""
 msgid "PressQueue batch"
 msgstr ""
 
+#: src/Security/SafeOperatorError.php:147
+msgid "PressQueue could not finish this. Try again in a moment."
+msgstr ""
+
+#. translators: %s: fixed error code such as storage_error.
+#: src/Security/SafeOperatorError.php:246
+#, php-format
+msgid "PressQueue could not finish setting up, so it was not activated. Try activating it again. If it still fails, contact PressQueue support and mention the error code %s."
+msgstr ""
+
+#: src/Security/SafeOperatorError.php:260
+msgid "Something changed in another window. Reload the page and try again."
+msgstr ""
+
+#: src/Security/SafeOperatorError.php:262
+msgid "PressQueue could not reach its data. Reload the page in a minute and try again."
+msgstr ""
+
+#: src/Security/SafeOperatorError.php:264
+msgid "PressQueue could not save the change. Try again in a minute."
+msgstr ""
+
+#: src/Security/SafeOperatorError.php:267
+msgid "Reload the page and try again."
+msgstr ""
+
 #. translators: %s: post title.
-#: src/SocialCard/CardStore.php:259
+#: src/SocialCard/CardStore.php:294
 #, php-format
 msgid "Social image: %s"
 msgstr ""
@@ -7243,7 +7375,7 @@ msgid "Include nested terms"
 msgstr ""
 
 #: assets/admin/condition-builder.js:532
-#: assets/editor/post-controls.js:977
+#: assets/editor/post-controls.js:986
 msgid "Remove"
 msgstr ""
 
@@ -7390,7 +7522,7 @@ msgid "Limit %d"
 msgstr ""
 
 #: assets/admin/rules.js:441
-msgid "Images chosen in the post"
+msgid "Image chosen in the post"
 msgstr ""
 
 #: assets/admin/rules.js:458
@@ -7420,59 +7552,56 @@ msgid "Choose a background image"
 msgstr ""
 
 #: assets/admin/social.js:115
+#: assets/editor/post-controls-classic.js:94
 msgid "Use this image"
 msgstr ""
 
 #. translators: 1: characters used, 2: character limit.
 #: assets/editor/post-controls-classic.js:64
-#: assets/editor/post-controls.js:1109
+#: assets/editor/post-controls.js:1118
 #, js-format
 msgid "%1$d of %2$d characters, including the link."
 msgstr ""
 
 #. translators: 1: number of characters over the limit, 2: social network name.
 #: assets/editor/post-controls-classic.js:69
-#: assets/editor/post-controls.js:1113
+#: assets/editor/post-controls.js:1122
 #, js-format
 msgid "%1$d characters too long for %2$s. The link counts too."
 msgstr ""
 
 #: assets/editor/post-controls-classic.js:93
-#: assets/editor/post-controls.js:986
-msgid "Choose images to share"
-msgstr ""
-
-#: assets/editor/post-controls-classic.js:94
-msgid "Use these images"
+#: assets/editor/post-controls.js:995
+msgid "Choose an image to share"
 msgstr ""
 
 #: assets/editor/post-controls-classic.js:152
-#: assets/editor/post-controls.js:798
+#: assets/editor/post-controls.js:807
 msgid "PressQueue could not do that. Check your connection and try again."
 msgstr ""
 
 #: assets/editor/post-controls-classic.js:246
-#: assets/editor/post-controls.js:900
+#: assets/editor/post-controls.js:909
 msgid "Confirm and share"
 msgstr ""
 
 #: assets/editor/post-controls-classic.js:248
-#: assets/editor/post-controls.js:901
+#: assets/editor/post-controls.js:910
 msgid "Close"
 msgstr ""
 
 #: assets/editor/post-controls-classic.js:264
-#: assets/editor/post-controls.js:900
+#: assets/editor/post-controls.js:909
 msgid "Sharing…"
 msgstr ""
 
 #: assets/editor/post-controls-classic.js:303
-#: assets/editor/post-controls.js:1317
+#: assets/editor/post-controls.js:1326
 msgid "Shared. It shows up here in a moment."
 msgstr ""
 
 #: assets/editor/post-controls-classic.js:326
-#: assets/editor/post-controls.js:864
+#: assets/editor/post-controls.js:873
 msgid "Checking what would be sent…"
 msgstr ""
 
@@ -7528,34 +7657,34 @@ msgstr ""
 msgid "Checking where this post goes…"
 msgstr ""
 
-#: assets/editor/post-controls.js:975
+#: assets/editor/post-controls.js:984
 msgid "Remove image"
 msgstr ""
 
-#: assets/editor/post-controls.js:996
-msgid "Change images"
+#: assets/editor/post-controls.js:1005
+msgid "Change image"
 msgstr ""
 
-#: assets/editor/post-controls.js:1131
+#: assets/editor/post-controls.js:1140
 msgid "Changed"
 msgstr ""
 
-#: assets/editor/post-controls.js:1218
+#: assets/editor/post-controls.js:1227
 msgid "Pick a date and a time."
 msgstr ""
 
-#: assets/editor/post-controls.js:1282
+#: assets/editor/post-controls.js:1291
 msgid "This post will not be shared."
 msgstr ""
 
-#: assets/editor/post-controls.js:1348
+#: assets/editor/post-controls.js:1357
 msgid "Loading sharing settings…"
 msgstr ""
 
-#: assets/editor/post-controls.js:1357
+#: assets/editor/post-controls.js:1366
 msgid "Load the latest settings"
 msgstr ""
 
-#: assets/editor/post-controls.js:1388
+#: assets/editor/post-controls.js:1397
 msgid "Save sharing settings"
 msgstr ""

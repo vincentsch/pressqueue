@@ -538,8 +538,8 @@ final class RuleSummary {
 				/* translators: 1: channel names, 2: highlighted phrase "end of the Buffer queue". */
 				return sprintf( esc_html__( 'send it to %1$s, add it to the %2$s', 'pressqueue' ), $channels, self::chip( __( 'end of the Buffer queue', 'pressqueue' ) ) );
 			case 'queue_next':
-				/* translators: 1: channel names, 2: highlighted phrase "next free queue slot". */
-				return sprintf( esc_html__( 'send it to %1$s, put it in the %2$s', 'pressqueue' ), $channels, self::chip( __( 'next free queue slot', 'pressqueue' ) ) );
+				/* translators: 1: channel names, 2: highlighted phrase "top of the Buffer queue". */
+				return sprintf( esc_html__( 'send it to %1$s, put it at the %2$s', 'pressqueue' ), $channels, self::chip( __( 'top of the Buffer queue', 'pressqueue' ) ) );
 			case 'draft':
 				/* translators: 1: channel names, 2: highlighted phrase "Buffer draft for review". */
 				return sprintf( esc_html__( 'send it to %1$s as a %2$s', 'pressqueue' ), $channels, self::chip( __( 'Buffer draft for review', 'pressqueue' ) ) );

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue\Admin;
 
 use PressQueue\Security\Capabilities;
+use PressQueue\Storage\Repository\RuleRepository;
 use PressQueue\Storage\SettingsRepository;
 
 /**
@@ -139,6 +140,49 @@ final class Ui {
 	 */
 	public static function mode(): string {
 		return ( new SettingsRepository() )->sharing_mode();
+	}
+
+	/**
+	 * Check whether at least one sharing rule is switched on.
+	 *
+	 * When the rules cannot be read the answer is yes, so screens keep their usual wording
+	 * instead of claiming that nothing is set up.
+	 *
+	 * @return bool
+	 */
+	public static function has_sharing_rule_on(): bool {
+		try {
+			foreach ( ( new RuleRepository() )->find_enabled() as $rule ) {
+				if ( 'include' === $rule->effect ) {
+					return true;
+				}
+			}
+		} catch ( \Throwable $throwable ) {
+			unset( $throwable );
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Return where the current user sets up sharing, or an empty string when they cannot.
+	 *
+	 * @return string
+	 */
+	public static function setup_url(): string {
+		return function_exists( 'current_user_can' ) && current_user_can( Capabilities::MANAGE_RULES ) ? self::url( self::PAGE_OVERVIEW ) : '';
+	}
+
+	/**
+	 * Return a "Set up sharing" button for people who can manage rules.
+	 *
+	 * @return string Escaped markup, or an empty string.
+	 */
+	public static function setup_button(): string {
+		$url = self::setup_url();
+
+		return '' === $url ? '' : '<a class="button button-primary" href="' . esc_url( $url ) . '">' . esc_html__( 'Set up sharing', 'pressqueue' ) . '</a>';
 	}
 
 	/**

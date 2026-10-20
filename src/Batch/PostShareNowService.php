@@ -59,7 +59,7 @@ final class PostShareNowService {
 	 * Create a stored preview of what Share now would send.
 	 *
 	 * The rules' timing is used, including a timing picked for this post. Share old
-	 * posts only allows "right away" and "next free slot" for a single share, so when
+	 * posts only allows "right away" and "top of the Buffer queue" for a single share, so when
 	 * the post goes to several channels with such a timing, each share goes to the end
 	 * of its Buffer queue instead. The preview shows that before anything is sent. Rules
 	 * that only save Buffer drafts keep their timing.

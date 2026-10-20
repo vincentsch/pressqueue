@@ -15,7 +15,26 @@ use PressQueue\Storage\StorageValidator;
  * Conservative local catalog for Buffer channel delivery capabilities.
  */
 final class BufferCapabilityCatalog {
-	public const VERSION = '2026-10-01.1';
+	public const VERSION = '2026-10-20.1';
+
+	/**
+	 * Mastodon limit when the server allows more, Buffer's documented default.
+	 */
+	public const MASTODON_DEFAULT_LIMIT = 500;
+
+	/**
+	 * Post text limits per network, as Buffer documents them for its own checks.
+	 *
+	 * X is kept at the free plan's 280, which every X account allows.
+	 */
+	private const TEXT_LIMITS = array(
+		'bluesky'  => 300,
+		'facebook' => 5000,
+		'linkedin' => 3000,
+		'mastodon' => self::MASTODON_DEFAULT_LIMIT,
+		'threads'  => 500,
+		'twitter'  => 280,
+	);
 
 	private const SUPPORTED_SERVICES = array(
 		'bluesky',
@@ -36,6 +55,7 @@ final class BufferCapabilityCatalog {
 		'https://developers.buffer.com/types/ImageAssetInput.html',
 		'https://developers.buffer.com/types/ImageMetadataInput.html',
 		'https://developers.buffer.com/types/MastodonMetadata.html',
+		'https://developers.buffer.com/guides/character-limits.html',
 	);
 
 	/**
@@ -53,14 +73,14 @@ final class BufferCapabilityCatalog {
 			return $this->unsupported( $service, $available ? 'unsupported_service' : 'unavailable_channel' );
 		}
 
-		$text_limit = 280;
+		$text_limit = self::TEXT_LIMITS[ $service ];
 		if ( 'mastodon' === $service ) {
 			$max_characters = $provider_metadata['maxCharacters'] ?? null;
 			if ( ! is_int( $max_characters ) || $max_characters <= 0 ) {
 				return $this->unsupported( $service, 'missing_mastodon_text_limit' );
 			}
 
-			$text_limit = min( $max_characters, 280 );
+			$text_limit = min( $max_characters, self::MASTODON_DEFAULT_LIMIT );
 		}
 
 		return array(
@@ -133,10 +153,24 @@ final class BufferCapabilityCatalog {
 			$sources[] = array(
 				'service'         => $service,
 				'source_url'      => $url,
-				'verified_on_utc' => str_contains( $url, 'create-draft-post' ) ? '2026-10-01' : '2026-08-25',
+				'verified_on_utc' => self::verified_on( $url ),
 			);
 		}
 
 		return $sources;
+	}
+
+	/**
+	 * Return the day a source was last checked.
+	 *
+	 * @param string $url Source URL.
+	 * @return string
+	 */
+	private static function verified_on( string $url ): string {
+		if ( str_contains( $url, 'character-limits' ) ) {
+			return '2026-10-20';
+		}
+
+		return str_contains( $url, 'create-draft-post' ) ? '2026-10-01' : '2026-08-25';
 	}
 }

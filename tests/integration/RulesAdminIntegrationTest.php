@@ -524,6 +524,118 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 		self::assertStringContainsString( 'No message templates yet', $this->render() );
 	}
 
+	public function test_switching_a_rule_on_in_test_mode_says_nothing_reaches_buffer_and_offers_go_live(): void {
+		$channel = $this->channel( 'linkedin', 'Larkfield Bakery' );
+		$rules   = new RuleRepository();
+		$rule    = $rules->create( $this->baseInput( $channel ) );
+		$rule    = $rules->mark_version_previewed( $rule->public_id, $rule->lock_version, $rule->version );
+		$rule    = $rules->enable_after_preview( $rule->public_id, $rule->lock_version );
+		$hint    = 'PressQueue is still in test mode, so nothing goes to Buffer yet.';
+		self::assertSame( 'test', ( new SettingsRepository() )->sharing_mode() );
+
+		$_GET = array(
+			'page'               => RulesController::SLUG,
+			'pressqueue_message' => 'rule_enabled',
+			'rule'               => $rule->public_id,
+		);
+		$html = $this->render();
+		self::assertStringContainsString( 'The rule is on.', $html );
+		self::assertStringContainsString( $hint, $html );
+		self::assertStringContainsString( 'name="sharing_mode" value="live"', $html );
+		self::assertStringContainsString( 'name="redirect_page" value="pressqueue-rules"', $html );
+		self::assertStringContainsString( '>Go live</button>', $html );
+
+		$_GET['pressqueue_message'] = 'rule_saved_on';
+		self::assertStringContainsString( $hint, $this->render() );
+
+		// The test view shows the hint next to the switch, once.
+		$_GET['view']               = 'test';
+		$_GET['pressqueue_message'] = 'rule_enabled';
+		$html                       = $this->render();
+		self::assertStringContainsString( 'This rule is on', $html );
+		self::assertSame( 1, substr_count( $html, $hint ) );
+		self::assertStringContainsString( '>Go live</button>', $html );
+
+		// "Never share" rules send nothing in any mode.
+		$never = $rules->create(
+			array_merge(
+				$this->baseInput( $channel ),
+				array(
+					'name'            => 'Keep drafts private',
+					'effect'          => 'exclude',
+					'destination_set' => array(
+						'schema_version' => 1,
+						'scope'          => 'all',
+					),
+				)
+			)
+		);
+		$_GET  = array(
+			'page'               => RulesController::SLUG,
+			'pressqueue_message' => 'rule_enabled',
+			'rule'               => $never->public_id,
+		);
+		$html  = $this->render();
+		self::assertStringContainsString( 'The rule is on.', $html );
+		self::assertStringNotContainsString( $hint, $html );
+
+		// Once live, the notice is the plain one and Go live comes back with its own notice.
+		( new SettingsRepository() )->set_sharing_mode( 'live' );
+		$_GET = array(
+			'page'                => RulesController::SLUG,
+			'pressqueue_message'  => 'rule_enabled',
+			'rule'                => $rule->public_id,
+			'pressqueue_settings' => 'mode_live',
+		);
+		$html = $this->render();
+		self::assertStringContainsString( 'The rule is on.', $html );
+		self::assertStringNotContainsString( $hint, $html );
+		self::assertStringContainsString( 'You are live. Posts that match a rule are now sent to Buffer.', $html );
+	}
+
+	public function test_turning_a_rule_on_from_the_list_keeps_the_rule_in_the_notice_link(): void {
+		$channel = $this->channel( 'linkedin', 'Larkfield Bakery' );
+		$rules   = new RuleRepository();
+		$rule    = $rules->create( $this->baseInput( $channel ) );
+		$rule    = $rules->mark_version_previewed( $rule->public_id, $rule->lock_version, $rule->version );
+
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = array(
+			'_wpnonce'       => wp_create_nonce( 'pressqueue_enable_rule' ),
+			'rule_public_id' => $rule->public_id,
+			'lock_version'   => (string) $rule->lock_version,
+			'return_view'    => 'list',
+		);
+		$_REQUEST                  = $_POST;
+		$locations                 = array();
+
+		// The handler redirects from inside its own try block, so keep the first redirect.
+		remove_all_filters( 'wp_redirect' );
+		add_filter(
+			'wp_redirect',
+			static function ( $url ) use ( &$locations ): void {
+				$locations[] = (string) $url;
+				throw new \RuntimeException( 'pressqueue-test-redirect' );
+			}
+		);
+
+		try {
+			RulesController::handle_enable_rule();
+		} catch ( \RuntimeException $exception ) {
+			self::assertSame( 'pressqueue-test-redirect', $exception->getMessage() );
+		} finally {
+			remove_all_filters( 'wp_redirect' );
+			$_REQUEST                  = array();
+			$_SERVER['REQUEST_METHOD'] = 'GET';
+		}
+
+		$location = (string) ( $locations[0] ?? '' );
+		self::assertStringContainsString( 'pressqueue_message=rule_enabled', $location );
+		self::assertStringContainsString( 'rule=' . $rule->public_id, $location );
+		self::assertStringNotContainsString( 'view=', $location );
+		self::assertTrue( $rules->find_by_public_id( $rule->public_id )->enabled );
+	}
+
 	/**
 	 * Render the Rules page.
 	 *

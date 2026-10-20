@@ -427,7 +427,12 @@ final class RulesController {
 		$wants_test  = 'test' === self::post_text( 'save_intent' );
 
 		if ( $rule->enabled ) {
-			self::redirect( array( 'pressqueue_message' => 'rule_saved_on' ) );
+			self::redirect(
+				array(
+					'pressqueue_message' => 'rule_saved_on',
+					'rule'               => $rule->public_id,
+				)
+			);
 		}
 
 		if ( ! $wants_test && ! $was_enabled ) {
@@ -667,11 +672,13 @@ final class RulesController {
 	 * @param string     $message Notice key.
 	 */
 	private static function redirect_after_toggle( RuleRecord $rule, string $return_view, string $message ): void {
-		$args = array( 'pressqueue_message' => $message );
+		$args = array(
+			'pressqueue_message' => $message,
+			'rule'               => $rule->public_id,
+		);
 
 		if ( 'list' !== $return_view ) {
 			$args['view'] = $return_view;
-			$args['rule'] = $rule->public_id;
 		}
 
 		self::redirect( $args );
@@ -805,9 +812,13 @@ final class RulesController {
 	 * Render notices from the query string.
 	 */
 	public static function render_notice(): void {
+		// The Go live button on the Rules screens comes back here with the settings result.
+		SettingsController::render_notice();
+
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Notice query args are display-only.
 		$message = isset( $_GET['pressqueue_message'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_message'] ) ) : '';
 		$detail  = isset( $_GET['pressqueue_detail'] ) ? SafeOperatorError::notice_detail( sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) ) : '';
+		$view    = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		$messages = array(
@@ -842,7 +853,52 @@ final class RulesController {
 			return;
 		}
 
+		// The test view already says so next to the switch, so only the list repeats it here.
+		if ( in_array( $message, array( 'rule_enabled', 'rule_saved_on' ), true ) && 'test' !== $view && self::test_mode_applies() ) {
+			echo '<div class="notice notice-success is-dismissible pq-notice"><p>' . esc_html( $messages[ $message ][1] ) . '</p>';
+			self::render_test_mode_hint();
+			echo '</div>';
+			return;
+		}
+
 		Ui::notice( $messages[ $message ][0], $messages[ $message ][1], 'error' === $messages[ $message ][0] ? self::friendly_detail( $detail ) : '' );
+	}
+
+	/**
+	 * Say that nothing reaches Buffer while PressQueue is in test mode, with the Go live button.
+	 *
+	 * The button is the same one the Overview checklist uses and comes back to the Rules screen.
+	 */
+	public static function render_test_mode_hint(): void {
+		echo '<p class="pq-test-mode-hint">' . esc_html__( 'PressQueue is still in test mode, so nothing goes to Buffer yet.', 'pressqueue' ) . '</p>';
+
+		if ( current_user_can( Capabilities::MANAGE_SETTINGS ) ) {
+			echo '<div class="pq-row pq-test-mode-action">';
+			SettingsController::render_mode_button( 'live', __( 'Go live', 'pressqueue' ), 'button button-primary', Ui::PAGE_RULES );
+			echo '</div>';
+		}
+	}
+
+	/**
+	 * Check whether the test mode hint belongs after a rule was switched on.
+	 *
+	 * A "never share" rule sends nothing in any mode, so it gets no hint.
+	 *
+	 * @return bool
+	 */
+	private static function test_mode_applies(): bool {
+		try {
+			if ( 'test' !== Ui::mode() ) {
+				return false;
+			}
+
+			$rule = self::rule_from_query();
+		} catch ( \Throwable $throwable ) {
+			unset( $throwable );
+			return false;
+		}
+
+		return null === $rule || 'exclude' !== $rule->effect;
 	}
 
 	/**
@@ -858,8 +914,6 @@ final class RulesController {
 			'Rule version changed before preview.'       => __( 'The rule changed in another window. Reload the page and try again.', 'pressqueue' ),
 			'Rule lock version is stale.'                => __( 'The rule changed in another window. Reload the page and try again.', 'pressqueue' ),
 			'Rule does not exist.'                       => __( 'The rule no longer exists.', 'pressqueue' ),
-			'Failure classification: stale_record.'      => __( 'The rule changed in another window. Reload the page and try again.', 'pressqueue' ),
-			'Failure classification: validation_failed.' => '',
 			'You are not allowed to preview this post.'  => __( 'You cannot edit that post, so it cannot be tested.', 'pressqueue' ),
 			'Post cannot be previewed for this trigger.' => __( 'That post cannot be shared, for example because it is in the trash or private.', 'pressqueue' ),
 		);

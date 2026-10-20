@@ -240,11 +240,15 @@ final class ChannelsPage {
 		echo '<' . esc_html( $heading ) . ' class="pq-step-heading">' . esc_html__( 'Create an API key in Buffer', 'pressqueue' ) . '</' . esc_html( $heading ) . '>';
 		echo '<p class="pq-muted pq-flush">';
 		printf(
-			/* translators: %s: the "New API key" button label in Buffer. */
-			esc_html__( 'In Buffer, click %s, name it PressQueue and copy it.', 'pressqueue' ),
-			'<span class="pq-kbd">' . esc_html__( 'New API key', 'pressqueue' ) . '</span>'
+			/* translators: 1: the "Personal Access" tab in Buffer, 2: the "+ New Key" button in Buffer, 3: the "1 year" expiry choice in Buffer, 4: the "Generate API Key" button in Buffer. */
+			esc_html__( 'In Buffer, open the %1$s tab and click %2$s. Name the key PressQueue, leave all permissions ticked and pick %3$s as the expiry, the longest Buffer offers. Then click %4$s and copy the key.', 'pressqueue' ),
+			'<span class="pq-kbd">' . esc_html__( 'Personal Access', 'pressqueue' ) . '</span>',
+			'<span class="pq-kbd">' . esc_html__( '+ New Key', 'pressqueue' ) . '</span>',
+			'<span class="pq-kbd">' . esc_html__( '1 year', 'pressqueue' ) . '</span>',
+			'<span class="pq-kbd">' . esc_html__( 'Generate API Key', 'pressqueue' ) . '</span>'
 		);
 		echo '</p>';
+		echo '<p class="pq-help pq-flush">' . esc_html__( 'When the key expires, PressQueue tells you here, and you paste a new one.', 'pressqueue' ) . '</p>';
 		echo '<p class="pq-flush">';
 		self::render_buffer_link( __( 'Open Buffer API settings', 'pressqueue' ), 'button' );
 		echo '</p>';
@@ -453,7 +457,7 @@ final class ChannelsPage {
 			case 'invalid':
 				echo '<div class="pq-callout pq-callout--bad">';
 				echo '<p class="pq-strong">' . esc_html__( 'Buffer no longer accepts the saved key, so nothing is shared through this account.', 'pressqueue' ) . '</p>';
-				echo '<p>' . esc_html__( 'This happens when the key is deleted in Buffer. Create a new key in Buffer and paste it below. Your channels and rules stay as they are.', 'pressqueue' ) . '</p>';
+				echo '<p>' . esc_html__( 'This happens when the key expires or is deleted in Buffer. To fix it, create a new key in Buffer or regenerate the old one there, then paste it below. Your channels and rules stay as they are.', 'pressqueue' ) . '</p>';
 				echo '</div>';
 				self::render_replace_form( $connection, true );
 				break;
@@ -1035,7 +1039,7 @@ final class ChannelsPage {
 				/* translators: %s: fixed error code such as network_failure. */
 				$technical = sprintf( __( 'Buffer request failed with code %s.', 'pressqueue' ), $reason );
 			} elseif ( '' !== $detail ) {
-				$technical = SafeOperatorError::notice_detail( $detail );
+				$technical = SafeOperatorError::technical_detail( $detail );
 			}
 
 			self::render_error_notice( $text, $technical );
@@ -1052,7 +1056,7 @@ final class ChannelsPage {
 		}
 
 		if ( 'connection_error' === $message ) {
-			self::render_error_notice( $text, '' === $detail ? '' : SafeOperatorError::notice_detail( $detail ) );
+			self::render_error_notice( $text, '' === $detail ? '' : SafeOperatorError::technical_detail( $detail ) );
 			return;
 		}
 

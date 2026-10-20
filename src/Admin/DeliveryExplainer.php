@@ -679,7 +679,7 @@ final class DeliveryExplainer {
 	 */
 	private static function failure_reason( string $error_class, ?string $provider_result ): string {
 		$sentences = array(
-			'invalid_credential'         => __( 'Buffer said the API key is no longer valid.', 'pressqueue' ),
+			'invalid_credential'         => __( 'Buffer said the API key is no longer valid. It may have expired or been deleted in Buffer.', 'pressqueue' ),
 			'credential_unavailable'     => __( 'PressQueue could not read the saved Buffer key.', 'pressqueue' ),
 			'forbidden'                  => __( 'Buffer refused access to this channel.', 'pressqueue' ),
 			'not_found'                  => __( 'Buffer could not find this channel.', 'pressqueue' ),

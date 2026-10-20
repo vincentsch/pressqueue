@@ -121,6 +121,13 @@ final class SafeOperatorError {
 	}
 
 	/**
+	 * Fixed English label stored with planning reasons and batch items.
+	 *
+	 * Stored documents are compared when work is repeated, so this text never changes with the language.
+	 */
+	private const STORED_FALLBACK = 'The operation could not be completed. Review the stored status and try again.';
+
+	/**
 	 * Return a safe message for notices and REST errors.
 	 *
 	 * @param Throwable $throwable Failure.
@@ -128,18 +135,28 @@ final class SafeOperatorError {
 	 * @return string
 	 */
 	public static function message( Throwable $throwable, string $fallback = '' ): string {
-		if ( $throwable instanceof ValidationException || $throwable instanceof StaleRecordException ) {
-			$message = trim( $throwable->getMessage() );
-			if ( '' !== $message && self::is_allowed_message( $message ) ) {
-				return $message;
-			}
+		$allowed = self::allowed_message( $throwable );
+		if ( null !== $allowed ) {
+			return $allowed;
 		}
 
 		if ( '' !== $fallback ) {
 			return $fallback;
 		}
 
-		return 'The operation could not be completed. Review the stored status and try again.';
+		return __( 'PressQueue could not finish this. Try again in a moment.', 'pressqueue' );
+	}
+
+	/**
+	 * Return a safe label to store in planning reasons and batch items.
+	 *
+	 * Unlike message(), the fallback is never translated.
+	 *
+	 * @param Throwable $throwable Failure.
+	 * @return string
+	 */
+	public static function stored_label( Throwable $throwable ): string {
+		return self::allowed_message( $throwable ) ?? self::STORED_FALLBACK;
 	}
 
 	/**
@@ -183,12 +200,32 @@ final class SafeOperatorError {
 	}
 
 	/**
-	 * Only display fixed diagnostics supplied through a redirect URL.
+	 * Only display fixed diagnostics supplied through a redirect URL, in plain words.
+	 *
+	 * A failure classification becomes a sentence that says what to do. Allowed messages pass through.
 	 *
 	 * @param string $detail Requested notice detail.
 	 * @return string
 	 */
 	public static function notice_detail( string $detail ): string {
+		$detail = self::technical_detail( $detail );
+
+		if ( 1 === preg_match( '/^Failure classification: ([a-z_]+)\\.$/', $detail, $matches ) ) {
+			return self::classification_text( $matches[1] );
+		}
+
+		return $detail;
+	}
+
+	/**
+	 * Only display fixed diagnostics supplied through a redirect URL, as they are.
+	 *
+	 * For "Technical details" boxes, where the exact code helps support.
+	 *
+	 * @param string $detail Requested notice detail.
+	 * @return string
+	 */
+	public static function technical_detail( string $detail ): string {
 		if ( in_array( $detail, self::ALLOWED_MESSAGES, true ) || 1 === preg_match( '/^Failure classification: (stale_record|storage_unavailable|validation_failed|storage_error|operator_error)\\.$/', $detail ) ) {
 			return $detail;
 		}
@@ -198,14 +235,56 @@ final class SafeOperatorError {
 	/**
 	 * Return a safe activation failure notice.
 	 *
+	 * The classification stays as a fixed code people can pass on to support.
+	 *
 	 * @param Throwable $throwable Failure.
 	 * @return string
 	 */
 	public static function activation_message( Throwable $throwable ): string {
 		return sprintf(
-			'PressQueue could not complete activation setup. Failure classification: %s.',
+			/* translators: %s: fixed error code such as storage_error. */
+			__( 'PressQueue could not finish setting up, so it was not activated. Try activating it again. If it still fails, contact PressQueue support and mention the error code %s.', 'pressqueue' ),
 			self::classification( $throwable )
 		);
+	}
+
+	/**
+	 * Explain a failure classification in plain words.
+	 *
+	 * @param string $classification Classification code.
+	 * @return string
+	 */
+	private static function classification_text( string $classification ): string {
+		switch ( $classification ) {
+			case 'stale_record':
+				return __( 'Something changed in another window. Reload the page and try again.', 'pressqueue' );
+			case 'storage_unavailable':
+				return __( 'PressQueue could not reach its data. Reload the page in a minute and try again.', 'pressqueue' );
+			case 'storage_error':
+				return __( 'PressQueue could not save the change. Try again in a minute.', 'pressqueue' );
+			case 'validation_failed':
+			case 'operator_error':
+				return __( 'Reload the page and try again.', 'pressqueue' );
+		}
+
+		return '';
+	}
+
+	/**
+	 * Return the exception message when it is on the public allowlist.
+	 *
+	 * @param Throwable $throwable Failure.
+	 * @return string|null
+	 */
+	private static function allowed_message( Throwable $throwable ): ?string {
+		if ( $throwable instanceof ValidationException || $throwable instanceof StaleRecordException ) {
+			$message = trim( $throwable->getMessage() );
+			if ( '' !== $message && self::is_allowed_message( $message ) ) {
+				return $message;
+			}
+		}
+
+		return null;
 	}
 
 	/**

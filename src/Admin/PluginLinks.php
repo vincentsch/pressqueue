@@ -16,6 +16,8 @@ use PressQueue\Security\Capabilities;
  */
 final class PluginLinks {
 	public const WELCOME_TRANSIENT = 'pressqueue_welcome_notice';
+	public const DOCS_URL          = 'https://www.pressqueue.com/docs/';
+	public const SUPPORT_URL       = 'https://github.com/vincentsch/pressqueue/issues';
 
 	/**
 	 * Register hooks.
@@ -26,6 +28,8 @@ final class PluginLinks {
 		}
 
 		add_filter( 'plugin_action_links_' . PRESSQUEUE_BASENAME, array( self::class, 'action_links' ) );
+		add_filter( 'plugin_row_meta', array( self::class, 'row_meta' ), 10, 2 );
+		add_filter( 'admin_footer_text', array( self::class, 'footer_text' ) );
 		add_action( 'admin_notices', array( self::class, 'render_welcome' ) );
 	}
 
@@ -55,6 +59,56 @@ final class PluginLinks {
 		}
 
 		return array_merge( $extra, $links );
+	}
+
+	/**
+	 * Add "Docs" and "Support" under PressQueue's description on the Plugins screen.
+	 *
+	 * @param array<int|string,string> $links Existing links.
+	 * @param string                   $file Plugin file of the row.
+	 * @return array<int|string,string>
+	 */
+	public static function row_meta( array $links, string $file ): array {
+		if ( ! defined( 'PRESSQUEUE_BASENAME' ) || PRESSQUEUE_BASENAME !== $file ) {
+			return $links;
+		}
+
+		$links['pressqueue-docs']    = self::external_link( self::DOCS_URL, __( 'Docs', 'pressqueue' ) );
+		$links['pressqueue-support'] = self::external_link( self::SUPPORT_URL, __( 'Support', 'pressqueue' ) );
+
+		return $links;
+	}
+
+	/**
+	 * Show the version and help links in the footer of PressQueue's own screens.
+	 *
+	 * @param mixed $text Footer text from WordPress.
+	 * @return mixed
+	 */
+	public static function footer_text( $text ) {
+		if ( ! Ui::is_pressqueue_screen() ) {
+			return $text;
+		}
+
+		$version = defined( 'PRESSQUEUE_VERSION' ) ? (string) PRESSQUEUE_VERSION : '';
+		/* translators: %s: PressQueue version number. */
+		$name = sprintf( __( 'PressQueue %s', 'pressqueue' ), $version );
+
+		return '<span class="pq-footer">' . esc_html( $name )
+			. ' &middot; ' . self::external_link( self::DOCS_URL, __( 'Docs', 'pressqueue' ) )
+			. ' &middot; ' . self::external_link( self::SUPPORT_URL, __( 'Support', 'pressqueue' ) )
+			. '</span>';
+	}
+
+	/**
+	 * Return a link to a page outside this site that opens in a new tab.
+	 *
+	 * @param string $url URL.
+	 * @param string $label Visible label.
+	 * @return string
+	 */
+	private static function external_link( string $url, string $label ): string {
+		return '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( $label ) . '<span class="screen-reader-text"> ' . esc_html__( '(opens in a new tab)', 'pressqueue' ) . '</span></a>';
 	}
 
 	/**

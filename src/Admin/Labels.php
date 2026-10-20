@@ -154,8 +154,8 @@ final class Labels {
 				'help'  => __( 'Buffer posts it in your next free time slot after everything already queued.', 'pressqueue' ),
 			),
 			'queue_next' => array(
-				'label' => __( 'Next free queue slot', 'pressqueue' ),
-				'help'  => __( 'Goes ahead of posts already waiting in your Buffer queue.', 'pressqueue' ),
+				'label' => __( 'Top of the Buffer queue', 'pressqueue' ),
+				'help'  => __( 'Buffer posts it in your next free time slot, ahead of posts already waiting.', 'pressqueue' ),
 			),
 			'immediate'  => array(
 				'label' => __( 'Post right away', 'pressqueue' ),
@@ -177,7 +177,7 @@ final class Labels {
 	public static function schedule_phrase( string $mode ): string {
 		$phrases = array(
 			'queue_end'     => __( 'end of the Buffer queue', 'pressqueue' ),
-			'queue_next'    => __( 'next free Buffer queue slot', 'pressqueue' ),
+			'queue_next'    => __( 'top of the Buffer queue', 'pressqueue' ),
 			'immediate'     => __( 'right away', 'pressqueue' ),
 			'draft'         => __( 'Buffer draft for review', 'pressqueue' ),
 			'explicit_time' => __( 'chosen date and time', 'pressqueue' ),
@@ -211,7 +211,7 @@ final class Labels {
 			),
 			'post_media'              => array(
 				'label' => __( 'Image chosen in each post', 'pressqueue' ),
-				'help'  => __( 'Writers pick the image in the post editor.', 'pressqueue' ),
+				'help'  => __( 'The image is picked in the Social sharing panel of each post.', 'pressqueue' ),
 			),
 		);
 	}

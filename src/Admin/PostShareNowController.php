@@ -73,19 +73,19 @@ final class PostShareNowController {
 		$post_id = max( 0, (int) $request['post_id'] );
 
 		if ( function_exists( 'is_user_logged_in' ) && ! is_user_logged_in() ) {
-			return self::rest_error( 'unauthenticated', 'Authentication is required.', 401 );
+			return self::rest_error( 'unauthenticated', __( 'You are logged out. Log in again, then try again.', 'pressqueue' ), 401 );
 		}
 
 		if ( ! function_exists( 'get_post' ) || ! ( get_post( $post_id ) instanceof \WP_Post ) ) {
-			return self::rest_error( 'not_found', 'Post does not exist.', 404 );
+			return self::rest_error( 'not_found', __( 'This post no longer exists.', 'pressqueue' ), 404 );
 		}
 
 		if ( ! PostControlAuthorization::is_supported_post( $post_id ) ) {
-			return self::rest_error( 'invalid_post_type', 'PressQueue controls are not supported for this post type.', 400 );
+			return self::rest_error( 'invalid_post_type', __( 'PressQueue does not share this kind of post.', 'pressqueue' ), 400 );
 		}
 
 		if ( ! PostShareNowService::current_user_can_share( $post_id ) ) {
-			return self::rest_error( 'forbidden', 'You are not allowed to share this post now.', 403 );
+			return self::rest_error( 'forbidden', __( 'You are not allowed to share this post now.', 'pressqueue' ), 403 );
 		}
 
 		return true;
@@ -200,7 +200,7 @@ final class PostShareNowController {
 			}
 		}
 
-		$single_timing = __( '"Post right away" and "Next free queue slot" only work for one channel at a time.', 'pressqueue' );
+		$single_timing = __( '"Post right away" and "Top of the Buffer queue" only work for one channel at a time.', 'pressqueue' );
 		if ( true === ( $batch->preview_summary['invalid_multi_item_schedule'] ?? false ) ) {
 			$problem = $single_timing . ' ' . __( 'Pick another timing under Customize for this post, update the post, then try again.', 'pressqueue' );
 		} elseif ( true === ( $batch->preview_summary['truncated'] ?? false ) ) {
@@ -339,7 +339,7 @@ final class PostShareNowController {
 			'permission'      => __( 'You are not allowed to share this post now.', 'pressqueue' ),
 			'post_gone'       => __( 'This post changed or is no longer published. Reload the page.', 'pressqueue' ),
 			'runtime'         => __( 'Background sharing is stopped, so nothing can be shared right now. Open Settings, then Data and privacy, to see why.', 'pressqueue' ),
-			'single_timing'   => __( '"Post right away" and "Next free queue slot" only work for one channel at a time. Pick another timing under Customize for this post, update the post, then try again.', 'pressqueue' ),
+			'single_timing'   => __( '"Post right away" and "Top of the Buffer queue" only work for one channel at a time. Pick another timing under Customize for this post, update the post, then try again.', 'pressqueue' ),
 			'too_many'        => __( 'This post would create too many shares at once.', 'pressqueue' ),
 		);
 		$code     = BatchController::error_code( $throwable );

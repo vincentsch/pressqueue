@@ -20,7 +20,7 @@
 	}
 
 	/*
-	 * Post right away and Next free queue slot are switched off while the
+	 * Post right away and Top of the Buffer queue are switched off while the
 	 * preview has more than one share. Once other picks change, the next
 	 * preview may have a single share, so offer them again.
 	 */

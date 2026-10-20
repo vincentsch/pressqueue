@@ -319,12 +319,15 @@ final class OverviewController {
 		echo '</div>';
 
 		if ( array() === $feed ) {
-			Ui::empty_state(
-				__( 'Nothing yet', 'pressqueue' ),
-				'test' === $mode
-					? __( 'Publish or update a post and PressQueue records here what it would share. In test mode nothing is sent.', 'pressqueue' )
-					: __( 'When you publish a post that matches a rule, it shows up here.', 'pressqueue' )
-			);
+			if ( ! Ui::has_sharing_rule_on() ) {
+				$text = __( 'Social sharing is not set up yet. Once a sharing rule is on, the posts it checks show up here.', 'pressqueue' );
+			} elseif ( 'test' === $mode ) {
+				$text = __( 'Publish or update a post and PressQueue records here what it would share. In test mode nothing is sent.', 'pressqueue' );
+			} else {
+				$text = __( 'When you publish a post that matches a rule, it shows up here.', 'pressqueue' );
+			}
+
+			Ui::empty_state( __( 'Nothing yet', 'pressqueue' ), $text );
 			echo '</div>';
 			return;
 		}

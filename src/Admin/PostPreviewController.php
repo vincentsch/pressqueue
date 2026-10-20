@@ -57,19 +57,19 @@ final class PostPreviewController {
 		$post_id = self::post_id_from_rest_request( $request );
 
 		if ( function_exists( 'is_user_logged_in' ) && ! is_user_logged_in() ) {
-			return self::rest_error( 'unauthenticated', 'Authentication is required.', 401 );
+			return self::rest_error( 'unauthenticated', __( 'You are logged out. Log in again, then try again.', 'pressqueue' ), 401 );
 		}
 
 		if ( ! function_exists( 'get_post' ) || ! ( get_post( $post_id ) instanceof \WP_Post ) ) {
-			return self::rest_error( 'not_found', 'Post does not exist.', 404 );
+			return self::rest_error( 'not_found', __( 'This post no longer exists.', 'pressqueue' ), 404 );
 		}
 
 		if ( ! PostControlAuthorization::is_supported_post( $post_id ) ) {
-			return self::rest_error( 'invalid_post_type', 'PressQueue controls are not supported for this post type.', 400 );
+			return self::rest_error( 'invalid_post_type', __( 'PressQueue does not share this kind of post.', 'pressqueue' ), 400 );
 		}
 
 		if ( ! PostControlAuthorization::current_user_can_access( $post_id ) ) {
-			return self::rest_error( 'forbidden', 'You are not allowed to preview PressQueue controls for this post.', 403 );
+			return self::rest_error( 'forbidden', __( 'You are not allowed to check where this post is shared.', 'pressqueue' ), 403 );
 		}
 
 		return true;

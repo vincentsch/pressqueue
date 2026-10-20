@@ -238,7 +238,11 @@ final class RuleTestView {
 	private static function render_status_card( RuleRecord $rule, bool $current, bool $has_result ): void {
 		if ( $rule->enabled ) {
 			echo '<div class="pq-card pq-card--pad pq-test-status pq-test-status--on">';
-			echo '<div><h2>' . esc_html__( 'This rule is on', 'pressqueue' ) . '</h2><p class="pq-sub">' . esc_html( 'exclude' === $rule->effect ? __( 'Matching posts are never shared.', 'pressqueue' ) : __( 'Matching posts are shared as shown below.', 'pressqueue' ) ) . '</p></div>';
+			echo '<div><h2>' . esc_html__( 'This rule is on', 'pressqueue' ) . '</h2><p class="pq-sub">' . esc_html( 'exclude' === $rule->effect ? __( 'Matching posts are never shared.', 'pressqueue' ) : __( 'Matching posts are shared as shown below.', 'pressqueue' ) ) . '</p>';
+			if ( 'exclude' !== $rule->effect && self::in_test_mode() ) {
+				RulesController::render_test_mode_hint();
+			}
+			echo '</div>';
 			RulesController::render_toggle( $rule, 'test' );
 			echo '</div>';
 			return;
@@ -889,5 +893,19 @@ final class RuleTestView {
 	 */
 	private static function transient_key(): string {
 		return self::TRANSIENT_BASE . get_current_user_id();
+	}
+
+	/**
+	 * Check whether PressQueue is in test mode. A mode that cannot be read gives no hint.
+	 *
+	 * @return bool
+	 */
+	private static function in_test_mode(): bool {
+		try {
+			return 'test' === Ui::mode();
+		} catch ( \Throwable $throwable ) {
+			unset( $throwable );
+			return false;
+		}
 	}
 }

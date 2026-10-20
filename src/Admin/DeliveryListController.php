@@ -721,7 +721,9 @@ final class DeliveryListController {
 			return;
 		}
 
-		$test = 'test' === $mode;
+		$test       = 'test' === $mode;
+		$set_up     = Ui::has_sharing_rule_on();
+		$not_set_up = __( 'Social sharing is not set up yet. Once a sharing rule is on, the posts it shares show up here.', 'pressqueue' );
 
 		switch ( $request['group'] ) {
 			case 'waiting':
@@ -744,6 +746,11 @@ final class DeliveryListController {
 				return;
 
 			case 'dry_run':
+				if ( $test && ! $set_up ) {
+					Ui::empty_state( __( 'No test runs yet', 'pressqueue' ), $not_set_up, Ui::setup_button() );
+					return;
+				}
+
 				Ui::empty_state(
 					__( 'No test runs yet', 'pressqueue' ),
 					$test ? __( 'Test runs show what PressQueue would have sent. Publish or update a post to see one.', 'pressqueue' ) : __( 'Test runs show what PressQueue would have sent. They are recorded while PressQueue is in test mode.', 'pressqueue' )
@@ -753,6 +760,11 @@ final class DeliveryListController {
 			case 'cancelled':
 				Ui::empty_state( __( 'Nothing was cancelled', 'pressqueue' ), __( 'Shares you cancel stay here so you can see what was not sent.', 'pressqueue' ) );
 				return;
+		}
+
+		if ( ! $set_up ) {
+			Ui::empty_state( __( 'No shares yet', 'pressqueue' ), $not_set_up, Ui::setup_button() );
+			return;
 		}
 
 		Ui::empty_state(

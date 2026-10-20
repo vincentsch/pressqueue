@@ -20,11 +20,6 @@ use PressQueue\Storage\Record\RuleRecord;
  */
 final class ChannelStatus {
 	/**
-	 * PressQueue never sends more than this many characters, whatever the network allows.
-	 */
-	private const TEXT_CEILING = 280;
-
-	/**
 	 * Count enabled sharing rules per channel.
 	 *
 	 * @param array<int,RuleRecord> $rules Rules.
@@ -113,7 +108,7 @@ final class ChannelStatus {
 	}
 
 	/**
-	 * Return the muted line under a usable channel, for example "LinkedIn · up to 280 characters with the link · 1 image".
+	 * Return the muted line under a usable channel, for example "LinkedIn · up to 3000 characters with the link · 1 image".
 	 *
 	 * @param ChannelRecord $channel Channel.
 	 * @return string
@@ -139,8 +134,8 @@ final class ChannelStatus {
 		$line = implode( ' · ', $parts );
 
 		if ( 'mastodon' === strtolower( $channel->service ) && $limit > 0 ) {
-			/* translators: %d: PressQueue's own character ceiling. */
-			$line .= '. ' . sprintf( __( 'PressQueue uses the lower of the server limit and %d.', 'pressqueue' ), self::TEXT_CEILING );
+			/* translators: %d: Buffer's default Mastodon character limit. */
+			$line .= '. ' . sprintf( __( 'PressQueue uses the lower of the server limit and %d.', 'pressqueue' ), BufferCapabilityCatalog::MASTODON_DEFAULT_LIMIT );
 		}
 
 		return $line;

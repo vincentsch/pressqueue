@@ -369,7 +369,12 @@ final class PostControlsController {
 				return;
 			}
 
-			echo '<div class="pq-ed-goes pq-ed-goes--none"><p><strong>' . esc_html__( 'Not shared when you publish.', 'pressqueue' ) . '</strong> ' . esc_html( (string) $display['reason'] ) . '</p>';
+			$setup_url = (string) ( $display['setup_url'] ?? '' );
+			echo '<div class="pq-ed-goes pq-ed-goes--none"><p><strong>' . esc_html__( 'Not shared when you publish.', 'pressqueue' ) . '</strong> ' . esc_html( (string) $display['reason'] );
+			if ( '' !== $setup_url ) {
+				echo ' <a href="' . esc_url( $setup_url ) . '">' . esc_html__( 'Set up sharing', 'pressqueue' ) . '</a>';
+			}
+			echo '</p>';
 			echo '<p class="pq-ed-small pq-ed-muted">' . esc_html__( 'Based on the last saved version of this post.', 'pressqueue' ) . '</p></div>';
 			return;
 		}
@@ -1072,19 +1077,19 @@ final class PostControlsController {
 	 */
 	private static function rest_permission_for_post( int $post_id ) {
 		if ( function_exists( 'is_user_logged_in' ) && ! is_user_logged_in() ) {
-			return self::rest_error( 'unauthenticated', 'Authentication is required.', 401 );
+			return self::rest_error( 'unauthenticated', __( 'You are logged out. Log in again, then try again.', 'pressqueue' ), 401 );
 		}
 
 		if ( ! function_exists( 'get_post' ) || ! ( get_post( $post_id ) instanceof \WP_Post ) ) {
-			return self::rest_error( 'not_found', 'Post does not exist.', 404 );
+			return self::rest_error( 'not_found', __( 'This post no longer exists.', 'pressqueue' ), 404 );
 		}
 
 		if ( ! PostControlAuthorization::is_supported_post( $post_id ) ) {
-			return self::rest_error( 'invalid_post_type', 'PressQueue controls are not supported for this post type.', 400 );
+			return self::rest_error( 'invalid_post_type', __( 'PressQueue does not share this kind of post.', 'pressqueue' ), 400 );
 		}
 
 		if ( ! PostControlAuthorization::current_user_can_access( $post_id ) ) {
-			return self::rest_error( 'forbidden', 'You are not allowed to edit PressQueue controls for this post.', 403 );
+			return self::rest_error( 'forbidden', __( 'You are not allowed to change social sharing for this post.', 'pressqueue' ), 403 );
 		}
 
 		return true;

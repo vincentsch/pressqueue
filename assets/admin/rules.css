@@ -725,6 +725,15 @@
 	border-left: 4px solid var(--pq-ok);
 }
 
+.pq-admin .pq-test-status .pq-test-mode-hint,
+.pq-admin .pq-test-status .pq-test-mode-action {
+	margin: 8px 0 0;
+}
+
+.pq-admin .notice .pq-test-mode-action {
+	margin: 0 0 10px;
+}
+
 .pq-admin .button.pq-turn-on {
 	min-height: 46px;
 	padding: 0 22px;

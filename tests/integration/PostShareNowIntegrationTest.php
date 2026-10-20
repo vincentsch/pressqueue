@@ -219,7 +219,7 @@ final class PostShareNowIntegrationTest extends WP_UnitTestCase {
 		self::assertTrue( $preview['can_confirm'] );
 		self::assertCount( 2, $preview['shares'] );
 		self::assertSame( array( 'End of the Buffer queue', 'End of the Buffer queue' ), array_column( $preview['shares'], 'when' ) );
-		self::assertSame( '"Post right away" and "Next free queue slot" only work for one channel at a time. So each share goes to the end of its Buffer queue.', $preview['note'] );
+		self::assertSame( '"Post right away" and "Top of the Buffer queue" only work for one channel at a time. So each share goes to the end of its Buffer queue.', $preview['note'] );
 		self::assertSame( 'PressQueue sends this to Buffer for 2 channels:', $this->liveHeading( $post_id ) );
 	}
 

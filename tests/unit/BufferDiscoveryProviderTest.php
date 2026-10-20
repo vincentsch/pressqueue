@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace PressQueue\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use PressQueue\Provider\Buffer\BufferCapabilityCatalog;
 use PressQueue\Provider\Buffer\BufferDiscoveryProvider;
 use PressQueue\Provider\Buffer\BufferGraphqlClient;
 use PressQueue\Provider\ProviderException;
@@ -124,12 +125,37 @@ final class BufferDiscoveryProviderTest extends TestCase {
 		self::assertSame( 'available', $channels[0]->availability );
 		self::assertSame( 2, $channels[0]->capability_document['schema_version'] );
 		self::assertSame( array( 'immediate', 'queue_next', 'queue_end', 'explicit_time', 'draft' ), $channels[0]->capability_document['delivery']['schedule_slots'] );
-		self::assertSame( 280, $channels[0]->capability_document['delivery']['max_text_characters'] );
+		self::assertSame( 500, $channels[0]->capability_document['delivery']['max_text_characters'] );
 		self::assertTrue( $channels[0]->capability_document['delivery']['text'] );
 		self::assertSame( 1, $channels[0]->capability_document['delivery']['image']['max_items'] );
 		self::assertSame( 'unsupported', $channels[1]->availability );
 		self::assertSame( 'missing_manage_updates', $channels[1]->unavailable_reason );
 		self::assertFalse( $channels[1]->capability_document['delivery']['text'] );
+	}
+
+	public function test_text_limits_follow_buffer_documentation_for_each_network(): void {
+		$catalog = new BufferCapabilityCatalog();
+		$limits  = array();
+
+		foreach ( array( 'bluesky', 'facebook', 'linkedin', 'threads', 'twitter' ) as $service ) {
+			$limits[ $service ] = $catalog->capability_for_service( $service )['delivery']['max_text_characters'];
+		}
+
+		self::assertSame(
+			array(
+				'bluesky'  => 300,
+				'facebook' => 5000,
+				'linkedin' => 3000,
+				'threads'  => 500,
+				'twitter'  => 280,
+			),
+			$limits
+		);
+
+		self::assertSame( 500, $catalog->capability_for_service( 'mastodon', array( 'maxCharacters' => 20000 ) )['delivery']['max_text_characters'] );
+		self::assertSame( 450, $catalog->capability_for_service( 'mastodon', array( 'maxCharacters' => 450 ) )['delivery']['max_text_characters'] );
+		self::assertFalse( $catalog->capability_for_service( 'mastodon' )['supported'] );
+		self::assertSame( 0, $catalog->capability_for_service( 'instagram' )['delivery']['max_text_characters'] );
 	}
 
 	public function test_provider_failures_are_classified_without_raw_body(): void {

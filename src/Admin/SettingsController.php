@@ -69,7 +69,7 @@ final class SettingsController {
 		echo '<div class="pq-card"><div class="pq-section">';
 		echo '<h2>' . esc_html__( 'New posts', 'pressqueue' ) . '</h2>';
 		echo '<div class="pq-checks">';
-		echo '<label><input type="radio" name="new_post_sharing" value="automatic" ' . checked( $new_posts, 'automatic', false ) . ' /><span><span class="pq-check-title">' . esc_html__( 'Share automatically when a rule matches', 'pressqueue' ) . '</span><span class="pq-muted">' . esc_html__( 'Writers can switch sharing off for a single post in the editor.', 'pressqueue' ) . '</span></span></label>';
+		echo '<label><input type="radio" name="new_post_sharing" value="automatic" ' . checked( $new_posts, 'automatic', false ) . ' /><span><span class="pq-check-title">' . esc_html__( 'Share automatically when a rule matches', 'pressqueue' ) . '</span><span class="pq-muted">' . esc_html__( "Administrators can switch sharing off for a single post in the editor. Other roles can when their role has PressQueue's post sharing permission.", 'pressqueue' ) . '</span></span></label>';
 		echo '<label><input type="radio" name="new_post_sharing" value="opt_in" ' . checked( $new_posts, 'opt_in', false ) . ' /><span><span class="pq-check-title">' . esc_html__( 'Only share posts where "Share this post" is switched on', 'pressqueue' ) . '</span><span class="pq-muted">' . esc_html__( 'New posts start with sharing switched off. Good for sites where only some posts belong on social media. Existing posts are not changed.', 'pressqueue' ) . '</span></span></label>';
 		echo '</div></div></div>';
 

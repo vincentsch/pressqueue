@@ -201,7 +201,7 @@ final class BatchQueueService {
 				'failed',
 				array(
 					'code'           => 'batch_handoff_failed',
-					'message'        => SafeOperatorError::message( $throwable ),
+					'message'        => SafeOperatorError::stored_label( $throwable ),
 					'schema_version' => 1,
 				)
 			);

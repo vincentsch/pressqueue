@@ -116,6 +116,8 @@ final class PostSharingSummary {
 		}
 
 		$will_share = array() !== $channels;
+		$kept_off   = $will_share ? '' : self::kept_off_sentence( $decisions, $summary );
+		$not_set_up = ! $will_share && '' === $kept_off && ! Ui::has_sharing_rule_on();
 		$details    = '';
 		if ( $will_share ) {
 			$timings = array_unique( array_column( $channels, 'timing' ) );
@@ -129,11 +131,12 @@ final class PostSharingSummary {
 			'channels'   => $channels,
 			'details'    => $details,
 			'heading'    => self::heading( $trigger, self::current_mode() ),
-			'kept_off'   => $will_share ? '' : self::kept_off_sentence( $decisions, $summary ),
+			'kept_off'   => $kept_off,
 			'left_out'   => $will_share ? self::left_out_channels( $decisions, $shared_ids, $summary ) : array(),
 			'message'    => $message,
-			'reason'     => $will_share ? '' : self::not_shared_reason( $decisions, $summary ),
+			'reason'     => $will_share ? '' : ( $not_set_up ? __( 'Social sharing is not set up yet.', 'pressqueue' ) : self::not_shared_reason( $decisions, $summary ) ),
 			'rule'       => self::rule_facts( $rule_id ),
+			'setup_url'  => $not_set_up ? Ui::setup_url() : '',
 			'trigger'    => $trigger,
 			'will_share' => $will_share,
 		);

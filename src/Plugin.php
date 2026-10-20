@@ -13,6 +13,7 @@ use PressQueue\Admin\AdminScreens;
 use PressQueue\Admin\AttentionNotice;
 use PressQueue\Admin\PluginLinks;
 use PressQueue\Admin\PostListColumn;
+use PressQueue\Admin\RuntimeNotice;
 use PressQueue\Batch\BatchQueueService;
 use PressQueue\Planning\EventCollector;
 use PressQueue\Privacy\PersonalDataEraser;
@@ -23,7 +24,6 @@ use PressQueue\Privacy\RetentionStateStore;
 use PressQueue\Runtime\RuntimeDisabledLatch;
 use PressQueue\Scheduler\ActionSchedulerQueue;
 use PressQueue\Security\Capabilities;
-use PressQueue\Security\SafeOperatorError;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\SchemaMigrator;
 use PressQueue\Storage\SchemaStatus;
@@ -107,6 +107,7 @@ final class Plugin {
 		AdminScreens::register_hooks();
 		PostListColumn::register_hooks();
 		AttentionNotice::register_hooks();
+		RuntimeNotice::register_hooks();
 		PluginLinks::register_hooks();
 		\PressQueue\SocialCard\Hooks::register_hooks();
 		PersonalDataExporter::register_hooks();
@@ -165,9 +166,7 @@ final class Plugin {
 			self::guard_runtime_state();
 		} catch ( Throwable $throwable ) {
 			RuntimeDisabledLatch::close();
-			if ( function_exists( 'pressqueue_register_admin_notice' ) ) {
-				pressqueue_register_admin_notice( __( 'PressQueue could not finish its database upgrade. Delivery remains disabled. Check the migration status in PressQueue settings.', 'pressqueue' ) );
-			}
+			RuntimeNotice::add( RuntimeNotice::UPGRADE_FAILED );
 		}
 	}
 
@@ -194,26 +193,16 @@ final class Plugin {
 
 	/**
 	 * Close runtime delivery when privacy state is malformed.
+	 *
+	 * A post that could not be checked is reported by RuntimeNotice from its stored marker.
 	 */
 	public static function guard_runtime_state(): void {
-		$failure = get_option( 'pressqueue_last_planning_failure', null );
-		if ( is_array( $failure ) && function_exists( 'pressqueue_register_admin_notice' ) ) {
-			/* translators: %d: WordPress post ID. */
-			pressqueue_register_admin_notice( sprintf( __( 'PressQueue could not finish planning post #%d. Open that post and preview it before sending a manual batch. Temporary failures are retried up to five times.', 'pressqueue' ), (int) ( $failure['post_id'] ?? 0 ) ) );
-		}
 		try {
 			self::assert_runtime_state_valid();
 		} catch ( Throwable $throwable ) {
+			unset( $throwable );
 			RuntimeDisabledLatch::close();
-
-			if ( function_exists( 'pressqueue_register_admin_notice' ) ) {
-				pressqueue_register_admin_notice(
-					SafeOperatorError::message(
-						$throwable,
-						__( 'Stored PressQueue runtime or privacy state is invalid. Runtime delivery remains disabled until the stored option is repaired.', 'pressqueue' )
-					)
-				);
-			}
+			RuntimeNotice::add( RuntimeNotice::STATE_INVALID );
 		}
 	}
 

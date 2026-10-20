@@ -722,7 +722,16 @@
 			return el(
 				'div',
 				{ className: 'pq-ed-goes pq-ed-goes--none', 'aria-live': 'polite' },
-				el( 'p', null, el( 'strong', null, __( 'Not shared when you publish.', 'pressqueue' ) ), ' ', display.reason )
+				el(
+					'p',
+					null,
+					el( 'strong', null, __( 'Not shared when you publish.', 'pressqueue' ) ),
+					' ',
+					display.reason,
+					// Before any sharing rule is on, people who manage rules get a way to set it up.
+					display.setup_url ? ' ' : null,
+					display.setup_url ? el( 'a', { href: display.setup_url }, __( 'Set up sharing', 'pressqueue' ) ) : null
+				)
 			);
 		}
 

@@ -69,14 +69,14 @@ namespace PressQueue\Tests\Unit {
 		}
 
 		public function test_summary_names_the_network_and_its_limits(): void {
-			self::assertSame( 'LinkedIn · up to 280 characters with the link · 1 image', ChannelStatus::summary( $this->channel( 'linkedin' ) ) );
+			self::assertSame( 'LinkedIn · up to 3000 characters with the link · 1 image', ChannelStatus::summary( $this->channel( 'linkedin' ) ) );
 			self::assertSame( 'X · up to 280 characters with the link · 1 image', ChannelStatus::summary( $this->channel( 'twitter' ) ) );
 		}
 
 		public function test_mastodon_summary_explains_the_lower_limit(): void {
-			$channel = $this->channel( 'mastodon', 'available', array(), array( 'maxCharacters' => 500 ) );
+			$channel = $this->channel( 'mastodon', 'available', array(), array( 'maxCharacters' => 5000 ) );
 
-			self::assertSame( 'Mastodon · up to 280 characters with the link · 1 image. PressQueue uses the lower of the server limit and 280.', ChannelStatus::summary( $channel ) );
+			self::assertSame( 'Mastodon · up to 500 characters with the link · 1 image. PressQueue uses the lower of the server limit and 500.', ChannelStatus::summary( $channel ) );
 
 			$small = $this->channel( 'mastodon', 'available', array(), array( 'maxCharacters' => 200 ) );
 			self::assertStringContainsString( 'up to 200 characters', ChannelStatus::summary( $small ) );
