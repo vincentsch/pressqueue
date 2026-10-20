@@ -91,6 +91,20 @@ final class MediaResolver {
 	}
 
 	/**
+	 * Return the image mode that applies to one post: its own choice, else the rule's.
+	 *
+	 * @param RuleRecord          $rule Rule.
+	 * @param array<string,mixed> $control_bundle Post sharing settings.
+	 * @return string
+	 */
+	public static function effective_mode( RuleRecord $rule, array $control_bundle ): string {
+		$control = isset( $control_bundle['media'] ) && is_array( $control_bundle['media'] ) ? $control_bundle['media'] : array();
+		$mode    = isset( $control['mode'] ) && is_string( $control['mode'] ) ? $control['mode'] : 'inherit';
+
+		return 'inherit' === $mode ? (string) ( $rule->media_policy['mode'] ?? 'none' ) : $mode;
+	}
+
+	/**
 	 * Resolve media policy.
 	 *
 	 * @param RuleRecord      $rule Rule.
@@ -101,17 +115,15 @@ final class MediaResolver {
 		$control = isset( $event->control_bundle['media'] ) && is_array( $event->control_bundle['media'] )
 			? $event->control_bundle['media']
 			: array( 'mode' => 'inherit' );
-		$mode    = isset( $control['mode'] ) && is_string( $control['mode'] ) ? $control['mode'] : 'inherit';
-
-		if ( 'inherit' === $mode ) {
-			$mode = (string) ( $rule->media_policy['mode'] ?? 'none' );
-		}
+		$mode    = self::effective_mode( $rule, $event->control_bundle );
 
 		if ( 'none' === $mode ) {
 			return new MediaPolicy( 'none' );
 		}
 
 		if ( 'social_card' === $mode ) {
+			// CardStore draws cards for published posts only, so an unpublished
+			// post previews as text and link until it goes live.
 			$card = CardStore::for_post( $event->post_id );
 
 			return null === $card ? new MediaPolicy( 'none' ) : new MediaPolicy( 'social_card', array( $card['attachment_id'] ) );

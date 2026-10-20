@@ -54,6 +54,12 @@ final class CardStore {
 			return null;
 		}
 
+		// A stored card is a public file, so only published posts get one.
+		// Drafts, scheduled and private posts keep their titles to themselves.
+		if ( ! self::may_store( $post ) ) {
+			$create = false;
+		}
+
 		$title = self::title( $post );
 		if ( '' === $title ) {
 			return null;
@@ -70,6 +76,32 @@ final class CardStore {
 		self::$memo[ $post_id ] = $card;
 
 		return $card;
+	}
+
+	/**
+	 * Whether a post may get a stored card.
+	 *
+	 * @param \WP_Post $post Post.
+	 * @return bool
+	 */
+	public static function may_store( \WP_Post $post ): bool {
+		return 'publish' === $post->post_status;
+	}
+
+	/**
+	 * Whether a post that has no stored card yet will get one when it is published.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return bool
+	 */
+	public static function will_draw_when_published( int $post_id ): bool {
+		$post = function_exists( 'get_post' ) ? get_post( $post_id ) : null;
+
+		return $post instanceof \WP_Post
+			&& 'attachment' !== $post->post_type
+			&& ! self::may_store( $post )
+			&& '' !== self::title( $post )
+			&& Renderer::is_supported();
 	}
 
 	/**

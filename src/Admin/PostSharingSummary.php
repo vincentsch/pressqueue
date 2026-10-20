@@ -13,6 +13,8 @@ use PressQueue\Batch\PostShareNowService;
 use PressQueue\Delivery\DeliveryQueryRepository;
 use PressQueue\Editorial\PostControlMetadata;
 use PressQueue\Editorial\PostControlPreviewService;
+use PressQueue\Planning\MediaResolver;
+use PressQueue\SocialCard\CardStore;
 use PressQueue\Storage\Database;
 use PressQueue\Storage\Record\ChannelRecord;
 use PressQueue\Storage\Record\DecisionRecord;
@@ -75,6 +77,8 @@ final class PostSharingSummary {
 			'url_length'    => 0,
 		);
 		$rule_id    = '';
+		$post_id    = (int) ( $event['post_id'] ?? 0 );
+		$card_later = array();
 
 		foreach ( $deliveries as $delivery ) {
 			if ( ! is_array( $delivery ) || ! isset( $delivery['payload_preview'] ) || ! is_array( $delivery['payload_preview'] ) ) {
@@ -89,7 +93,7 @@ final class PostSharingSummary {
 			$channels[]   = array_merge(
 				self::channel_identity( $channel_id, $service, null === $channel ? (string) ( $payload['channel_label'] ?? '' ) : ActivitySummary::channel_display_name( $channel ) ),
 				array(
-					'image'  => self::image_text( $payload ),
+					'image'  => self::image_text( $payload, self::card_comes_later( $post_id, (string) ( $payload['rule_public_id'] ?? '' ), $card_later ) ),
 					'timing' => self::timing_text( $payload ),
 				)
 			);
@@ -646,6 +650,35 @@ final class PostSharingSummary {
 	}
 
 	/**
+	 * Whether an unpublished post previews without its social image because the image is drawn when it goes live.
+	 *
+	 * @param int                $post_id Post ID.
+	 * @param string             $rule_public_id Rule public ID.
+	 * @param array<string,bool> $cache Answers per rule in this preview.
+	 * @return bool
+	 */
+	private static function card_comes_later( int $post_id, string $rule_public_id, array &$cache ): bool {
+		if ( $post_id <= 0 || '' === $rule_public_id ) {
+			return false;
+		}
+
+		if ( ! array_key_exists( $rule_public_id, $cache ) ) {
+			try {
+				$rule = ( new RuleRepository() )->find_by_public_id( $rule_public_id );
+			} catch ( \Throwable $throwable ) {
+				unset( $throwable );
+				$rule = null;
+			}
+
+			$cache[ $rule_public_id ] = null !== $rule
+				&& 'social_card' === MediaResolver::effective_mode( $rule, PostControlMetadata::read_for_post( $post_id ) )
+				&& CardStore::will_draw_when_published( $post_id );
+		}
+
+		return $cache[ $rule_public_id ];
+	}
+
+	/**
 	 * Return the newest runtime event recorded for a post.
 	 *
 	 * @param int $post_id Post ID.
@@ -732,15 +765,16 @@ final class PostSharingSummary {
 	 * Return the image of one share in words.
 	 *
 	 * @param array<string,mixed> $payload Payload preview.
+	 * @param bool                $card_comes_later Whether the post gets its social image when it is published.
 	 * @return string
 	 */
-	private static function image_text( array $payload ): string {
+	private static function image_text( array $payload, bool $card_comes_later = false ): string {
 		$media = isset( $payload['media_snapshot'] ) && is_array( $payload['media_snapshot'] ) ? $payload['media_snapshot'] : array();
 		$items = isset( $media['items'] ) && is_array( $media['items'] ) ? $media['items'] : array();
 		$mode  = is_string( $media['mode'] ?? null ) ? $media['mode'] : 'none';
 
 		if ( array() === $items ) {
-			return Labels::media_phrase( 'none' );
+			return Labels::media_phrase( $card_comes_later ? 'social_card' : 'none' );
 		}
 
 		if ( 'post_media' === $mode ) {

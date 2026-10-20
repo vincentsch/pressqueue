@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace PressQueue\Tests\Integration;
 
+use PressQueue\Admin\PostSharingSummary;
 use PressQueue\Planning\EventNormalizer;
 use PressQueue\Planning\Planner;
 use PressQueue\Runtime\RuntimeDisabledLatch;
@@ -143,6 +144,52 @@ final class SocialCardIntegrationTest extends PressQueueIntegrationTestCase {
 		self::assertSame( 'image/jpeg', $media['items'][0]['mime_type'] );
 		self::assertTrue( CardStore::is_card( (int) $media['items'][0]['attachment_id'] ) );
 		self::assertStringContainsString( '/pressqueue/social/', $media['items'][0]['url'] );
+	}
+
+	public function test_unpublished_posts_get_no_public_card_until_they_go_live(): void {
+		$destination = $this->enabledDestination();
+		$rule        = $this->createEnabledRule( $this->includeRuleInput( $destination['channel_public_id'] ) );
+
+		foreach ( array( 'draft', 'pending', 'private', 'future' ) as $status ) {
+			$post_id = (int) self::factory()->post->create(
+				array(
+					'post_content' => 'Body text',
+					'post_date'    => 'future' === $status ? gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS ) : '',
+					'post_status'  => $status,
+					'post_title'   => 'Secret plans for ' . $status,
+				)
+			);
+
+			self::assertNull( CardStore::for_post( $post_id ), $status );
+			self::assertSame( array(), get_children( array( 'post_parent' => $post_id, 'post_type' => 'attachment' ) ), $status );
+			self::assertTrue( CardStore::will_draw_when_published( $post_id ), $status );
+
+			$normalizer = new EventNormalizer();
+			$event      = $normalizer->from_post_id( $post_id, 'preview', 'integration', 'first_publish', $normalizer->metadata_allowlist_for_rules( array( $rule ) ) );
+			self::assertNotNull( $event, $status );
+			$result = ( new Planner() )->preview_as_new_publication( $event, null, false )->to_array();
+			self::assertNotSame( array(), $result['deliveries'], $status );
+			foreach ( $result['deliveries'] as $delivery ) {
+				self::assertSame( 'none', $delivery['payload_preview']['media_snapshot']['mode'] ?? null, $status );
+			}
+			self::assertSame( array(), get_children( array( 'post_parent' => $post_id, 'post_type' => 'attachment' ) ), $status . ' after preview' );
+
+			$summary = PostSharingSummary::from_preview( $result );
+			self::assertStringContainsString( 'with a social image of the title', (string) wp_json_encode( $summary ), $status );
+		}
+
+		$post_id = (int) self::factory()->post->create(
+			array(
+				'post_content' => 'Body text',
+				'post_status'  => 'draft',
+				'post_title'   => 'Published at last',
+			)
+		);
+		self::assertNull( CardStore::for_post( $post_id ) );
+		wp_publish_post( $post_id );
+		CardStore::flush_memo();
+		self::assertNotNull( CardStore::for_post( $post_id ) );
+		self::assertFalse( CardStore::will_draw_when_published( $post_id ) );
 	}
 
 	public function test_link_previews_hand_the_card_to_the_seo_framework(): void {

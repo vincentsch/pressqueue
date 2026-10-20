@@ -43,7 +43,8 @@ final class SharingOffLabelsTest extends TestCase {
 		self::assertSame( 'with a social image of the title', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'social_card', 'items' => array( $image ) ) ) ) );
 		self::assertSame( 'with the featured image', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'featured_image_optional', 'items' => array( $image ) ) ) ) );
 		self::assertSame( 'with 1 chosen image', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'post_media', 'items' => array( $image ) ) ) ) );
-		self::assertSame( 'without an image', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'social_card', 'items' => array() ) ) ) );
+		self::assertSame( 'without an image', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'none', 'items' => array() ) ) ) );
+		self::assertSame( 'with a social image of the title', $image_text->invoke( null, array( 'media_snapshot' => array( 'mode' => 'none', 'items' => array() ) ), true ), 'an unpublished post gets its image when it goes live' );
 	}
 
 	public function test_only_an_exclusion_without_a_rule_counts_as_the_post_switch(): void {
