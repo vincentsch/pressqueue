@@ -229,10 +229,11 @@ final class SafeMediaUrlProbe {
 			$method,
 			$url,
 			array(
-				'headers'                => array(),
+				'headers'                => array( 'Accept' => 'image/*' ),
 				'limit_response_size'    => self::MAX_TRANSFER_BYTES,
 				'pressqueue_resolved_ip' => $resolved_ip,
 				'redirection'            => 0,
+				'reject_unsafe_urls'     => true,
 				'sslverify'              => true,
 				'timeout'                => self::TIMEOUT_SECONDS,
 			)
@@ -273,7 +274,7 @@ final class SafeMediaUrlProbe {
 	}
 
 	/**
-	 * Issue a pinned HTTPS request to the validated address.
+	 * Use the WordPress HTTP API with a pinned cURL connection.
 	 *
 	 * @param string              $method Method.
 	 * @param string              $url URL.
@@ -281,130 +282,100 @@ final class SafeMediaUrlProbe {
 	 * @return array<string,mixed>
 	 */
 	private function pinned_transport( string $method, string $url, array $args ): array {
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Needed for a pinned socket transport.
-		$parts = parse_url( $url );
-		if ( ! is_array( $parts ) || ! isset( $parts['host'] ) || ! is_string( $parts['host'] ) ) {
-			throw new ValidationException( 'Media URL is invalid.' );
-		}
-
-		$host        = $parts['host'];
 		$resolved_ip = isset( $args['pressqueue_resolved_ip'] ) && is_string( $args['pressqueue_resolved_ip'] ) ? $args['pressqueue_resolved_ip'] : '';
 		if ( '' === $resolved_ip || ! $this->is_public_ip( $resolved_ip ) ) {
 			throw new ValidationException( 'Media URL resolved address is unsafe.' );
 		}
 
-		if ( class_exists( '\\WP_HTTP_Proxy' ) ) {
-			$proxy = new \WP_HTTP_Proxy();
-			if ( $proxy->is_enabled() && $proxy->send_through_proxy( $url ) ) {
-				throw new ValidationException( 'Pinned media URL checks cannot use the configured HTTP proxy.' );
+		if ( ! defined( 'CURLOPT_CONNECT_TO' ) || ! class_exists( '\WpOrg\Requests\Transport\Curl' ) || ! \WpOrg\Requests\Transport\Curl::test( array( 'ssl' => true ) ) ) {
+			throw new ValidationException( 'Media URL checks require address pinning with cURL.' );
+		}
+
+		// Refuse proxies rather than rely on their handling of a pinned destination.
+		$proxy = new \WP_HTTP_Proxy();
+		if ( $proxy->is_enabled() && $proxy->send_through_proxy( $url ) ) {
+			throw new ValidationException( 'Pinned media URL checks cannot use the configured HTTP proxy.' );
+		}
+
+		$args['method']                 = $method;
+		$args['user-agent']             = 'PressQueue-MediaProbe/1.0';
+		$args['pressqueue_probe_token'] = new \stdClass();
+		$token                          = $args['pressqueue_probe_token'];
+		$address                        = $this->curl_address( $resolved_ip );
+		// Requests normalizes host case, default ports and paths before its hook.
+		$request_url = ( new \WpOrg\Requests\Iri( $url ) )->uri;
+
+		// Select WordPress's cURL transport before any connection can be opened.
+		// Checking for cURL alone would still allow a different Requests transport.
+		$select_transport = static function ( $normalized_url, $headers, $data, $type, array &$options ) use ( $request_url ): void {
+			if ( $request_url !== $normalized_url || 'PressQueue-MediaProbe/1.0' !== ( $options['useragent'] ?? '' ) ) {
+				return;
 			}
+
+			$options['transport']        = \WpOrg\Requests\Transport\Curl::class;
+			$options['verify']           = defined( 'ABSPATH' ) && defined( 'WPINC' ) ? ABSPATH . WPINC . '/certificates/ca-bundle.crt' : true;
+			$options['verifyname']       = true;
+			$options['follow_redirects'] = false;
+			$options['timeout']          = self::TIMEOUT_SECONDS;
+			$options['connect_timeout']  = self::TIMEOUT_SECONDS;
+			$options['max_bytes']        = self::MAX_TRANSFER_BYTES;
+		};
+		$pin_address      = static function ( $handle, array $request_args, string $request_url ) use ( $url, $address, $token ): void {
+			if ( $url !== $request_url || ( $request_args['pressqueue_probe_token'] ?? null ) !== $token ) {
+				return;
+			}
+
+			// Keep the hostname in the URL for Host, SNI and certificate checks.
+			// A fresh direct connection also avoids cached connections and env proxies.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt_array -- Only pins the WordPress HTTP API handle; WordPress sends the request.
+			if ( ! curl_setopt_array(
+				$handle,
+				array(
+					// Match any hostname on port 443, including cURL's normalized spelling.
+					CURLOPT_CONNECT_TO        => array( ':443:' . $address . ':443' ),
+					CURLOPT_PROXY             => '',
+					CURLOPT_FRESH_CONNECT     => true,
+					CURLOPT_FORBID_REUSE      => true,
+					CURLOPT_FOLLOWLOCATION    => false,
+					CURLOPT_SSL_VERIFYPEER    => true,
+					CURLOPT_SSL_VERIFYHOST    => 2,
+					CURLOPT_CONNECTTIMEOUT_MS => self::TIMEOUT_SECONDS * 1000,
+					CURLOPT_TIMEOUT_MS        => self::TIMEOUT_SECONDS * 1000,
+				)
+			) ) {
+				throw new ValidationException( 'Media URL probe transport failed.' );
+			}
+		};
+
+		add_action( 'requests-requests.before_request', $select_transport, PHP_INT_MAX, 5 );
+		add_action( 'http_api_curl', $pin_address, PHP_INT_MAX, 3 );
+		try {
+			$response = wp_safe_remote_request( $url, $args );
+		} finally {
+			remove_action( 'requests-requests.before_request', $select_transport, PHP_INT_MAX );
+			remove_action( 'http_api_curl', $pin_address, PHP_INT_MAX );
 		}
-		if ( ! function_exists( 'stream_socket_client' ) ) {
-			throw new ValidationException( 'Media URL checks require TLS socket support.' );
-		}
 
-		$context = stream_context_create(
-			array(
-				'ssl' => array(
-					'cafile'           => $this->certificate_authority_file(),
-					'SNI_enabled'      => true,
-					'SNI_server_name'  => $host,
-					'peer_name'        => $host,
-					'verify_peer'      => true,
-					'verify_peer_name' => true,
-				),
-			)
-		);
-
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Raw socket failures are converted to validation failures below.
-		$socket = @stream_socket_client( 'tls://' . $this->socket_address( $resolved_ip ) . ':443', $errno, $error, self::TIMEOUT_SECONDS, STREAM_CLIENT_CONNECT, $context );
-		unset( $errno, $error );
-
-		if ( ! is_resource( $socket ) ) {
+		if ( is_wp_error( $response ) || ! is_array( $response ) ) {
 			throw new ValidationException( 'Media URL probe transport failed.' );
 		}
 
-		stream_set_timeout( $socket, self::TIMEOUT_SECONDS );
-
-		$path = isset( $parts['path'] ) && is_string( $parts['path'] ) && '' !== $parts['path'] ? $parts['path'] : '/';
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- Raw socket writes pin the validated DNS result.
-		fwrite(
-			$socket,
-			$method . ' ' . $path . " HTTP/1.1\r\n"
-			. 'Host: ' . $host . "\r\n"
-			. "Accept: image/*\r\n"
-			. "User-Agent: PressQueue-MediaProbe/1.0\r\n"
-			. "Connection: close\r\n\r\n"
-		);
-
-		$deadline           = microtime( true ) + self::TIMEOUT_SECONDS;
-		$raw_headers        = '';
-		$raw_headers_length = 0;
-		while ( ! feof( $socket ) && ! str_contains( $raw_headers, "\r\n\r\n" ) && $raw_headers_length <= 32768 && microtime( true ) < $deadline ) {
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Raw socket reads pin the validated DNS result.
-			$chunk = fread( $socket, 1024 );
-			if ( false === $chunk || '' === $chunk ) {
-				break;
-			}
-
-			$raw_headers        .= $chunk;
-			$raw_headers_length += strlen( $chunk );
-		}
-
-		if ( ! str_contains( $raw_headers, "\r\n\r\n" ) ) {
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Raw socket reads pin the validated DNS result.
-			fclose( $socket );
-			throw new ValidationException( 'Media URL probe response headers are invalid.' );
-		}
-
-		list( $header_block, $body ) = explode( "\r\n\r\n", $raw_headers, 2 );
-		$body                        = 'GET' === $method ? $body : '';
-		$body_length                 = strlen( $body );
-
-		while ( 'GET' === $method && ! feof( $socket ) && $body_length < self::MAX_TRANSFER_BYTES && microtime( true ) < $deadline ) {
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Raw socket reads pin the validated DNS result.
-			$chunk = fread( $socket, min( 8192, self::MAX_TRANSFER_BYTES - $body_length ) );
-			if ( false === $chunk || '' === $chunk ) {
-				break;
-			}
-
-			$body        .= $chunk;
-			$body_length += strlen( $chunk );
-		}
-
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Raw socket reads pin the validated DNS result.
-		fclose( $socket );
-
-		$headers     = $this->parse_headers( $header_block );
-		$status      = $this->parse_status( $header_block );
-		$size        = isset( $headers['content-length'] ) ? (int) $headers['content-length'] : ( '' === $body ? 0 : strlen( $body ) );
-		$header_mime = isset( $headers['content-type'] ) ? strtok( $headers['content-type'], ';' ) : '';
+		$body        = 'GET' === $method ? substr( wp_remote_retrieve_body( $response ), 0, self::MAX_TRANSFER_BYTES ) : '';
+		$length      = wp_remote_retrieve_header( $response, 'content-length' );
+		$header_mime = wp_remote_retrieve_header( $response, 'content-type' );
+		$header_mime = is_string( $header_mime ) ? strtok( $header_mime, ';' ) : '';
 		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Invalid image bytes are handled as an unconfirmed image below.
 		$image        = '' === $body ? false : @getimagesizefromstring( $body );
 		$sniffed_mime = is_array( $image ) ? strtolower( $image['mime'] ) : '';
 		$mime_type    = is_string( $header_mime ) && '' !== $header_mime ? strtolower( $header_mime ) : $sniffed_mime;
 
 		return array(
-			'body'      => $body,
-			'byte_size' => $size,
+			'byte_size' => '' !== $length ? (int) $length : strlen( $body ),
 			'height'    => is_array( $image ) ? (int) $image[1] : 0,
 			'mime_type' => $mime_type,
-			'status'    => $status,
+			'status'    => (int) wp_remote_retrieve_response_code( $response ),
 			'width'     => is_array( $image ) ? (int) $image[0] : 0,
 		);
-	}
-
-	/**
-	 * Use WordPress's bundled trust store for the pinned TLS connection.
-	 *
-	 * @return string
-	 */
-	private function certificate_authority_file(): string {
-		if ( defined( 'ABSPATH' ) && defined( 'WPINC' ) ) {
-			return ABSPATH . WPINC . '/certificates/ca-bundle.crt';
-		}
-		$file = ini_get( 'openssl.cafile' );
-		return false === $file ? '' : $file;
 	}
 
 	/**
@@ -416,6 +387,11 @@ final class SafeMediaUrlProbe {
 	private function is_public_ip( string $address ): bool {
 		$address = $this->normalize_ip( $address );
 		if ( false === filter_var( $address, FILTER_VALIDATE_IP ) ) {
+			return false;
+		}
+
+		// Only global unicast IPv6 can be a public image destination.
+		if ( false !== filter_var( $address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) && ! $this->ip_in_cidr( $address, '2000::/3' ) ) {
 			return false;
 		}
 
@@ -473,6 +449,11 @@ final class SafeMediaUrlProbe {
 	 */
 	private function normalize_host( string $host ): string {
 		$host = strtolower( rtrim( trim( $host ), '.' ) );
+		// Reject alternate numeric IP spellings that HTTP clients may interpret as literals.
+		if ( 1 === preg_match( '/^(?:(?:0x[0-9a-f]+|[0-9]+)\.)*(?:0x[0-9a-f]+|[0-9]+)$/', $host ) ) {
+			throw new ValidationException( 'Media URL host is invalid.' );
+		}
+
 		if ( '' === $host || strlen( $host ) > 253 || 1 !== preg_match( '/^[a-z0-9.-]+$/', $host ) ) {
 			throw new ValidationException( 'Media URL host is invalid.' );
 		}
@@ -511,48 +492,13 @@ final class SafeMediaUrlProbe {
 	}
 
 	/**
-	 * Return a socket-safe address.
+	 * Format an address for a cURL connection target.
 	 *
 	 * @param string $address IP address.
 	 * @return string
 	 */
-	private function socket_address( string $address ): string {
+	private function curl_address( string $address ): string {
 		return false !== filter_var( $address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ? '[' . $address . ']' : $address;
-	}
-
-	/**
-	 * Parse response headers.
-	 *
-	 * @param string $header_block Header block.
-	 * @return array<string,string>
-	 */
-	private function parse_headers( string $header_block ): array {
-		$headers = array();
-		foreach ( explode( "\r\n", $header_block ) as $index => $line ) {
-			if ( 0 === $index || ! str_contains( $line, ':' ) ) {
-				continue;
-			}
-
-			list( $name, $value )                   = explode( ':', $line, 2 );
-			$headers[ strtolower( trim( $name ) ) ] = trim( $value );
-		}
-
-		return $headers;
-	}
-
-	/**
-	 * Parse HTTP status from the response.
-	 *
-	 * @param string $header_block Header block.
-	 * @return int
-	 */
-	private function parse_status( string $header_block ): int {
-		$line = strtok( $header_block, "\r\n" );
-		if ( ! is_string( $line ) || 1 !== preg_match( '/^HTTP\/\d(?:\.\d)?\s+(\d{3})\b/', $line, $matches ) ) {
-			return 0;
-		}
-
-		return (int) $matches[1];
 	}
 
 	/**
