@@ -139,7 +139,7 @@ if ( ! class_exists( 'wpdb' ) ) {
 	}
 }
 
-$GLOBALS['wp_version']                          = $GLOBALS['wp_version'] ?? '6.8.8';
+$GLOBALS['wp_version']                          = $GLOBALS['wp_version'] ?? '6.9';
 $GLOBALS['pressqueue_test_actions']             = array();
 $GLOBALS['pressqueue_test_hooks']               = array();
 $GLOBALS['pressqueue_test_http_requests']       = array();
@@ -223,7 +223,7 @@ function pressqueue_test_reset_wordpress_stubs(): void {
 	$GLOBALS['pressqueue_test_sites']               = array( 1 );
 	$GLOBALS['pressqueue_test_current_blog_id']     = 1;
 	$GLOBALS['pressqueue_test_timezone']            = 'UTC';
-	$GLOBALS['wp_version']                          = '6.8.8';
+	$GLOBALS['wp_version']                          = '6.9';
 	unset( $GLOBALS['wpdb'] );
 }
 

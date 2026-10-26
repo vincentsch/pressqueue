@@ -84,7 +84,7 @@ final class SocialCardsController {
 		// Show each font in its own face on the font picker.
 		$css = '';
 		foreach ( Catalog::fonts() as $id => $font ) {
-			$css .= '@font-face{font-family:"pq-card-' . $id . '";src:url("' . esc_url_raw( plugins_url( 'assets/social/fonts/' . $font['file'], PRESSQUEUE_FILE ) ) . '") format("truetype");font-display:swap;}';
+			$css .= '@font-face{font-family:"pq-card-' . $id . '";src:url("' . esc_url( plugins_url( 'assets/social/fonts/' . $font['file'], PRESSQUEUE_FILE ) ) . '") format("truetype");font-display:swap;}';
 		}
 		wp_add_inline_style( 'pressqueue-social', $css );
 	}

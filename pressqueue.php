@@ -3,8 +3,8 @@
  * Plugin Name: PressQueue
  * Plugin URI: https://www.pressqueue.com
  * Description: Share your WordPress posts through Buffer, with rules for which posts go where, message previews and an image made from each title.
- * Version: 0.1.0
- * Requires at least: 6.8
+ * Version: 0.1.1
+ * Requires at least: 6.9
  * Requires PHP: 8.1
  * Author: Vincent Schmalbach
  * Author URI: https://www.vincentschmalbach.com
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'PRESSQUEUE_VERSION' ) ) {
-	define( 'PRESSQUEUE_VERSION', '0.1.0' );
+	define( 'PRESSQUEUE_VERSION', '0.1.1' );
 }
 
 if ( ! defined( 'PRESSQUEUE_MINIMUM_PHP' ) ) {
@@ -29,7 +29,7 @@ if ( ! defined( 'PRESSQUEUE_MINIMUM_PHP' ) ) {
 }
 
 if ( ! defined( 'PRESSQUEUE_MINIMUM_WORDPRESS' ) ) {
-	define( 'PRESSQUEUE_MINIMUM_WORDPRESS', '6.8' );
+	define( 'PRESSQUEUE_MINIMUM_WORDPRESS', '6.9' );
 }
 
 if ( ! defined( 'PRESSQUEUE_FILE' ) ) {
@@ -90,7 +90,7 @@ function pressqueue_check_runtime_requirements( $network_wide ) {
 		! isset( $wp_version )
 		|| version_compare( $wp_version, PRESSQUEUE_MINIMUM_WORDPRESS, '<' )
 	) {
-		return __( 'PressQueue requires WordPress 6.8 or newer.', 'pressqueue' );
+		return __( 'PressQueue requires WordPress 6.9 or newer.', 'pressqueue' );
 	}
 
 	if ( $network_wide && function_exists( 'is_multisite' ) && is_multisite() ) {

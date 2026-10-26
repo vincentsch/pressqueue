@@ -90,10 +90,7 @@ final class JsonResponse {
 	 * @param array<string,mixed> $document Document.
 	 */
 	private static function line( array $document ): void {
-		$json = function_exists( 'wp_json_encode' )
-			? wp_json_encode( $document, JSON_UNESCAPED_SLASHES )
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- wp_json_encode() may not be loaded in isolated CLI contexts.
-			: json_encode( $document, JSON_UNESCAPED_SLASHES );
+		$json = wp_json_encode( $document, JSON_UNESCAPED_SLASHES );
 
 		if ( ! is_string( $json ) ) {
 			$json = '{"schema_version":1,"error":{"code":"internal_error","message":"JSON encoding failed.","status":5,"field_errors":[]}}';

@@ -1,7 +1,7 @@
 # PressQueue
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-3858e9)
-![WordPress 6.8 or newer](https://img.shields.io/badge/WordPress-6.8%2B-21759b)
+![WordPress 6.9 or newer](https://img.shields.io/badge/WordPress-6.9%2B-21759b)
 ![PHP 8.1 or newer](https://img.shields.io/badge/PHP-8.1%2B-777bb4)
 
 PressQueue is a free WordPress plugin for Buffer. When you publish a post,
@@ -88,7 +88,7 @@ explains each step. To run PressQueue from a Git checkout, run
 
 ## Requirements
 
-- WordPress 6.8 or newer and PHP 8.1 or newer, with PHP's Sodium extension,
+- WordPress 6.9 or newer and PHP 8.1 or newer, with PHP's Sodium extension,
   which has been part of PHP since 7.2.
 - MySQL 5.7.8 or MariaDB 10.2.3 or newer.
 - A Buffer account. Buffer's free plan works.

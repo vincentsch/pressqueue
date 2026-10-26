@@ -23,7 +23,7 @@ if ( ! is_array( $pressqueue_matrix_options ) ) {
 
 $pressqueue_matrix_root               = dirname( __DIR__ );
 $pressqueue_matrix_php_versions       = pressqueue_matrix_parse_csv_option( $pressqueue_matrix_options['php'] ?? getenv( 'PRESSQUEUE_MATRIX_PHP' ), array( '8.1', '8.2', '8.3', '8.4' ) );
-$pressqueue_matrix_wordpress_versions = pressqueue_matrix_parse_csv_option( $pressqueue_matrix_options['wordpress'] ?? getenv( 'PRESSQUEUE_MATRIX_WORDPRESS' ), array( '6.8.11', '7.1.3' ) );
+$pressqueue_matrix_wordpress_versions = pressqueue_matrix_parse_csv_option( $pressqueue_matrix_options['wordpress'] ?? getenv( 'PRESSQUEUE_MATRIX_WORDPRESS' ), array( '6.9.9', '7.1.3' ) );
 $pressqueue_matrix_dry_run            = array_key_exists( 'dry-run', $pressqueue_matrix_options );
 $pressqueue_matrix_unit_only          = array_key_exists( 'unit-only', $pressqueue_matrix_options );
 $pressqueue_matrix_scratch            = pressqueue_matrix_scratch_dir();

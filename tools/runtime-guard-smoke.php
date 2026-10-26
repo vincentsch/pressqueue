@@ -28,7 +28,7 @@ $GLOBALS['pressqueue_smoke_deactivated']  = array();
 $GLOBALS['pressqueue_smoke_notices']      = array();
 $GLOBALS['pressqueue_smoke_is_multisite'] = 'network' === $scenario;
 $GLOBALS['pressqueue_smoke_is_network_admin'] = 'network' === $scenario;
-$GLOBALS['wp_version']                    = 'wordpress' === $scenario ? '6.7.7' : '6.8.8';
+$GLOBALS['wp_version']                    = 'wordpress' === $scenario ? '6.8.11' : '6.9';
 
 if ( 'network' === $scenario ) {
 	$_GET['action'] = 'activate';
@@ -171,7 +171,7 @@ if ( 'php' === $scenario && version_compare( PHP_VERSION, '8.1', '>=' ) ) {
 
 $expected = array(
 	'php'       => 'PressQueue requires PHP 8.1 or newer.',
-	'wordpress' => 'PressQueue requires WordPress 6.8 or newer.',
+	'wordpress' => 'PressQueue requires WordPress 6.9 or newer.',
 	'network'   => 'PressQueue does not support network activation yet. Activate it per site.',
 	'package'   => '',
 );

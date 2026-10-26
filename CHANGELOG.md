@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 (directory review update)
+
+- Updated Action Scheduler to 4.2.0. WordPress 6.9 or newer is now required,
+  matching the bundled scheduler's supported versions.
+- Sanitize admin header actions and badges before output. Escape the font URLs
+  in social-image settings and use WordPress's JSON encoder for CLI responses.
+- Link to WordPress security-key instructions instead of its salt API.
+
 ## 0.1.0 (2026-10-20)
 
 First public release.

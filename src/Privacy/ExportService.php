@@ -71,7 +71,7 @@ final class ExportService {
 				'generated_at_utc'          => self::rfc3339( $started_at ),
 				'include_rendered_payloads' => $include_rendered_payloads,
 				'page_size'                 => $page_size,
-				'plugin_version'            => defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.0',
+				'plugin_version'            => defined( 'PRESSQUEUE_VERSION' ) ? PRESSQUEUE_VERSION : '0.1.1',
 				'schema_version'            => 1,
 				'site_url_hash'             => $this->site_url_hash(),
 				'snapshot_cutoff_utc'       => self::rfc3339( $started_at ),

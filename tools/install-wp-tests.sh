@@ -5,7 +5,7 @@ DB_NAME=${1:-pressqueue_tests}
 DB_USER=${2:-root}
 DB_PASS=${3:-}
 DB_HOST=${4:-127.0.0.1}
-WP_VERSION=${5:-6.8.8}
+WP_VERSION=${5:-6.9.9}
 SKIP_DB_CREATE=${6:-false}
 
 TMPDIR=${TMPDIR:-/tmp}

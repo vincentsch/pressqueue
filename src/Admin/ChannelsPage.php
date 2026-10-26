@@ -22,7 +22,7 @@ use PressQueue\Storage\Repository\RuleRepository;
  */
 final class ChannelsPage {
 	private const BUFFER_API_URL = 'https://publish.buffer.com/settings/api';
-	private const SALT_URL       = 'https://api.wordpress.org/secret-key/1.1/salt/';
+	private const SALT_HELP_URL  = 'https://developer.wordpress.org/advanced-administration/wordpress/wp-config/#security-keys';
 
 	/**
 	 * Whether the "Add another Buffer account" disclosure starts open.
@@ -307,7 +307,7 @@ final class ChannelsPage {
 		echo '<p class="pq-strong">' . esc_html__( 'PressQueue cannot store a Buffer key on this server yet.', 'pressqueue' ) . '</p>';
 		echo '<p>' . esc_html( self::storage_problem_text( $problem ) ) . '</p>';
 		if ( 'salts' === $problem ) {
-			echo '<p><a href="' . esc_url( self::SALT_URL ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Generate new keys and salts', 'pressqueue' ) . '<span class="screen-reader-text"> ' . esc_html__( '(opens in a new tab)', 'pressqueue' ) . '</span></a></p>';
+			echo '<p><a href="' . esc_url( self::SALT_HELP_URL ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'How to set WordPress keys and salts', 'pressqueue' ) . '<span class="screen-reader-text"> ' . esc_html__( '(opens in a new tab)', 'pressqueue' ) . '</span></a></p>';
 		}
 		echo '</div>';
 	}

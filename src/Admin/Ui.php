@@ -54,7 +54,7 @@ final class Ui {
 	 * @return string
 	 */
 	public static function asset_version( string $relative_path ): string {
-		$version = defined( 'PRESSQUEUE_VERSION' ) ? (string) PRESSQUEUE_VERSION : '0.1.0';
+		$version = defined( 'PRESSQUEUE_VERSION' ) ? (string) PRESSQUEUE_VERSION : '0.1.1';
 		$path    = defined( 'PRESSQUEUE_DIR' ) ? PRESSQUEUE_DIR . $relative_path : '';
 
 		if ( '' !== $path && file_exists( $path ) ) {
@@ -96,12 +96,10 @@ final class Ui {
 		}
 		echo '<h1>' . esc_html( $title ) . '</h1>';
 		if ( isset( $options['badge'] ) && is_string( $options['badge'] ) ) {
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Callers pass markup built from escaped helpers.
-			echo $options['badge'];
+			echo wp_kses_post( $options['badge'] );
 		}
 		if ( isset( $options['actions'] ) && is_string( $options['actions'] ) ) {
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Callers pass markup built from escaped helpers.
-			echo $options['actions'];
+			echo wp_kses_post( $options['actions'] );
 		}
 		echo '<span class="pq-grow"></span>';
 		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- mode_pill returns escaped markup.

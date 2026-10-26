@@ -1,10 +1,10 @@
 === PressQueue ===
-Contributors: webtq
+Contributors: vincentschmalbach
 Tags: social media, buffer, auto post, share, scheduling
-Requires at least: 6.8
+Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.1.0
+Stable tag: 0.1.1
 License: MIT
 License URI: https://opensource.org/license/mit
 
@@ -174,6 +174,10 @@ PressQueue sends no analytics or tracking requests.
 Buffer terms of service: https://buffer.com/legal#terms
 Buffer privacy policy: https://buffer.com/legal#privacy-policy
 
+The Channels screen links to WordPress's instructions for setting security
+keys and salts. PressQueue does not call a remote salt generator or send your
+site's keys to WordPress.org.
+
 == Screenshots ==
 
 1. The Social sharing panel in the post editor shows where a post goes when you publish it.
@@ -184,6 +188,12 @@ Buffer privacy policy: https://buffer.com/legal#privacy-policy
 6. The overview: recent shares and a quick check of what would happen to any post.
 
 == Changelog ==
+
+= 0.1.1 =
+
+* Updated bundled Action Scheduler to 4.2.0. WordPress 6.9 or newer is now required.
+* Hardened admin header HTML and font URL output.
+* Clarified the link to WordPress security-key instructions.
 
 = 0.1.0 =
 

@@ -37,4 +37,19 @@ final class BootstrapEntryPointTest extends TestCase {
 		self::assertSame( 1, did_action( 'pressqueue_after_activation' ) );
 		self::assertSame( array(), $GLOBALS['pressqueue_test_deactivated'] );
 	}
+
+	/**
+	 * @depends test_main_file_bootstraps_without_http_requests
+	 */
+	public function test_wordpress_requirement_matches_the_bundled_scheduler(): void {
+		$previous = $GLOBALS['wp_version'];
+		try {
+			$GLOBALS['wp_version'] = '6.8.11';
+			self::assertSame( 'PressQueue requires WordPress 6.9 or newer.', \pressqueue_check_runtime_requirements( false ) );
+			$GLOBALS['wp_version'] = '6.9';
+			self::assertTrue( \pressqueue_check_runtime_requirements( false ) );
+		} finally {
+			$GLOBALS['wp_version'] = $previous;
+		}
+	}
 }
