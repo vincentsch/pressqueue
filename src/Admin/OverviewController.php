@@ -374,20 +374,17 @@ final class OverviewController {
 
 			if ( array() === $shares ) {
 				$result = Labels::decision_result( (string) $entry['blocked_kind'] );
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
-				echo Ui::pill( $result['tone'], $result['label'], $result['help'] );
+				echo wp_kses_post( Ui::pill( $result['tone'], $result['label'], $result['help'] ) );
 			} else {
 				echo '<span class="pq-row" style="gap:8px">';
 				echo '<span class="pq-svcs">';
 				foreach ( $shares as $share ) {
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- service_badge returns escaped markup.
-					echo Ui::service_badge( (string) $share['service'], 'sm' );
+					echo wp_kses_post( Ui::service_badge( (string) $share['service'], 'sm' ) );
 				}
 				echo '</span>';
 				$state = self::combined_state( array_column( $shares, 'state' ) );
 				$label = Labels::delivery_state( $state );
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
-				echo Ui::pill( $label['tone'], $label['label'], $label['help'] );
+				echo wp_kses_post( Ui::pill( $label['tone'], $label['label'], $label['help'] ) );
 				echo '</span>';
 			}
 
@@ -463,13 +460,11 @@ final class OverviewController {
 		$inner = '<b>' . esc_html( number_format_i18n( $value ) ) . '</b><span>' . esc_html( $label ) . '</span>';
 
 		if ( '' !== $url ) {
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $inner is escaped above.
-			echo '<a class="' . esc_attr( $class ) . '" href="' . esc_url( $url ) . '">' . $inner . '</a>';
+			echo '<a class="' . esc_attr( $class ) . '" href="' . esc_url( $url ) . '">' . wp_kses_post( $inner ) . '</a>';
 			return;
 		}
 
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $inner is escaped above.
-		echo '<div class="' . esc_attr( $class ) . '">' . $inner . '</div>';
+		echo '<div class="' . esc_attr( $class ) . '">' . wp_kses_post( $inner ) . '</div>';
 	}
 
 	/**

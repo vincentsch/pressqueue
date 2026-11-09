@@ -387,8 +387,7 @@ final class PostControlsController {
 				continue;
 			}
 			echo '<li>';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
-			echo Ui::channel_name( (string) $channel['service'], (string) $channel['name'] );
+			echo wp_kses_post( Ui::channel_name( (string) $channel['service'], (string) $channel['name'] ) );
 			if ( '' === (string) $display['details'] ) {
 				echo '<span class="pq-ed-small pq-ed-muted pq-ed-channel-detail">' . esc_html( trim( (string) $channel['timing'] . ' · ' . (string) $channel['image'], ' ·' ) ) . '</span>';
 			}
@@ -426,11 +425,9 @@ final class PostControlsController {
 			echo '<ul class="pq-ed-channels">';
 			foreach ( $items as $item ) {
 				echo '<li class="pq-ed-activity-row">';
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
-				echo Ui::channel_name( (string) $item['service'], (string) $item['name'] );
+				echo wp_kses_post( Ui::channel_name( (string) $item['service'], (string) $item['name'] ) );
 				echo '<span class="pq-ed-activity-state">';
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
-				echo Ui::pill( (string) $item['tone'], (string) $item['label'], (string) $item['help'] );
+				echo wp_kses_post( Ui::pill( (string) $item['tone'], (string) $item['label'], (string) $item['help'] ) );
 				echo ' <span class="pq-ed-small pq-ed-muted" title="' . esc_attr( (string) $item['time_full'] ) . '">' . esc_html( (string) $item['time'] ) . '</span>';
 				echo '</span>';
 				if ( '' !== (string) ( $item['reason'] ?? '' ) ) {
@@ -485,8 +482,7 @@ final class PostControlsController {
 				$checked = null === $selected || in_array( $channel['public_id'], $selected, true );
 				echo '<input type="hidden" name="pressqueue_channel_listed[]" value="' . esc_attr( (string) $channel['public_id'] ) . '" />';
 				echo '<label class="pq-ed-check"><input type="checkbox" name="pressqueue_channel_public_ids[]" value="' . esc_attr( (string) $channel['public_id'] ) . '" ' . checked( $checked, true, false ) . ' /> ';
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
-				echo Ui::channel_name( (string) $channel['service'], (string) $channel['name'] );
+				echo wp_kses_post( Ui::channel_name( (string) $channel['service'], (string) $channel['name'] ) );
 				echo '</label>';
 			}
 			echo '<span class="pq-ed-help">' . esc_html__( 'Untick a channel to leave it out for this post.', 'pressqueue' ) . '</span>';
@@ -539,8 +535,23 @@ final class PostControlsController {
 		echo '<ul class="pq-ed-thumbs" data-pq-media-list>';
 		foreach ( $ids as $attachment_id ) {
 			$thumb = function_exists( 'wp_get_attachment_image' ) ? wp_get_attachment_image( $attachment_id, 'thumbnail' ) : '';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_get_attachment_image returns escaped markup.
-			echo '<li>' . ( '' === $thumb ? esc_html( '#' . $attachment_id ) : $thumb ) . '</li>';
+			echo '<li>' . ( '' === $thumb ? esc_html( '#' . $attachment_id ) : wp_kses(
+				$thumb,
+				array(
+					'img' => array(
+						'src'           => true,
+						'alt'           => true,
+						'class'         => true,
+						'width'         => true,
+						'height'        => true,
+						'srcset'        => true,
+						'sizes'         => true,
+						'loading'       => true,
+						'decoding'      => true,
+						'fetchpriority' => true,
+					),
+				)
+			) ) . '</li>';
 		}
 		echo '</ul>';
 		echo '<button type="button" class="button" data-pq-media-pick>' . esc_html__( 'Choose an image', 'pressqueue' ) . '</button>';

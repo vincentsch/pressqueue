@@ -345,7 +345,7 @@ final class ChannelsPage {
 		echo '<div class="pq-account-head">';
 		echo '<span class="pq-avatar" aria-hidden="true">' . esc_html( self::initials( $name ) ) . '</span>';
 		echo '<div class="pq-account-info">';
-		echo '<h2 class="pq-account-name"><span>' . esc_html( $name ) . '</span> ' . Ui::pill( $pill[0], $pill[1] ) . '</h2>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
+		echo '<h2 class="pq-account-name"><span>' . esc_html( $name ) . '</span> ' . wp_kses_post( Ui::pill( $pill[0], $pill[1] ) ) . '</h2>';
 		self::render_account_meta( $connection );
 		echo '</div>';
 
@@ -407,8 +407,15 @@ final class ChannelsPage {
 			$parts[] = esc_html__( 'Buffer', 'pressqueue' );
 		}
 
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Every part is escaped above.
-		echo '<p class="pq-account-meta">' . implode( ' &middot; ', $parts ) . '</p>';
+		echo '<p class="pq-account-meta">' . wp_kses(
+			implode( ' &middot; ', $parts ),
+			array(
+				'time' => array(
+					'datetime' => true,
+					'title'    => true,
+				),
+			)
+		) . '</p>';
 	}
 
 	/**
@@ -815,8 +822,7 @@ final class ChannelsPage {
 		$classes = 'pq-channel' . ( $channel->enabled ? '' : ' pq-channel--off' ) . ( null === $problem ? '' : ' pq-channel--unavailable' );
 
 		echo '<li class="' . esc_attr( $classes ) . '">';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::service_badge escapes.
-		echo Ui::service_badge( $channel->service, 'lg' );
+		echo wp_kses_post( Ui::service_badge( $channel->service, 'lg' ) );
 		echo '<div class="pq-channel-main">';
 		echo '<div class="pq-channel-title">' . esc_html( $name ) . '<span class="screen-reader-text"> (' . esc_html( $service ) . ')</span></div>';
 		echo '<div class="pq-channel-meta">' . esc_html( null === $problem ? ChannelStatus::summary( $channel ) : $service . ' · ' . $problem['text'] ) . '</div>';
@@ -825,20 +831,19 @@ final class ChannelsPage {
 		echo '<div class="pq-channel-status">';
 		if ( null !== $problem ) {
 			$tone = in_array( $problem['key'], array( 'unsupported_service', 'unsupported_capability', 'other_organization' ), true ) ? 'idle' : 'warn';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
-			echo Ui::pill( $tone, $problem['label'] );
+			echo wp_kses_post( Ui::pill( $tone, $problem['label'] ) );
 			if ( $channel->enabled ) {
 				echo ' <span class="pq-muted pq-small">' . esc_html__( 'Skipped until it works again', 'pressqueue' ) . '</span>';
 			}
 		} elseif ( $channel->enabled && $used_by > 0 ) {
 			/* translators: %d: number of rules. */
-			echo Ui::pill( 'ok', sprintf( _n( 'Used by %d rule', 'Used by %d rules', $used_by, 'pressqueue' ), $used_by ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
+			echo wp_kses_post( Ui::pill( 'ok', sprintf( _n( 'Used by %d rule', 'Used by %d rules', $used_by, 'pressqueue' ), $used_by ) ) );
 		} elseif ( $channel->enabled ) {
 			echo '<span class="pq-muted pq-small">' . esc_html__( 'Add it to a rule to share posts here.', 'pressqueue' ) . '</span> ';
-			echo Ui::pill( 'info', __( 'Not in a rule yet', 'pressqueue' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
+			echo wp_kses_post( Ui::pill( 'info', __( 'Not in a rule yet', 'pressqueue' ) ) );
 		} elseif ( $used_by > 0 ) {
 			/* translators: %d: number of rules. */
-			echo Ui::pill( 'warn', sprintf( _n( 'Off, %d rule skips it', 'Off, %d rules skip it', $used_by, 'pressqueue' ), $used_by ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
+			echo wp_kses_post( Ui::pill( 'warn', sprintf( _n( 'Off, %d rule skips it', 'Off, %d rules skip it', $used_by, 'pressqueue' ), $used_by ) ) );
 		} else {
 			echo '<span class="pq-muted">' . esc_html__( 'Off', 'pressqueue' ) . '</span>';
 		}
@@ -909,8 +914,8 @@ final class ChannelsPage {
 			echo '<td>' . esc_html( self::connection_name( $connection ) ) . '</td>';
 			echo '<td><code class="pq-code">' . esc_html( $connection->connection_status ) . '</code> ' . esc_html( $connection->enabled ? __( 'on', 'pressqueue' ) : __( 'off', 'pressqueue' ) ) . '</td>';
 			echo '<td><code class="pq-code">' . esc_html( $connection->public_id ) . '</code></td>';
-			echo '<td>' . self::code_or_none( $connection->remote_account_id ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- code_or_none escapes.
-			echo '<td>' . self::code_or_none( $connection->remote_organization_id ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- code_or_none escapes.
+			echo '<td>' . wp_kses_post( self::code_or_none( $connection->remote_account_id ) ) . '</td>';
+			echo '<td>' . wp_kses_post( self::code_or_none( $connection->remote_organization_id ) ) . '</td>';
 			echo '</tr>';
 		}
 		echo '</tbody></table></div></div>';
@@ -932,12 +937,11 @@ final class ChannelsPage {
 			echo '</tr></thead><tbody>';
 			foreach ( $rows as $channel ) {
 				echo '<tr>';
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::channel_name escapes.
-				echo '<td>' . Ui::channel_name( $channel->service, ActivitySummary::channel_display_name( $channel ) ) . '</td>';
+				echo '<td>' . wp_kses_post( Ui::channel_name( $channel->service, ActivitySummary::channel_display_name( $channel ) ) ) . '</td>';
 				echo '<td><code class="pq-code">' . esc_html( $channel->availability ) . '</code> ' . esc_html( $channel->enabled ? __( 'on', 'pressqueue' ) : __( 'off', 'pressqueue' ) ) . '</td>';
 				echo '<td><code class="pq-code">' . esc_html( $channel->public_id ) . '</code></td>';
 				echo '<td><code class="pq-code">' . esc_html( $channel->remote_channel_id ) . '</code></td>';
-				echo '<td>' . self::code_or_none( $channel->remote_organization_id ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- code_or_none escapes.
+				echo '<td>' . wp_kses_post( self::code_or_none( $channel->remote_organization_id ) ) . '</td>';
 				echo '</tr>';
 			}
 			echo '</tbody></table></div></div>';

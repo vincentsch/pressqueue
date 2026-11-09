@@ -124,8 +124,7 @@ final class DeliveryDetailController {
 		$rule = $summary->rule_name( $delivery->rule_public_id );
 
 		echo '<div class="pq-share-meta pq-row">';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_markup returns escaped markup.
-		echo DeliveryListController::channel_markup( $delivery, $summary );
+		echo wp_kses_post( DeliveryListController::channel_markup( $delivery, $summary ) );
 		if ( '' !== $rule ) {
 			/* translators: %s: rule name. */
 			echo '<span class="pq-muted">' . esc_html( sprintf( __( 'Rule: %s', 'pressqueue' ), $rule ) ) . '</span>';
@@ -352,8 +351,7 @@ final class DeliveryDetailController {
 
 		echo '<div class="pq-card pq-card--pad pq-stack pq-share-status">';
 		echo '<div class="pq-row pq-row--between"><h2>' . esc_html__( 'Status', 'pressqueue' ) . '</h2>';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
-		echo Ui::pill( $label['tone'], $label['label'] ) . '</div>';
+		echo wp_kses_post( Ui::pill( $label['tone'], $label['label'] ) ) . '</div>';
 
 		$sentence = self::status_sentence( $delivery, $events );
 		if ( '' !== $sentence ) {
@@ -363,8 +361,7 @@ final class DeliveryDetailController {
 		if ( 'failed' === $delivery->state ) {
 			$steps = DeliveryExplainer::failure_steps( $delivery, self::can_retry( $delivery ) );
 			if ( array() !== $steps ) {
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- steps_html returns escaped markup.
-				echo '<p class="pq-next-steps">' . DeliveryExplainer::steps_html( $steps ) . '</p>';
+				echo '<p class="pq-next-steps">' . wp_kses_post( DeliveryExplainer::steps_html( $steps ) ) . '</p>';
 			}
 		}
 

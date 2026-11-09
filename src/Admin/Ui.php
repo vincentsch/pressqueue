@@ -91,8 +91,7 @@ final class Ui {
 
 		echo '<div class="pq-head">';
 		if ( ! empty( $options['brand'] ) ) {
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Static SVG markup.
-			echo '<span class="pq-mark" aria-hidden="true">' . self::logo_svg() . '</span>';
+			echo '<span class="pq-mark" aria-hidden="true">' . wp_kses( self::logo_svg(), self::svg_allowed_html() ) . '</span>';
 		}
 		echo '<h1>' . esc_html( $title ) . '</h1>';
 		if ( isset( $options['badge'] ) && is_string( $options['badge'] ) ) {
@@ -102,8 +101,7 @@ final class Ui {
 			echo wp_kses_post( $options['actions'] );
 		}
 		echo '<span class="pq-grow"></span>';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- mode_pill returns escaped markup.
-		echo self::mode_pill();
+		echo wp_kses_post( self::mode_pill() );
 		echo '</div>';
 		echo '<hr class="wp-header-end" />';
 	}
@@ -124,9 +122,7 @@ final class Ui {
 	public static function tabs( array $tabs, string $current ): void {
 		echo '<nav class="pq-tabs" aria-label="' . esc_attr__( 'Sections', 'pressqueue' ) . '">';
 		foreach ( $tabs as $key => $tab ) {
-			$attributes = $key === $current ? ' aria-current="page"' : '';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $attributes is a fixed literal.
-			echo '<a href="' . esc_url( $tab[1] ) . '"' . $attributes . '>' . esc_html( $tab[0] ) . '</a>';
+			echo '<a href="' . esc_url( $tab[1] ) . '"' . ( $key === $current ? ' aria-current="page"' : '' ) . '>' . esc_html( $tab[0] ) . '</a>';
 		}
 		echo '</nav>';
 	}
@@ -258,13 +254,11 @@ final class Ui {
 	 * @param array<string,string> $attributes Extra form attributes.
 	 */
 	public static function form_start( string $action, string $nonce_action, array $hidden = array(), array $attributes = array() ): void {
-		$extra = '';
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"';
 		foreach ( $attributes as $name => $value ) {
-			$extra .= ' ' . esc_attr( $name ) . '="' . esc_attr( $value ) . '"';
+			echo ' ' . esc_attr( $name ) . '="' . esc_attr( $value ) . '"';
 		}
-
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes are escaped above.
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"' . $extra . '>';
+		echo '>';
 		wp_nonce_field( $nonce_action );
 		echo '<input type="hidden" name="action" value="' . esc_attr( $action ) . '" />';
 		foreach ( $hidden as $name => $value ) {
@@ -299,9 +293,7 @@ final class Ui {
 		}
 
 		self::form_start( $target, $target, $hidden, $attributes );
-		$disabled = ! empty( $options['disabled'] ) ? ' disabled="disabled"' : '';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $disabled is a fixed literal.
-		echo '<label class="pq-toggle"><input type="checkbox" aria-label="' . esc_attr( $label ) . '" ' . checked( $checked, true, false ) . $disabled . ' /><span></span></label>';
+		echo '<label class="pq-toggle"><input type="checkbox" aria-label="' . esc_attr( $label ) . '" ' . checked( $checked, true, false ) . ( ! empty( $options['disabled'] ) ? ' disabled="disabled"' : '' ) . ' /><span></span></label>';
 		echo '<button type="submit" class="button button-small pq-toggle-submit">' . esc_html( $checked ? __( 'Turn off', 'pressqueue' ) : __( 'Turn on', 'pressqueue' ) ) . '</button>';
 		self::form_end();
 	}
@@ -331,13 +323,12 @@ final class Ui {
 	 *
 	 * @param string $title Heading.
 	 * @param string $text Explanation.
-	 * @param string $action_html Escaped action markup.
+	 * @param string $action_html Action links, sanitized before output.
 	 */
 	public static function empty_state( string $title, string $text, string $action_html = '' ): void {
 		echo '<div class="pq-empty"><h2>' . esc_html( $title ) . '</h2><p>' . esc_html( $text ) . '</p>';
 		if ( '' !== $action_html ) {
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Callers pass escaped markup.
-			echo '<div class="pq-row">' . $action_html . '</div>';
+			echo '<div class="pq-row">' . wp_kses_post( $action_html ) . '</div>';
 		}
 		echo '</div>';
 	}
@@ -470,5 +461,40 @@ final class Ui {
 	 */
 	public static function logo_svg(): string {
 		return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" focusable="false"><path d="M3 3h7a3 3 0 0 1 0 6H6v4H3V3Z" fill="#fff"/><circle cx="12.5" cy="12.5" r="2" fill="#8ea2ff"/></svg>';
+	}
+
+	/**
+	 * Allow the elements and attributes used by the bundled interface icons.
+	 *
+	 * @return array<string,array<string,bool>>
+	 */
+	public static function svg_allowed_html(): array {
+		return array(
+			'span'   => array(
+				'class'       => true,
+				'aria-hidden' => true,
+			),
+			'svg'    => array(
+				'width'     => true,
+				'height'    => true,
+				'viewbox'   => true,
+				'fill'      => true,
+				'focusable' => true,
+			),
+			'path'   => array(
+				'd'               => true,
+				'stroke'          => true,
+				'stroke-width'    => true,
+				'fill'            => true,
+				'stroke-linecap'  => true,
+				'stroke-linejoin' => true,
+			),
+			'circle' => array(
+				'cx'   => true,
+				'cy'   => true,
+				'r'    => true,
+				'fill' => true,
+			),
+		);
 	}
 }

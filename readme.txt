@@ -1,5 +1,5 @@
 === PressQueue ===
-Contributors: vincentschmalbach
+Contributors: webtq
 Tags: social media, buffer, auto post, share, scheduling
 Requires at least: 6.9
 Tested up to: 7.1

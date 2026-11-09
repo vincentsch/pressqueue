@@ -181,19 +181,16 @@ final class RulesController {
 		);
 
 		echo '<div class="pq-rule' . ( $rule->enabled ? '' : ' pq-rule--off' ) . '" id="' . esc_attr( 'pq-rule-' . strtolower( $rule->public_id ) ) . '">';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Static SVG markup.
-		echo $is_exclude ? self::shield_icon() : self::share_icon();
+		echo wp_kses( $is_exclude ? self::shield_icon() : self::share_icon(), Ui::svg_allowed_html() );
 		echo '<div class="pq-rule-body">';
 		echo '<h3 class="pq-rule-name"><a href="' . esc_url( $edit_url ) . '">' . esc_html( $rule->name ) . '</a> ';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui helpers return escaped markup.
-		echo self::status_pill( $rule );
+		echo wp_kses_post( self::status_pill( $rule ) );
 		echo '</h3>';
 
 		if ( null !== $rule->invalid_reason ) {
 			echo '<p class="pq-rule-sentence">' . esc_html__( 'PressQueue cannot read this rule, so it stops every post the rule could affect. Open it and save it again to fix it.', 'pressqueue' ) . '</p>';
 		} else {
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- RuleSummary returns escaped markup.
-			echo '<p class="pq-rule-sentence">' . $summary->sentence( $rule ) . '</p>';
+			echo '<p class="pq-rule-sentence">' . wp_kses_post( $summary->sentence( $rule ) ) . '</p>';
 		}
 
 		$meta = array();
@@ -221,8 +218,7 @@ final class RulesController {
 				: esc_html__( 'Off. Test it, then switch it on.', 'pressqueue' );
 		}
 
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Each part is escaped above.
-		echo '<p class="pq-rule-meta">' . implode( ' <span aria-hidden="true">&middot;</span> ', $meta ) . '</p>';
+		echo '<p class="pq-rule-meta">' . wp_kses_post( implode( ' <span aria-hidden="true">&middot;</span> ', $meta ) ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="pq-rule-actions">';
@@ -319,11 +315,6 @@ final class RulesController {
 			return;
 		}
 
-		ob_start();
-		Ui::button_form( 'pressqueue_quick_start_rule', 'pressqueue_quick_start_rule', array(), __( 'Share every new post to all my channels', 'pressqueue' ), 'button button-primary' );
-		$actions  = (string) ob_get_clean();
-		$actions .= '<a class="button" href="' . esc_url( self::url( array( 'view' => 'new' ) ) ) . '">' . esc_html__( 'Add a rule yourself', 'pressqueue' ) . '</a>';
-
 		$names = array();
 		foreach ( $ready as $channel ) {
 			$names[] = ActivitySummary::channel_display_name( $channel );
@@ -333,8 +324,10 @@ final class RulesController {
 
 		echo '<div class="pq-empty"><h2>' . esc_html__( 'No rules yet', 'pressqueue' ) . '</h2>';
 		echo '<p>' . esc_html__( 'A rule decides which posts are shared, to which channels, and when.', 'pressqueue' ) . '</p>';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from escaped helpers above.
-		echo '<div class="pq-row">' . $actions . '</div>';
+		echo '<div class="pq-row">';
+		Ui::button_form( 'pressqueue_quick_start_rule', 'pressqueue_quick_start_rule', array(), __( 'Share every new post to all my channels', 'pressqueue' ), 'button button-primary' );
+		echo '<a class="button" href="' . esc_url( self::url( array( 'view' => 'new' ) ) ) . '">' . esc_html__( 'Add a rule yourself', 'pressqueue' ) . '</a>';
+		echo '</div>';
 		echo '<p class="pq-help">' . esc_html(
 			sprintf(
 				/* translators: %s: channel names. */
@@ -351,15 +344,10 @@ final class RulesController {
 	 *
 	 * @param string $title Heading.
 	 * @param string $text Explanation.
-	 * @param string $action_html Escaped action markup.
+	 * @param string $action_html Action links, sanitized before output.
 	 */
 	public static function empty_state( string $title, string $text, string $action_html = '' ): void {
-		echo '<div class="pq-empty"><h2>' . esc_html( $title ) . '</h2><p>' . esc_html( $text ) . '</p>';
-		if ( '' !== $action_html ) {
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Callers pass escaped markup.
-			echo '<div class="pq-row">' . $action_html . '</div>';
-		}
-		echo '</div>';
+		Ui::empty_state( $title, $text, $action_html );
 	}
 
 	/**

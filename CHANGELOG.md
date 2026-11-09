@@ -7,6 +7,10 @@
 - Sanitize admin header actions and badges before output. Escape the font URLs
   in social-image settings and use WordPress's JSON encoder for CLI responses.
 - Link to WordPress security-key instructions instead of its salt API.
+- Sanitize empty-state action links and render the quick-start rule form directly,
+  preserving its nonce and submit button.
+- Escape generated admin HTML at output, preserving icon shapes, verification
+  timestamps and responsive image attributes with explicit allowlists.
 
 ## 0.1.0 (2026-10-20)
 

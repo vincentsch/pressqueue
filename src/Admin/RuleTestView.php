@@ -420,8 +420,7 @@ final class RuleTestView {
 		if ( array() !== $shares ) {
 			echo '<span class="pq-svcs pq-test-svcs">';
 			foreach ( $shares as $share ) {
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- service_badge returns escaped markup.
-				echo '<span title="' . esc_attr( (string) ( $share['channel_name'] ?? '' ) ) . '">' . Ui::service_badge( (string) ( $share['service'] ?? '' ) ) . '</span>';
+				echo '<span title="' . esc_attr( (string) ( $share['channel_name'] ?? '' ) ) . '">' . wp_kses_post( Ui::service_badge( (string) ( $share['service'] ?? '' ) ) ) . '</span>';
 			}
 			echo '</span>';
 		}
@@ -463,8 +462,7 @@ final class RuleTestView {
 			foreach ( $blocked as $item ) {
 				echo '<div class="pq-row pq-small">';
 				$service = (string) ( $item['service'] ?? '' );
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
-				echo '' === $service ? '<span>' . esc_html( (string) ( $item['channel_name'] ?? '' ) ) . '</span>' : Ui::channel_name( $service, (string) ( $item['channel_name'] ?? '' ) );
+				echo '' === $service ? '<span>' . esc_html( (string) ( $item['channel_name'] ?? '' ) ) . '</span>' : wp_kses_post( Ui::channel_name( $service, (string) ( $item['channel_name'] ?? '' ) ) );
 				echo '<span class="pq-muted">' . esc_html( (string) ( $item['reason'] ?? '' ) ) . '</span>';
 				echo '</div>';
 			}

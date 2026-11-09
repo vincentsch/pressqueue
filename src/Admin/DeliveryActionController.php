@@ -418,7 +418,7 @@ final class DeliveryActionController {
 	 * @return string
 	 */
 	private static function post_action_text( string $key ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Callers check nonces before reading mutations.
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Handlers verify the nonce before mutation; reconciliation first reads the outcome to select its nonce action.
 		$value = isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
 
 		if ( ! is_string( $value ) ) {

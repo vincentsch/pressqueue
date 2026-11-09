@@ -82,7 +82,7 @@ final class MessageComposer {
 			foreach ( $services as $service => $label ) {
 				$id = 'pq-message-' . sanitize_html_class( (string) $service );
 				echo '<div>';
-				echo '<label class="pq-label pq-channel-name" for="' . esc_attr( $id ) . '">' . Ui::service_badge( (string) $service, 'sm' ) . esc_html( (string) $label ) . '</label>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- service_badge returns escaped markup.
+				echo '<label class="pq-label pq-channel-name" for="' . esc_attr( $id ) . '">' . wp_kses_post( Ui::service_badge( (string) $service, 'sm' ) ) . esc_html( (string) $label ) . '</label>';
 				echo '<textarea id="' . esc_attr( $id ) . '" class="pq-field" name="message_service[' . esc_attr( (string) $service ) . ']" rows="2" maxlength="2000" data-pq-message="' . esc_attr( (string) $service ) . '" placeholder="' . esc_attr__( 'Leave empty to use the main message.', 'pressqueue' ) . '">' . esc_textarea( (string) ( $messages[ $service ] ?? '' ) ) . '</textarea>';
 				echo '</div>';
 			}

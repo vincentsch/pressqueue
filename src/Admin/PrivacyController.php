@@ -480,7 +480,7 @@ final class PrivacyController {
 		}
 		echo '<p class="pq-help">' . esc_html__( 'To answer a request from one person, use the WordPress privacy tools under Tools. They include PressQueue records linked to that person.', 'pressqueue' );
 		if ( array() !== $links ) {
-			echo ' ' . implode( ' &middot; ', $links ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Links are escaped above.
+			echo ' ' . wp_kses_post( implode( ' &middot; ', $links ) );
 		}
 		echo '</p>';
 

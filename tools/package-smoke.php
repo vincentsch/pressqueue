@@ -652,7 +652,7 @@ function deactivate_package( array $wp_command, string $wp_path ): void {
  * @param string            $wp_path WordPress path.
  */
 function assert_scripts_enqueue( array $wp_command, string $wp_path ): void {
-	$code = '$_GET["page"]="pressqueue-rules"; do_action("admin_enqueue_scripts"); if (!wp_script_is("pressqueue-condition-builder", "enqueued")) { throw new RuntimeException("Condition builder script was not enqueued."); } require_once ABSPATH . "wp-admin/includes/screen.php"; set_current_screen("post"); get_current_screen()->post_type="post"; do_action("enqueue_block_editor_assets"); if (!wp_script_is("pressqueue-post-controls", "enqueued")) { throw new RuntimeException("Post controls script was not enqueued."); }';
+	$code = 'require_once ABSPATH . "wp-admin/includes/screen.php"; set_current_screen("pressqueue-rules"); $_GET["page"]="pressqueue-rules"; do_action("admin_enqueue_scripts"); if (!wp_script_is("pressqueue-condition-builder", "enqueued")) { throw new RuntimeException("Condition builder script was not enqueued."); } set_current_screen("post"); get_current_screen()->post_type="post"; do_action("enqueue_block_editor_assets"); if (!wp_script_is("pressqueue-post-controls", "enqueued")) { throw new RuntimeException("Post controls script was not enqueued."); }';
 
 	run_command(
 		array_merge(

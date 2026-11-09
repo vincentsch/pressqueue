@@ -84,20 +84,16 @@ final class TemplateController {
 			return;
 		}
 
-		$form = null === $rule ? '' : ' form="pq-adopt-template-form"';
-
 		echo '<div class="pq-template-picker' . ( null === $rule ? ' pq-js-only' : '' ) . '">';
 		echo '<label class="pq-label" for="pq-template-pick">' . esc_html__( 'Start from a saved template', 'pressqueue' ) . '</label>';
 		echo '<div class="pq-row">';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $form is a fixed attribute string.
-		echo '<select id="pq-template-pick" class="pq-field pq-field--auto" name="template_public_id"' . $form . ' data-pq-template-pick>';
+		echo '<select id="pq-template-pick" class="pq-field pq-field--auto" name="template_public_id"' . ( null === $rule ? '' : ' form="pq-adopt-template-form"' ) . ' data-pq-template-pick>';
 		echo '<option value="">' . esc_html__( 'Choose a template', 'pressqueue' ) . '</option>';
 		foreach ( $templates as $template ) {
 			echo '<option value="' . esc_attr( $template->public_id ) . '" data-set="' . esc_attr( (string) wp_json_encode( $template->template_set ) ) . '" ' . selected( $adopted, $template->public_id, false ) . '>' . esc_html( $template->name ) . '</option>';
 		}
 		echo '</select>';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $form is a fixed attribute string.
-		echo '<button type="submit" class="button"' . $form . ' data-pq-template-use>' . esc_html__( 'Use this template', 'pressqueue' ) . '</button>';
+		echo '<button type="submit" class="button"' . ( null === $rule ? '' : ' form="pq-adopt-template-form"' ) . ' data-pq-template-use>' . esc_html__( 'Use this template', 'pressqueue' ) . '</button>';
 		echo '</div>';
 		echo '<input type="hidden" name="adopted_template_public_id" value="' . esc_attr( $adopted ) . '" data-pq-adopted />';
 		echo '<p class="pq-help" data-pq-template-status>' . esc_html__( 'Copies the template\'s message into this rule. Later changes to the template do not change the rule.', 'pressqueue' ) . '</p>';
@@ -295,8 +291,7 @@ final class TemplateController {
 		echo '<span class="pq-rule-icon pq-rule-icon--template" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" focusable="false"><path d="M2.5 3h9M2.5 7h9M2.5 11h5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>';
 		echo '<div class="pq-rule-body">';
 		echo '<h3 class="pq-rule-name"><a href="' . esc_url( $edit_url ) . '">' . esc_html( $template->name ) . '</a> ';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill returns escaped markup.
-		echo $template->enabled ? Ui::pill( 'ok', __( 'Offered in rules', 'pressqueue' ) ) : Ui::pill( 'idle', __( 'Hidden', 'pressqueue' ) );
+		echo wp_kses_post( $template->enabled ? Ui::pill( 'ok', __( 'Offered in rules', 'pressqueue' ) ) : Ui::pill( 'idle', __( 'Hidden', 'pressqueue' ) ) );
 		echo '</h3>';
 		echo '<p class="pq-rule-sentence"><code class="pq-code">' . esc_html( (string) ( $template->template_set['default_message'] ?? '' ) ) . '</code> <span class="pq-muted">' . esc_html__( 'plus the link', 'pressqueue' ) . '</span></p>';
 

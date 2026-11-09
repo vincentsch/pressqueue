@@ -383,10 +383,7 @@ final class DeliveryListController {
 				unset( $args['group'] );
 			}
 
-			$class = 'attention' === $key && $total > 0 ? ' class="pq-chip-alert"' : '';
-			$aria  = $current === $key ? ' aria-current="true"' : '';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $class and $aria are fixed literals.
-			echo '<a href="' . esc_url( Ui::url( self::SLUG, $args ) ) . '"' . $class . $aria . '>' . esc_html( $group['label'] ) . ' <b>' . esc_html( number_format_i18n( $total ) ) . '</b></a>';
+			echo '<a href="' . esc_url( Ui::url( self::SLUG, $args ) ) . '"' . ( 'attention' === $key && $total > 0 ? ' class="pq-chip-alert"' : '' ) . ( $current === $key ? ' aria-current="true"' : '' ) . '>' . esc_html( $group['label'] ) . ' <b>' . esc_html( number_format_i18n( $total ) ) . '</b></a>';
 		}
 		echo '</nav>';
 	}
@@ -540,13 +537,11 @@ final class DeliveryListController {
 			echo '</td>';
 
 			echo '<td class="pq-col-channel">';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_markup returns escaped markup.
-			echo self::channel_markup( $delivery, $summary );
+			echo wp_kses_post( self::channel_markup( $delivery, $summary ) );
 			echo '</td>';
 
 			$label = Labels::delivery_state( $delivery->state );
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
-			echo '<td class="pq-col-status">' . Ui::pill( $label['tone'], $label['label'], $label['help'] ) . '</td>';
+			echo '<td class="pq-col-status">' . wp_kses_post( Ui::pill( $label['tone'], $label['label'], $label['help'] ) ) . '</td>';
 
 			echo '<td class="pq-col-when">';
 			self::render_when( $delivery );

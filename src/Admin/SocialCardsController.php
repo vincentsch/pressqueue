@@ -338,8 +338,7 @@ final class SocialCardsController {
 					)
 				)
 			) . '">' . esc_html( '' === $rule->name ? __( 'Untitled rule', 'pressqueue' ) : $rule->name ) . '</a> ';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill escapes.
-			echo $uses ? Ui::pill( 'ok', __( 'Uses the social image', 'pressqueue' ) ) : Ui::pill( 'idle', __( 'Not used', 'pressqueue' ) );
+			echo $uses ? wp_kses_post( Ui::pill( 'ok', __( 'Uses the social image', 'pressqueue' ) ) ) : wp_kses_post( Ui::pill( 'idle', __( 'Not used', 'pressqueue' ) ) );
 			echo '</li>';
 		}
 		echo '</ul>';

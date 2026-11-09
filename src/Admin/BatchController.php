@@ -315,7 +315,7 @@ final class BatchController {
 
 		Ui::form_start( 'pressqueue_preview_batch', 'pressqueue_preview_batch', $hidden, array( 'id' => self::FORM_ID ) );
 		echo '<div class="pq-section pq-batch-step">';
-		echo '<h2 id="pq-batch-pick">' . self::step_dot( 1 ) . esc_html__( 'Pick posts', 'pressqueue' ) . '</h2>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- step_dot returns escaped markup.
+		echo '<h2 id="pq-batch-pick">' . wp_kses_post( self::step_dot( 1 ) ) . esc_html__( 'Pick posts', 'pressqueue' ) . '</h2>';
 
 		echo '<div class="pq-choices" role="radiogroup" aria-labelledby="pq-batch-pick">';
 		foreach ( $types as $type => $copy ) {
@@ -324,8 +324,7 @@ final class BatchController {
 			echo '<span><b>' . esc_html( $copy['label'] ) . '</b><span class="pq-choice-help">' . esc_html( $copy['help'] ) . '</span>';
 			if ( ! $available ) {
 				echo '<span class="pq-choice-help pq-batch-warn">' . esc_html( $copy['no_rule'] ) . '</span>';
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- The format is escaped and rules_link returns escaped markup.
-				echo '<span class="pq-choice-help">' . sprintf( esc_html( $copy['tick'] ), self::rules_link() ) . '</span>';
+				echo '<span class="pq-choice-help">' . wp_kses_post( sprintf( esc_html( $copy['tick'] ), self::rules_link() ) ) . '</span>';
 			}
 			echo '</span></label>';
 		}
@@ -474,13 +473,13 @@ final class BatchController {
 		echo '<div class="pq-section pq-batch-step" id="pq-batch-review">';
 
 		if ( null === $batch || null === $review ) {
-			echo '<h2>' . self::step_dot( 2 ) . esc_html__( 'Review', 'pressqueue' ) . '</h2>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- step_dot returns escaped markup.
+			echo '<h2>' . wp_kses_post( self::step_dot( 2 ) ) . esc_html__( 'Review', 'pressqueue' ) . '</h2>';
 			echo '<p class="pq-muted pq-batch-placeholder">' . esc_html__( 'Pick posts above and click Preview posts. PressQueue checks each post against your rules and lists what would be shared and what would be skipped, and why. Nothing is shared yet.', 'pressqueue' ) . '</p>';
 			echo '</div>';
 			return;
 		}
 
-		echo '<h2>' . self::step_dot( 2 ) . esc_html__( 'Review', 'pressqueue' ) . ' <small>' . esc_html( self::totals_line( $review ) ) . '</small></h2>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- step_dot returns escaped markup.
+		echo '<h2>' . wp_kses_post( self::step_dot( 2 ) ) . esc_html__( 'Review', 'pressqueue' ) . ' <small>' . esc_html( self::totals_line( $review ) ) . '</small></h2>';
 
 		foreach ( self::review_problems( $review ) as $problem ) {
 			echo '<div class="pq-callout pq-callout--bad"><p>' . esc_html( $problem ) . '</p></div>';
@@ -571,7 +570,7 @@ final class BatchController {
 			echo '<div class="pq-batch-channels"><span class="pq-muted pq-small">' . esc_html__( 'Shares to', 'pressqueue' ) . '</span>';
 			foreach ( $shares as $share ) {
 				if ( null !== $share['channel'] ) {
-					echo self::channel_markup( $share['channel'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_markup returns escaped markup.
+					echo wp_kses_post( self::channel_markup( $share['channel'] ) );
 				}
 			}
 			echo '</div>';
@@ -636,12 +635,12 @@ final class BatchController {
 		foreach ( $skipped as $skip ) {
 			echo '<li>';
 			if ( 1 === count( $skip['channels'] ) ) {
-				echo self::channel_markup( $skip['channels'][0] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_markup returns escaped markup.
+				echo wp_kses_post( self::channel_markup( $skip['channels'][0] ) );
 			} elseif ( count( $skip['channels'] ) > 1 ) {
 				$names = array();
 				echo '<span class="pq-svcs">';
 				foreach ( $skip['channels'] as $channel ) {
-					echo Ui::service_badge( $channel['service'], 'sm' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- service_badge returns escaped markup.
+					echo wp_kses_post( Ui::service_badge( $channel['service'], 'sm' ) );
 					$names[] = $channel['name'];
 				}
 				echo '</span><span class="pq-batch-names">' . esc_html( implode( ', ', $names ) ) . '</span>';
@@ -691,7 +690,7 @@ final class BatchController {
 		$shares = null === $review ? 0 : (int) $review['share_count'];
 
 		echo '<div class="pq-section pq-batch-step">';
-		echo '<h2 id="pq-batch-timing">' . self::step_dot( 3 ) . esc_html__( 'Timing', 'pressqueue' ) . '</h2>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- step_dot returns escaped markup.
+		echo '<h2 id="pq-batch-timing">' . wp_kses_post( self::step_dot( 3 ) ) . esc_html__( 'Timing', 'pressqueue' ) . '</h2>';
 		echo '<div class="pq-checks pq-batch-timings" role="radiogroup" aria-labelledby="pq-batch-timing">';
 
 		foreach ( self::timing_choices( $rules, (string) $form['batch_type'] ) as $value => $choice ) {
@@ -733,16 +732,11 @@ final class BatchController {
 	 * @param array<string,mixed> $form Form values.
 	 */
 	private static function render_stagger_fields( array $form ): void {
-		$form_attr = ' form="' . esc_attr( self::FORM_ID ) . '"';
-
 		echo '<div class="pq-batch-stagger">';
 		echo '<div class="pq-field-row">';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $form_attr is escaped above.
-		echo '<div><label class="pq-label" for="pq-batch-start-date">' . esc_html__( 'First share on', 'pressqueue' ) . '</label><input class="pq-field" type="date" id="pq-batch-start-date" name="start_date"' . $form_attr . ' value="' . esc_attr( (string) $form['start_date'] ) . '" /></div>';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $form_attr is escaped above.
-		echo '<div><label class="pq-label" for="pq-batch-start-time">' . esc_html__( 'At', 'pressqueue' ) . '</label><input class="pq-field" type="time" id="pq-batch-start-time" name="start_time"' . $form_attr . ' value="' . esc_attr( (string) $form['start_time'] ) . '" /></div>';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $form_attr is escaped above.
-		echo '<div><label class="pq-label" for="pq-batch-interval">' . esc_html__( 'Then one every', 'pressqueue' ) . '</label><select class="pq-field" id="pq-batch-interval" name="interval"' . $form_attr . '>';
+		echo '<div><label class="pq-label" for="pq-batch-start-date">' . esc_html__( 'First share on', 'pressqueue' ) . '</label><input class="pq-field" type="date" id="pq-batch-start-date" name="start_date" form="' . esc_attr( self::FORM_ID ) . '" value="' . esc_attr( (string) $form['start_date'] ) . '" /></div>';
+		echo '<div><label class="pq-label" for="pq-batch-start-time">' . esc_html__( 'At', 'pressqueue' ) . '</label><input class="pq-field" type="time" id="pq-batch-start-time" name="start_time" form="' . esc_attr( self::FORM_ID ) . '" value="' . esc_attr( (string) $form['start_time'] ) . '" /></div>';
+		echo '<div><label class="pq-label" for="pq-batch-interval">' . esc_html__( 'Then one every', 'pressqueue' ) . '</label><select class="pq-field" id="pq-batch-interval" name="interval" form="' . esc_attr( self::FORM_ID ) . '">';
 		foreach ( self::INTERVALS as $minutes ) {
 			echo '<option value="' . esc_attr( (string) $minutes ) . '" ' . selected( (int) $form['interval'], $minutes, false ) . '>' . esc_html( self::interval_label( $minutes ) ) . '</option>';
 		}
@@ -769,7 +763,6 @@ final class BatchController {
 	private static function render_builder_actions( ?BatchRecord $batch, ?array $review, array $rules, bool $runtime ): void {
 		$can_preview = $runtime && ( array() !== $rules['bulk'] || array() !== $rules['repost'] );
 		$confirmable = null !== $batch && null !== $review && $runtime && self::is_confirmable( $batch, $review );
-		$disabled    = $can_preview ? '' : ' disabled="disabled"';
 
 		echo '<div class="pq-actions-bar pq-batch-actions">';
 
@@ -794,8 +787,7 @@ final class BatchController {
 				)
 			) . '</button>';
 			Ui::form_end();
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $disabled is a fixed literal.
-			echo '<button type="submit" form="' . esc_attr( self::FORM_ID ) . '" class="button" data-pq-batch-update' . $disabled . '>' . esc_html__( 'Update preview', 'pressqueue' ) . '</button>';
+			echo '<button type="submit" form="' . esc_attr( self::FORM_ID ) . '" class="button" data-pq-batch-update' . ( $can_preview ? '' : ' disabled="disabled"' ) . '>' . esc_html__( 'Update preview', 'pressqueue' ) . '</button>';
 			$expiry = self::expiry_text( $batch );
 			if ( 'dry_run' === $review['delivery_mode'] ) {
 				$expiry = __( 'Test mode: PressQueue records test runs and sends nothing to Buffer.', 'pressqueue' ) . ' ' . $expiry;
@@ -804,8 +796,7 @@ final class BatchController {
 			echo '<p class="pq-batch-stale" data-pq-batch-stale hidden>' . esc_html__( 'You changed your choices. Update the preview before you share.', 'pressqueue' ) . '</p>';
 		} else {
 			$label = null === $batch ? __( 'Preview posts', 'pressqueue' ) : __( 'Update preview', 'pressqueue' );
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $disabled is a fixed literal.
-			echo '<button type="submit" form="' . esc_attr( self::FORM_ID ) . '" class="button button-primary"' . $disabled . '>' . esc_html( $label ) . '</button>';
+			echo '<button type="submit" form="' . esc_attr( self::FORM_ID ) . '" class="button button-primary"' . ( $can_preview ? '' : ' disabled="disabled"' ) . '>' . esc_html( $label ) . '</button>';
 			$note = null === $batch
 				? __( 'Nothing is shared until you review the posts and confirm.', 'pressqueue' )
 				: __( 'Nothing in this preview can be shared yet. Change your choices and update the preview.', 'pressqueue' );
@@ -885,7 +876,7 @@ final class BatchController {
 			echo '<div class="pq-muted pq-small" title="' . esc_attr( Ui::local_datetime( $batch->created_at ) ) . '">' . esc_html( Ui::relative_time( $batch->created_at ) ) . '</div></td>';
 			echo '<td>' . esc_html( self::posts_and_shares( $posts, $shares ) ) . '</td>';
 			echo '<td>' . esc_html( self::user_name( $batch->created_by ) ) . '</td>';
-			echo '<td>' . Ui::pill( $status['tone'], $status['label'], $status['help'] ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill returns escaped markup.
+			echo '<td>' . wp_kses_post( Ui::pill( $status['tone'], $status['label'], $status['help'] ) ) . '</td>';
 			echo '</tr>';
 		}
 
@@ -965,8 +956,8 @@ final class BatchController {
 			$reason = in_array( $item->state, array( 'duplicate', 'excluded', 'policy_error', 'failed' ), true ) ? self::item_reason( $item, (bool) $post['can_edit'] ) : '';
 
 			echo '<li>';
-			echo null === $entry['channel'] ? '<span class="pq-muted">' . esc_html__( 'Whole post', 'pressqueue' ) . '</span>' : self::channel_markup( $entry['channel'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_markup returns escaped markup.
-			echo Ui::pill( $state['tone'], $state['label'], $state['help'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Ui::pill returns escaped markup.
+			echo null === $entry['channel'] ? '<span class="pq-muted">' . esc_html__( 'Whole post', 'pressqueue' ) . '</span>' : wp_kses_post( self::channel_markup( $entry['channel'] ) );
+			echo wp_kses_post( Ui::pill( $state['tone'], $state['label'], $state['help'] ) );
 			if ( '' !== $reason ) {
 				echo '<span class="pq-muted pq-small">' . esc_html( $reason ) . '</span>';
 			}

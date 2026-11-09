@@ -488,6 +488,18 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 		$html    = $this->render();
 		self::assertStringContainsString( 'Share every new post to all my channels', $html );
 		self::assertStringContainsString( 'pressqueue_quick_start_rule', $html );
+		$dom = new \DOMDocument();
+		@$dom->loadHTML( $html );
+		$xpath = new \DOMXPath( $dom );
+		$forms = $xpath->query( '//form[input[@name="action" and @value="pressqueue_quick_start_rule"]]' );
+		self::assertSame( 1, $forms->length );
+		$form = $forms->item( 0 );
+		self::assertSame( 'post', strtolower( $form->getAttribute( 'method' ) ) );
+		self::assertSame( admin_url( 'admin-post.php' ), $form->getAttribute( 'action' ) );
+		$nonce = $xpath->query( './/input[@name="_wpnonce"]', $form )->item( 0 );
+		self::assertNotNull( $nonce );
+		self::assertNotFalse( wp_verify_nonce( $nonce->getAttribute( 'value' ), 'pressqueue_quick_start_rule' ) );
+		self::assertSame( 1, $xpath->query( './/button[@type="submit"]', $form )->length );
 
 		$rule = ( new RuleRepository() )->create( array_merge( $this->baseInput( $channel ), array( 'name' => '<script>alert(1)</script> & friends' ) ) );
 		$html = $this->render();

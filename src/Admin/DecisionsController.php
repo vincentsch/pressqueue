@@ -304,10 +304,7 @@ final class DecisionsController {
 			}
 
 			$total = (int) ( $counts[ $key ] ?? 0 );
-			$class = 'blocked' === $key && $total > 0 ? ' class="pq-chip-alert"' : '';
-			$aria  = $current === $key ? ' aria-current="true"' : '';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $class and $aria are fixed literals.
-			echo '<a href="' . esc_url( Ui::url( DeliveryListController::SLUG, $args ) ) . '"' . $class . $aria . '>' . esc_html( $label ) . ' <b>' . esc_html( number_format_i18n( $total ) ) . '</b></a>';
+			echo '<a href="' . esc_url( Ui::url( DeliveryListController::SLUG, $args ) ) . '"' . ( 'blocked' === $key && $total > 0 ? ' class="pq-chip-alert"' : '' ) . ( $current === $key ? ' aria-current="true"' : '' ) . '>' . esc_html( $label ) . ' <b>' . esc_html( number_format_i18n( $total ) ) . '</b></a>';
 		}
 		echo '</nav>';
 	}
@@ -345,8 +342,7 @@ final class DecisionsController {
 		if ( 'shared' === $kind && array() !== $channels ) {
 			echo '<span class="pq-svcs" aria-hidden="true">';
 			foreach ( $channels as $channel ) {
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- service_badge returns escaped markup.
-				echo Ui::service_badge( $channel['service'], 'sm' );
+				echo wp_kses_post( Ui::service_badge( $channel['service'], 'sm' ) );
 			}
 			echo '</span>';
 		}
@@ -372,12 +368,10 @@ final class DecisionsController {
 		echo '<div class="pq-decision-side">';
 		if ( $test_run ) {
 			$state = Labels::delivery_state( 'dry_run' );
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
-			echo Ui::pill( $state['tone'], $state['label'], $state['help'] );
+			echo wp_kses_post( Ui::pill( $state['tone'], $state['label'], $state['help'] ) );
 		} else {
 			$result = Labels::decision_result( self::result_for_kind( $kind ) );
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pill returns escaped markup.
-			echo Ui::pill( $result['tone'], $result['label'], $result['help'] );
+			echo wp_kses_post( Ui::pill( $result['tone'], $result['label'], $result['help'] ) );
 		}
 		DeliveryListController::render_time( $event['created_at'] );
 		echo '</div>';
@@ -419,8 +413,7 @@ final class DecisionsController {
 			echo '<div><h3 class="pq-why-heading">' . esc_html__( 'Channels', 'pressqueue' ) . '</h3><ul class="pq-checklist pq-why-list">';
 			foreach ( $channels as $line ) {
 				echo '<li><span class="' . esc_attr( $line['shared'] ? 'pq-yes' : 'pq-no' ) . '" aria-hidden="true">' . ( $line['shared'] ? '&#x2713;' : '&#x2715;' ) . '</span><span>';
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
-				echo Ui::channel_name( $line['service'], $line['name'] );
+				echo wp_kses_post( Ui::channel_name( $line['service'], $line['name'] ) );
 				echo ' <span class="pq-muted">' . esc_html( $line['reason'] ) . '</span></span></li>';
 			}
 			echo '</ul></div>';

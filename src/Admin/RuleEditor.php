@@ -113,7 +113,7 @@ final class RuleEditor {
 		echo '<div class="pq-stack pq-sticky pq-editor-side">';
 		if ( $is_exclude ) {
 			echo '<div class="pq-card pq-card--pad pq-stack">';
-			echo '<div class="pq-row">' . RulesController::shield_icon() . '<h2>' . esc_html__( 'How "never share" works', 'pressqueue' ) . '</h2></div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Static SVG markup.
+			echo '<div class="pq-row">' . wp_kses( RulesController::shield_icon(), Ui::svg_allowed_html() ) . '<h2>' . esc_html__( 'How "never share" works', 'pressqueue' ) . '</h2></div>';
 			echo '<p class="pq-flush">' . esc_html__( 'A post that matches is never shared, by any rule, to any channel. This also covers Share old posts and sharing a post again.', 'pressqueue' ) . '</p>';
 			echo '<p class="pq-flush pq-muted">' . esc_html__( 'If PressQueue cannot check this rule for a post, it stops that post to be safe.', 'pressqueue' ) . '</p>';
 			echo '</div>';
@@ -325,7 +325,7 @@ final class RuleEditor {
 		self::render_section_error( 'name', $error );
 		echo '<div><label class="pq-label" for="pq-rule-name">' . esc_html__( 'Rule name', 'pressqueue' ) . '</label>';
 		$placeholder = 'exclude' === $effect ? __( 'For example: Keep private posts off social media', 'pressqueue' ) : __( 'For example: Share new recipes', 'pressqueue' );
-		echo '<input id="pq-rule-name" class="pq-field pq-field--narrow" type="text" name="name" maxlength="191" required value="' . esc_attr( (string) $state['name'] ) . '" placeholder="' . esc_attr( $placeholder ) . '"' . self::invalid_attr( 'name', $error ) . ' /></div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- invalid_attr returns a fixed attribute string.
+		echo '<input id="pq-rule-name" class="pq-field pq-field--narrow" type="text" name="name" maxlength="191" required value="' . esc_attr( (string) $state['name'] ) . '" placeholder="' . esc_attr( $placeholder ) . '"' . ( 'name' === $error['section'] ? ' aria-invalid="true" aria-describedby="pq-error-name"' : '' ) . ' /></div>';
 		echo '</div>';
 	}
 
@@ -437,8 +437,7 @@ final class RuleEditor {
 			$name  = ActivitySummary::channel_display_name( $channel );
 			echo '<label class="pq-dest-chip' . ( $channel->enabled ? '' : ' is-off' ) . '">';
 			echo '<input type="checkbox" name="destination_channel_ids[]" value="' . esc_attr( $channel->public_id ) . '" data-service="' . esc_attr( $channel->service ) . '" data-name="' . esc_attr( $name ) . '" data-limit="' . esc_attr( (string) ( $limit > 0 ? $limit : MessageComposer::DEFAULT_LIMIT ) ) . '" ' . checked( $checked, true, false ) . ' />';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- service_badge returns escaped markup.
-			echo Ui::service_badge( $channel->service, 'sm' ) . '<span>' . esc_html( $name ) . '</span><span class="screen-reader-text"> (' . esc_html( Labels::service( $channel->service ) ) . ')</span>';
+			echo wp_kses_post( Ui::service_badge( $channel->service, 'sm' ) ) . '<span>' . esc_html( $name ) . '</span><span class="screen-reader-text"> (' . esc_html( Labels::service( $channel->service ) ) . ')</span>';
 			if ( $unsupported ) {
 				echo ' <span class="pq-muted pq-small">' . esc_html__( '(PressQueue cannot post here)', 'pressqueue' ) . '</span>';
 			} elseif ( ! $channel->enabled ) {
@@ -618,17 +617,6 @@ final class RuleEditor {
 		}
 
 		echo '<p class="pq-field-error" id="' . esc_attr( 'pq-error-' . $section ) . '" role="alert">' . esc_html( $error['message'] ) . '</p>';
-	}
-
-	/**
-	 * Return aria-invalid attributes for a section's main field.
-	 *
-	 * @param string                               $section Section key.
-	 * @param array{section:string,message:string} $error Error.
-	 * @return string
-	 */
-	private static function invalid_attr( string $section, array $error ): string {
-		return $section === $error['section'] ? ' aria-invalid="true" aria-describedby="pq-error-' . $section . '"' : '';
 	}
 
 	/**

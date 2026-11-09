@@ -132,8 +132,7 @@ final class PreviewPresenter {
 
 		foreach ( $summary['blocked'] as $blocked ) {
 			echo '<div class="pq-row pq-small">';
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
-			echo '' === $blocked['service'] ? '<span>' . esc_html( $blocked['channel_name'] ) . '</span>' : Ui::channel_name( $blocked['service'], $blocked['channel_name'] );
+			echo '' === $blocked['service'] ? '<span>' . esc_html( $blocked['channel_name'] ) . '</span>' : wp_kses_post( Ui::channel_name( $blocked['service'], $blocked['channel_name'] ) );
 			echo '<span class="pq-muted">' . esc_html( $blocked['reason'] ) . '</span>';
 			echo '</div>';
 		}
@@ -150,8 +149,7 @@ final class PreviewPresenter {
 	public static function render_share( array $share, bool $show_message = true ): void {
 		echo '<div class="pq-share-card">';
 		echo '<div class="pq-row pq-row--between">';
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- channel_name returns escaped markup.
-		echo Ui::channel_name( (string) $share['service'], (string) $share['channel_name'] );
+		echo wp_kses_post( Ui::channel_name( (string) $share['service'], (string) $share['channel_name'] ) );
 		echo '<span class="pq-muted pq-small">' . esc_html( self::timing_text( $share ) ) . '</span>';
 		echo '</div>';
 
