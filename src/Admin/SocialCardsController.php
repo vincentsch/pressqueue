@@ -60,7 +60,7 @@ final class SocialCardsController {
 	 */
 	public static function enqueue_assets(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Page routing is read-only.
-		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 		if ( self::SLUG !== $page || ! defined( 'PRESSQUEUE_FILE' ) ) {
 			return;
 		}
@@ -382,10 +382,13 @@ final class SocialCardsController {
 		if ( ! check_ajax_referer( self::PREVIEW_ACTION, false, false ) ) {
 			wp_die( '', '', array( 'response' => 403 ) );
 		}
+		if ( ! current_user_can( Capabilities::MANAGE_SETTINGS ) && ! current_user_can( Capabilities::MANAGE_RULES ) && ! current_user_can( Capabilities::EDIT_POST_CONTROLS ) ) {
+			wp_die( '', '', array( 'response' => 403 ) );
+		}
 
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Nonce checked above.
-		$post_id = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0;
-		$title   = isset( $_GET['title'] ) ? sanitize_text_field( wp_unslash( $_GET['title'] ) ) : '';
+		$post_id = isset( $_GET['post'] ) && is_string( $_GET['post'] ) ? absint( $_GET['post'] ) : 0;
+		$title   = isset( $_GET['title'] ) && is_string( $_GET['title'] ) ? sanitize_text_field( wp_unslash( $_GET['title'] ) ) : '';
 		$style   = Settings::style( Settings::read() );
 
 		if ( isset( $_GET['background'] ) ) {
@@ -406,8 +409,6 @@ final class SocialCardsController {
 				$input['background'] = Catalog::DEFAULT_BACKGROUND;
 			}
 			$style = Settings::style( Settings::normalize( $input ) );
-		} elseif ( ! current_user_can( Capabilities::MANAGE_SETTINGS ) && ! current_user_can( Capabilities::MANAGE_RULES ) && ! current_user_can( Capabilities::EDIT_POST_CONTROLS ) ) {
-			wp_die( '', '', array( 'response' => 403 ) );
 		}
 
 		if ( $post_id > 0 ) {
@@ -440,17 +441,15 @@ final class SocialCardsController {
 	 * Save the style.
 	 */
 	public static function handle_save(): void {
-		AdminPostBoundary::check( 'pressqueue_save_social_cards', Capabilities::MANAGE_SETTINGS, __( 'You are not allowed to manage PressQueue settings.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_save_social_cards', Capabilities::MANAGE_SETTINGS, __( 'You are not allowed to manage PressQueue settings.', 'pressqueue' ) );
 
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce checked above.
 		$input = array();
 		foreach ( array( 'align', 'background', 'custom_image', 'font', 'link_preview', 'site_label', 'text' ) as $key ) {
-			if ( isset( $_POST[ $key ] ) ) {
-				$input[ $key ] = sanitize_text_field( wp_unslash( $_POST[ $key ] ) );
+			if ( isset( $post[ $key ] ) ) {
+				$input[ $key ] = sanitize_text_field( $post[ $key ] );
 			}
 		}
-		$input['show_site'] = ! empty( $_POST['show_site'] );
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		$input['show_site'] = ! empty( $post['show_site'] );
 
 		try {
 			if ( 'custom' === ( $input['background'] ?? '' ) && ! self::can_use_custom_image( (int) ( $input['custom_image'] ?? 0 ) ) ) {
@@ -481,7 +480,7 @@ final class SocialCardsController {
 	 */
 	private static function render_notice(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only query arg.
-		$message = isset( $_GET['pressqueue_social'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_social'] ) ) : '';
+		$message = isset( $_GET['pressqueue_social'] ) && is_string( $_GET['pressqueue_social'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_social'] ) ) : '';
 		if ( 'saved' === $message ) {
 			Ui::notice( 'success', __( 'Style saved. New social images use it from now on.', 'pressqueue' ) );
 		} elseif ( 'error' === $message ) {

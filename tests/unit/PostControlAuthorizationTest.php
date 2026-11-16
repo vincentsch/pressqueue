@@ -377,6 +377,39 @@ final class PostControlAuthorizationTest extends TestCase {
 		self::assertSame( 'exclude', PostControlMetadata::read_for_post( 42 )['policy'] );
 	}
 
+	/**
+	 * @dataProvider rejected_classic_nonces
+	 *
+	 * @param string|null $nonce Submitted nonce, or null when missing.
+	 */
+	public function test_classic_save_rejects_bad_nonces_before_writing_controls( ?string $nonce ): void {
+		$this->grant_control_access();
+		$this->classic_request( array() );
+		$GLOBALS['pressqueue_test_valid_nonces']['pressqueue_save_post_controls_43'] = 'nonce-43';
+		if ( null === $nonce ) {
+			unset( $_POST['pressqueue_controls_nonce'] );
+		} else {
+			$_POST['pressqueue_controls_nonce'] = $nonce;
+		}
+		$_REQUEST = $_POST;
+
+		try {
+			PostControlsController::handle_classic_pre_update( 42, array() );
+			self::fail( 'Invalid controls must stop the post save.' );
+		} catch ( \RuntimeException $exception ) {
+			self::assertStringContainsString( 'The post was not saved', $exception->getMessage() );
+		}
+		self::assertFalse( metadata_exists( 'post', 42, PostControlMetadata::META_KEY ) );
+	}
+
+	public static function rejected_classic_nonces(): array {
+		return array(
+			'missing'      => array( null ),
+			'stale'        => array( 'stale-nonce' ),
+			'another post' => array( 'nonce-43' ),
+		);
+	}
+
 	public function test_classic_save_ignores_other_posts_and_requests_without_the_box(): void {
 		$this->grant_control_access();
 		PostControlsController::handle_classic_pre_update( 42, array() );

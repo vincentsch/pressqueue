@@ -146,27 +146,25 @@ final class SettingsController {
 	 * Save settings.
 	 */
 	public static function handle_save(): void {
-		AdminPostBoundary::check( 'pressqueue_save_settings', Capabilities::MANAGE_SETTINGS, __( 'You are not allowed to manage PressQueue settings.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_save_settings', Capabilities::MANAGE_SETTINGS, __( 'You are not allowed to manage PressQueue settings.', 'pressqueue' ) );
 
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce checked above.
-		$page = isset( $_POST['redirect_page'] ) ? sanitize_key( wp_unslash( $_POST['redirect_page'] ) ) : Ui::PAGE_SETTINGS;
+		$page = isset( $post['redirect_page'] ) && is_string( $post['redirect_page'] ) ? sanitize_key( $post['redirect_page'] ) : Ui::PAGE_SETTINGS;
 		$page = in_array( $page, self::RETURN_PAGES, true ) ? $page : Ui::PAGE_SETTINGS;
 
 		try {
 			$repository = new SettingsRepository();
 			$before     = $repository->sharing_mode();
 
-			if ( isset( $_POST['sharing_mode'] ) ) {
-				$repository->set_sharing_mode( sanitize_key( wp_unslash( $_POST['sharing_mode'] ) ) );
-			} elseif ( isset( $_POST['dry_run_present'] ) || isset( $_POST['dry_run_enabled'] ) || isset( $_POST['kill_switch_enabled'] ) ) {
-				$repository->set_dry_run_enabled( isset( $_POST['dry_run_enabled'] ) );
-				$repository->set_kill_switch_enabled( isset( $_POST['kill_switch_enabled'] ) );
+			if ( isset( $post['sharing_mode'] ) ) {
+				$repository->set_sharing_mode( sanitize_key( $post['sharing_mode'] ) );
+			} elseif ( isset( $post['dry_run_present'] ) || isset( $post['dry_run_enabled'] ) || isset( $post['kill_switch_enabled'] ) ) {
+				$repository->set_dry_run_enabled( isset( $post['dry_run_enabled'] ) );
+				$repository->set_kill_switch_enabled( isset( $post['kill_switch_enabled'] ) );
 			}
 
-			if ( isset( $_POST['new_post_sharing'] ) ) {
-				$repository->set_new_post_sharing( sanitize_key( wp_unslash( $_POST['new_post_sharing'] ) ) );
+			if ( isset( $post['new_post_sharing'] ) ) {
+				$repository->set_new_post_sharing( sanitize_key( $post['new_post_sharing'] ) );
 			}
-			// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 			$after   = $repository->sharing_mode();
 			$message = 'settings_saved';
@@ -188,7 +186,7 @@ final class SettingsController {
 	 */
 	public static function render_notice(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only query arg.
-		$message = isset( $_GET['pressqueue_settings'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_settings'] ) ) : '';
+		$message = isset( $_GET['pressqueue_settings'] ) && is_string( $_GET['pressqueue_settings'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_settings'] ) ) : '';
 
 		$messages = array(
 			'settings_saved'    => array( 'success', __( 'Settings saved.', 'pressqueue' ) ),

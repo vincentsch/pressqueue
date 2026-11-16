@@ -68,7 +68,7 @@ final class PrivacyController {
 	 */
 	public static function enqueue_assets(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing query arg.
-		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 		if ( self::SLUG !== $page || ! defined( 'PRESSQUEUE_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
 			return;
 		}
@@ -116,7 +116,7 @@ final class PrivacyController {
 	 * change only its own fields. Without it, every field is read, as before.
 	 */
 	public static function handle_save_settings(): void {
-		AdminPostBoundary::check(
+		$post = AdminPostBoundary::read(
 			'pressqueue_save_privacy_settings',
 			Capabilities::MANAGE_SETTINGS,
 			__( 'You are not allowed to manage PressQueue privacy settings.', 'pressqueue' )
@@ -125,15 +125,14 @@ final class PrivacyController {
 		try {
 			$repository = new PrivacySettings();
 			$current    = self::current_settings_for_save( $repository );
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Shared boundary checked above; fields are sanitized one by one.
-			$next = self::settings_from_request( $current, self::post_text( 'privacy_section' ), wp_unslash( $_POST ) );
+			$next       = self::settings_from_request( $current, self::post_text( $post, 'privacy_section' ), $post );
 
 			if ( ! $current['retention_enabled'] && $next['retention_enabled'] ) {
-				self::require_acknowledgment( 'acknowledge_retention_effect', 'confirm_retention_effect', PrivacySettings::RETENTION_CONFIRMATION, 'retention_ack' );
+				self::require_acknowledgment( $post, 'acknowledge_retention_effect', 'confirm_retention_effect', PrivacySettings::RETENTION_CONFIRMATION, 'retention_ack' );
 			}
 
 			if ( ! $current['delete_data_on_uninstall'] && $next['delete_data_on_uninstall'] ) {
-				self::require_acknowledgment( 'acknowledge_uninstall_effect', 'confirm_uninstall_effect', PrivacySettings::UNINSTALL_CONFIRMATION, 'uninstall_ack' );
+				self::require_acknowledgment( $post, 'acknowledge_uninstall_effect', 'confirm_uninstall_effect', PrivacySettings::UNINSTALL_CONFIRMATION, 'uninstall_ack' );
 			}
 
 			$repository->save( $next );
@@ -148,19 +147,19 @@ final class PrivacyController {
 	 * Handle full-site export download.
 	 */
 	public static function handle_export(): void {
-		AdminPostBoundary::check(
+		$post = AdminPostBoundary::read(
 			'pressqueue_export_data',
 			Capabilities::EXPORT_DATA,
 			__( 'You are not allowed to export PressQueue data.', 'pressqueue' )
 		);
 
 		try {
-			$include_rendered_payloads = isset( $_POST['include_rendered_payloads'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Shared boundary checked above.
+			$include_rendered_payloads = isset( $post['include_rendered_payloads'] );
 			if ( $include_rendered_payloads ) {
-				self::require_acknowledgment( 'acknowledge_export_effect', 'confirm_export_effect', PrivacySettings::EXPORT_CONFIRMATION, 'export_ack' );
+				self::require_acknowledgment( $post, 'acknowledge_export_effect', 'confirm_export_effect', PrivacySettings::EXPORT_CONFIRMATION, 'export_ack' );
 			}
 
-			$cursor = trim( self::post_text( 'export_cursor' ) );
+			$cursor = trim( self::post_text( $post, 'export_cursor' ) );
 			if ( '' !== $cursor ) {
 				try {
 					ExportCursor::from_string( $cursor );
@@ -232,18 +231,19 @@ final class PrivacyController {
 	/**
 	 * Require a ticked acknowledgment box, or the older exact confirmation sentence.
 	 *
-	 * @param string $checkbox Acknowledgment checkbox field.
-	 * @param string $text_field Older typed confirmation field.
-	 * @param string $sentence Exact confirmation sentence.
-	 * @param string $error_code Error code when neither is present.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $checkbox Acknowledgment checkbox field.
+	 * @param string              $text_field Older typed confirmation field.
+	 * @param string              $sentence Exact confirmation sentence.
+	 * @param string              $error_code Error code when neither is present.
 	 */
-	private static function require_acknowledgment( string $checkbox, string $text_field, string $sentence, string $error_code ): void {
-		if ( '1' === self::post_text( $checkbox ) ) {
+	private static function require_acknowledgment( array $post, string $checkbox, string $text_field, string $sentence, string $error_code ): void {
+		if ( '1' === self::post_text( $post, $checkbox ) ) {
 			return;
 		}
 
 		try {
-			AdminPostBoundary::require_exact_confirmation( $text_field, $sentence );
+			AdminPostBoundary::require_exact_confirmation( $post, $text_field, $sentence );
 		} catch ( ValidationException $exception ) {
 			unset( $exception );
 			throw new DomainException( esc_html( $error_code ) );
@@ -712,13 +712,13 @@ final class PrivacyController {
 	/**
 	 * Return POST text.
 	 *
-	 * @param string $key Key.
-	 * @param string $fallback Fallback.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
+	 * @param string              $fallback Fallback.
 	 * @return string
 	 */
-	private static function post_text( string $key, string $fallback = '' ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Shared boundary checked by callers.
-		return isset( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $fallback;
+	private static function post_text( array $post, string $key, string $fallback = '' ): string {
+		return isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? sanitize_text_field( $post[ $key ] ) : $fallback;
 	}
 
 	/**
@@ -730,7 +730,7 @@ final class PrivacyController {
 	 */
 	private static function query_text( string $key, int $maximum ): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only notice query args.
-		$value = isset( $_GET[ $key ] ) ? sanitize_text_field( wp_unslash( $_GET[ $key ] ) ) : '';
+		$value = isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ? sanitize_text_field( wp_unslash( $_GET[ $key ] ) ) : '';
 
 		return strlen( $value ) > $maximum ? substr( $value, 0, $maximum ) : $value;
 	}
@@ -742,7 +742,7 @@ final class PrivacyController {
 	 * @param string $message Denial message.
 	 */
 	private static function require_capability( string $capability, string $message ): void {
-		if ( function_exists( 'current_user_can' ) && ! current_user_can( $capability ) ) {
+		if ( ! current_user_can( $capability ) ) {
 			wp_die( esc_html( $message ) );
 		}
 	}

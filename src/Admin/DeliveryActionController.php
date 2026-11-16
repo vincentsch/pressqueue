@@ -95,16 +95,16 @@ final class DeliveryActionController {
 	 * Handle cancellation.
 	 */
 	public static function handle_cancel_delivery(): void {
-		self::mutation_boundary( 'pressqueue_cancel_delivery' );
-		self::require_confirmation( 'delivery_confirm_cancel' );
+		$post = self::mutation_boundary( 'pressqueue_cancel_delivery' );
+		self::require_confirmation( $post, 'delivery_confirm_cancel' );
 
 		$delivery_public_id = '';
 		try {
-			$delivery_public_id = self::post_delivery_public_id();
+			$delivery_public_id = self::post_delivery_public_id( $post );
 			self::operator_service()->cancel( $delivery_public_id, self::actor_user_id() );
-			self::redirect_detail( $delivery_public_id, 'delivery_cancelled' );
+			self::redirect_detail( $post, $delivery_public_id, 'delivery_cancelled' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect_detail( $delivery_public_id, 'delivery_error', self::safe_error_detail( $throwable ) );
+			self::redirect_detail( $post, $delivery_public_id, 'delivery_error', self::safe_error_detail( $throwable ) );
 		}
 	}
 
@@ -112,15 +112,15 @@ final class DeliveryActionController {
 	 * Handle resume.
 	 */
 	public static function handle_resume_delivery(): void {
-		self::mutation_boundary( 'pressqueue_resume_delivery' );
+		$post = self::mutation_boundary( 'pressqueue_resume_delivery' );
 
 		$delivery_public_id = '';
 		try {
-			$delivery_public_id = self::post_delivery_public_id();
+			$delivery_public_id = self::post_delivery_public_id( $post );
 			self::operator_service()->resume( $delivery_public_id, self::actor_user_id() );
-			self::redirect_detail( $delivery_public_id, 'delivery_resumed' );
+			self::redirect_detail( $post, $delivery_public_id, 'delivery_resumed' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect_detail( $delivery_public_id, 'delivery_error', self::safe_error_detail( $throwable ) );
+			self::redirect_detail( $post, $delivery_public_id, 'delivery_error', self::safe_error_detail( $throwable ) );
 		}
 	}
 
@@ -128,15 +128,15 @@ final class DeliveryActionController {
 	 * Handle manual retry.
 	 */
 	public static function handle_retry_delivery(): void {
-		self::mutation_boundary( 'pressqueue_retry_delivery' );
+		$post = self::mutation_boundary( 'pressqueue_retry_delivery' );
 
 		$delivery_public_id = '';
 		try {
-			$delivery_public_id = self::post_delivery_public_id();
+			$delivery_public_id = self::post_delivery_public_id( $post );
 			self::operator_service()->retry( $delivery_public_id, self::actor_user_id() );
-			self::redirect_detail( $delivery_public_id, 'delivery_retried' );
+			self::redirect_detail( $post, $delivery_public_id, 'delivery_retried' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect_detail( $delivery_public_id, 'delivery_error', self::safe_error_detail( $throwable ) );
+			self::redirect_detail( $post, $delivery_public_id, 'delivery_error', self::safe_error_detail( $throwable ) );
 		}
 	}
 
@@ -147,22 +147,32 @@ final class DeliveryActionController {
 		self::require_capability();
 		self::require_post_request();
 
-		$outcome = self::post_action_text( 'outcome' );
-		if ( ! in_array( $outcome, array( 'confirmed_remote_id', 'confirmed_not_accepted', 'cancelled' ), true ) ) {
+		$nonce        = isset( $_POST['_wpnonce'] ) && is_string( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
+		$nonce_action = 'pressqueue_reconcile_delivery_confirmed_remote_id';
+		foreach ( array( 'confirmed_remote_id', 'confirmed_not_accepted', 'cancelled' ) as $candidate ) {
+			if ( wp_verify_nonce( $nonce, 'pressqueue_reconcile_delivery_' . $candidate ) ) {
+				$nonce_action = 'pressqueue_reconcile_delivery_' . $candidate;
+				break;
+			}
+		}
+
+		// A missing or invalid nonce fails here, before any business input is read.
+		$post    = AdminPostBoundary::read( $nonce_action, Capabilities::OPERATE_DELIVERIES, __( 'You are not allowed to operate PressQueue deliveries.', 'pressqueue' ) );
+		$outcome = self::post_action_text( $post, 'outcome' );
+		if ( 'pressqueue_reconcile_delivery_' . $outcome !== $nonce_action ) {
 			wp_die( esc_html__( 'Delivery reconciliation outcome is not supported.', 'pressqueue' ) );
 		}
 
-		AdminPostBoundary::check( 'pressqueue_reconcile_delivery_' . $outcome, Capabilities::OPERATE_DELIVERIES, __( 'You are not allowed to operate PressQueue deliveries.', 'pressqueue' ) );
-		self::require_confirmation( 'delivery_confirm_reconcile' );
+		self::require_confirmation( $post, 'delivery_confirm_reconcile' );
 
 		$delivery_public_id = '';
 		try {
-			$delivery_public_id = self::post_delivery_public_id();
+			$delivery_public_id = self::post_delivery_public_id( $post );
 			self::reconciliation_service()->reconcile(
 				$delivery_public_id,
 				$outcome,
-				self::post_optional_raw_text( 'remote_id' ),
-				self::post_optional_raw_text( 'note' ),
+				self::post_optional_raw_text( $post, 'remote_id' ),
+				self::post_optional_raw_text( $post, 'note' ),
 				self::actor_user_id()
 			);
 			$messages = array(
@@ -170,9 +180,9 @@ final class DeliveryActionController {
 				'confirmed_not_accepted' => 'delivery_reconciled_not_found',
 				'confirmed_remote_id'    => 'delivery_reconciled_found',
 			);
-			self::redirect_detail( $delivery_public_id, $messages[ $outcome ] );
+			self::redirect_detail( $post, $delivery_public_id, $messages[ $outcome ] );
 		} catch ( \Throwable $throwable ) {
-			self::redirect_detail( $delivery_public_id, 'delivery_error', self::safe_error_detail( $throwable ) );
+			self::redirect_detail( $post, $delivery_public_id, 'delivery_error', self::safe_error_detail( $throwable ) );
 		}
 	}
 
@@ -189,8 +199,8 @@ final class DeliveryActionController {
 	 * Handle "Cancel all on hold".
 	 */
 	public static function handle_cancel_held_deliveries(): void {
-		self::mutation_boundary( 'pressqueue_cancel_held_deliveries' );
-		if ( ! self::has_confirmation() ) {
+		$post = self::mutation_boundary( 'pressqueue_cancel_held_deliveries' );
+		if ( ! self::has_confirmation( $post ) ) {
 			self::redirect_activity( array( 'pressqueue_message' => 'held_confirm_cancel' ) );
 		}
 
@@ -345,9 +355,10 @@ final class DeliveryActionController {
 	 * Assert mutation request requirements.
 	 *
 	 * @param string $nonce_action Nonce action.
+	 * @return array<string,mixed> Verified, unslashed form data.
 	 */
-	private static function mutation_boundary( string $nonce_action ): void {
-		AdminPostBoundary::check( $nonce_action, Capabilities::OPERATE_DELIVERIES, __( 'You are not allowed to operate PressQueue deliveries.', 'pressqueue' ) );
+	private static function mutation_boundary( string $nonce_action ): array {
+		return AdminPostBoundary::read( $nonce_action, Capabilities::OPERATE_DELIVERIES, __( 'You are not allowed to operate PressQueue deliveries.', 'pressqueue' ) );
 	}
 
 	/**
@@ -376,25 +387,26 @@ final class DeliveryActionController {
 	 *
 	 * Nothing changes without the tick. Callers check the nonce and capability first.
 	 *
-	 * @param string $message Notice key shown after the redirect.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $message Notice key shown after the redirect.
 	 */
-	private static function require_confirmation( string $message ): void {
-		if ( self::has_confirmation() ) {
+	private static function require_confirmation( array $post, string $message ): void {
+		if ( self::has_confirmation( $post ) ) {
 			return;
 		}
 
-		$delivery_public_id = self::post_action_text( 'delivery_public_id' );
-		self::redirect_detail( PublicIds::is_valid( $delivery_public_id ) ? $delivery_public_id : '', $message );
+		$delivery_public_id = self::post_action_text( $post, 'delivery_public_id' );
+		self::redirect_detail( $post, PublicIds::is_valid( $delivery_public_id ) ? $delivery_public_id : '', $message );
 	}
 
 	/**
 	 * Check whether the person ticked the confirmation box.
 	 *
+	 * @param array<string,mixed> $post Verified, unslashed form data.
 	 * @return bool
 	 */
-	private static function has_confirmation(): bool {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce is checked before this method is called; the value is only compared with a fixed string.
-		$confirmed = isset( $_POST['confirm_local_effect'] ) ? wp_unslash( $_POST['confirm_local_effect'] ) : '';
+	private static function has_confirmation( array $post ): bool {
+		$confirmed = isset( $post['confirm_local_effect'] ) ? $post['confirm_local_effect'] : '';
 
 		return is_string( $confirmed ) && '1' === trim( $confirmed );
 	}
@@ -402,10 +414,11 @@ final class DeliveryActionController {
 	/**
 	 * Return a validated delivery public ID.
 	 *
+	 * @param array<string,mixed> $post Verified, unslashed form data.
 	 * @return string
 	 */
-	private static function post_delivery_public_id(): string {
-		$value = self::post_action_text( 'delivery_public_id' );
+	private static function post_delivery_public_id( array $post ): string {
+		$value = self::post_action_text( $post, 'delivery_public_id' );
 		PublicIds::assert( $value );
 
 		return $value;
@@ -414,12 +427,12 @@ final class DeliveryActionController {
 	/**
 	 * Return one unmodified POST string.
 	 *
-	 * @param string $key Key.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
 	 * @return string
 	 */
-	private static function post_action_text( string $key ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Handlers verify the nonce before mutation; reconciliation first reads the outcome to select its nonce action.
-		$value = isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
+	private static function post_action_text( array $post, string $key ): string {
+		$value = isset( $post[ $key ] ) ? $post[ $key ] : '';
 
 		if ( ! is_string( $value ) ) {
 			return '';
@@ -431,12 +444,12 @@ final class DeliveryActionController {
 	/**
 	 * Return an optional opaque POST string without text-field rewriting.
 	 *
-	 * @param string $key Key.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
 	 * @return string|null
 	 */
-	private static function post_optional_raw_text( string $key ): ?string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Opaque IDs and notes are validated or sanitized by the service.
-		$value = isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
+	private static function post_optional_raw_text( array $post, string $key ): ?string {
+		$value = isset( $post[ $key ] ) ? $post[ $key ] : '';
 
 		if ( ! is_string( $value ) ) {
 			return null;
@@ -461,22 +474,23 @@ final class DeliveryActionController {
 	/**
 	 * Redirect back to the delivery detail screen.
 	 *
-	 * @param string      $delivery_public_id Delivery public ID.
-	 * @param string      $message Message key.
-	 * @param string|null $detail Optional detail.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $delivery_public_id Delivery public ID.
+	 * @param string              $message Message key.
+	 * @param string|null         $detail Optional detail.
 	 */
-	private static function redirect_detail( string $delivery_public_id, string $message, ?string $detail = null ): void {
+	private static function redirect_detail( array $post, string $delivery_public_id, string $message, ?string $detail = null ): void {
 		$args = array(
 			'delivery_public_id' => $delivery_public_id,
 			'page'               => DeliveryDetailController::SLUG,
 			'pressqueue_message' => $message,
 		);
 
-		if ( '' === $delivery_public_id || 'activity' === self::post_action_text( 'pq_return' ) ) {
+		if ( '' === $delivery_public_id || 'activity' === self::post_action_text( $post, 'pq_return' ) ) {
 			$args['page'] = DeliveryListController::SLUG;
 			unset( $args['delivery_public_id'] );
 
-			$group = self::post_action_text( 'pq_group' );
+			$group = self::post_action_text( $post, 'pq_group' );
 			if ( 'all' !== $group && isset( DeliveryListController::groups()[ $group ] ) ) {
 				$args['group'] = $group;
 			}

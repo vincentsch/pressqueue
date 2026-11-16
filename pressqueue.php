@@ -3,7 +3,7 @@
  * Plugin Name: PressQueue
  * Plugin URI: https://www.pressqueue.com
  * Description: Share your WordPress posts through Buffer, with rules for which posts go where, message previews and an image made from each title.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Requires at least: 6.9
  * Requires PHP: 8.1
  * Author: Vincent Schmalbach
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'PRESSQUEUE_VERSION' ) ) {
-	define( 'PRESSQUEUE_VERSION', '0.1.1' );
+	define( 'PRESSQUEUE_VERSION', '0.1.2' );
 }
 
 if ( ! defined( 'PRESSQUEUE_MINIMUM_PHP' ) ) {
@@ -101,36 +101,28 @@ function pressqueue_check_runtime_requirements( $network_wide ) {
 }
 
 /**
- * Sanitize a raw activation request value.
- *
- * @param mixed $value Raw request value.
- * @return mixed Sanitized request value.
- */
-function pressqueue_sanitize_activation_request_value( $value ) {
-	if ( is_array( $value ) ) {
-		return array_map( 'pressqueue_sanitize_activation_request_value', $value );
-	}
-
-	return sanitize_text_field( $value );
-}
-
-/**
  * Read an activation request value before WordPress calls activation hooks.
  *
  * @param string $key Request key.
  * @return mixed|null
  */
 function pressqueue_get_activation_request_value( $key ) {
-	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Runtime guard only reads activation context before WordPress calls hooks.
-	if ( isset( $_POST[ $key ] ) ) {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Runtime guard sanitizes this value through pressqueue_sanitize_activation_request_value().
-		return pressqueue_sanitize_activation_request_value( wp_unslash( $_POST[ $key ] ) );
+	// Pluggable authentication functions are not loaded during ordinary plugin inclusion.
+	if ( ! function_exists( 'wp_verify_nonce' ) || ! current_user_can( 'activate_plugins' ) ) {
+		return null;
 	}
 
-	// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Runtime guard only reads activation context before WordPress calls hooks.
+	$nonce = isset( $_REQUEST['_wpnonce'] ) && is_string( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
+	if ( ! wp_verify_nonce( $nonce, 'activate-plugin_' . PRESSQUEUE_BASENAME ) && ! wp_verify_nonce( $nonce, 'bulk-plugins' ) ) {
+		return null;
+	}
+
+	if ( isset( $_POST[ $key ] ) ) {
+		return map_deep( wp_unslash( $_POST[ $key ] ), 'sanitize_text_field' );
+	}
+
 	if ( isset( $_GET[ $key ] ) ) {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Runtime guard sanitizes this value through pressqueue_sanitize_activation_request_value().
-		return pressqueue_sanitize_activation_request_value( wp_unslash( $_GET[ $key ] ) );
+		return map_deep( wp_unslash( $_GET[ $key ] ), 'sanitize_text_field' );
 	}
 
 	return null;
@@ -289,8 +281,9 @@ $pressqueue_requirements       = pressqueue_check_runtime_requirements( $pressqu
 
 if ( true !== $pressqueue_requirements ) {
 	if ( $pressqueue_network_activation ) {
-		pressqueue_fail_activation( $pressqueue_requirements );
-		return;
+		// Inclusion can happen before WordPress verifies the activation request.
+		// Refuse this request without changing the existing activation state.
+		wp_die( esc_html( $pressqueue_requirements ) );
 	}
 
 	pressqueue_register_admin_notice( $pressqueue_requirements );

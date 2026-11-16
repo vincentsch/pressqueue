@@ -76,7 +76,7 @@ final class ChannelsPage {
 		$storage_problem = ConnectionController::credential_storage_problem();
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Display-only routing hints.
 		$error_form       = isset( $_GET['pressqueue_error'], $_GET['pressqueue_form'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_form'] ) ) : '';
-		$error_connection = isset( $_GET['pressqueue_connection'] ) ? sanitize_text_field( wp_unslash( $_GET['pressqueue_connection'] ) ) : '';
+		$error_connection = isset( $_GET['pressqueue_connection'] ) && is_string( $_GET['pressqueue_connection'] ) ? sanitize_text_field( wp_unslash( $_GET['pressqueue_connection'] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 		self::$open_add_another = 'connect' === $error_form;
 		self::$open_menu_for    = 'replace' === $error_form && PublicIds::is_valid( $error_connection ) ? $error_connection : '';
@@ -1002,12 +1002,12 @@ final class ChannelsPage {
 	 */
 	private static function render_notice( array $connections, array $channels, array $usage ): void {
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Notice query args are display-only.
-		$message       = isset( $_GET['pressqueue_message'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_message'] ) ) : '';
-		$error         = isset( $_GET['pressqueue_error'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_error'] ) ) : '';
-		$detail        = isset( $_GET['pressqueue_detail'] ) ? sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) : '';
-		$reason        = isset( $_GET['pressqueue_reason'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_reason'] ) ) : '';
-		$connection_id = isset( $_GET['pressqueue_connection'] ) ? sanitize_text_field( wp_unslash( $_GET['pressqueue_connection'] ) ) : '';
-		$channel_id    = isset( $_GET['pressqueue_channel'] ) ? sanitize_text_field( wp_unslash( $_GET['pressqueue_channel'] ) ) : '';
+		$message       = isset( $_GET['pressqueue_message'] ) && is_string( $_GET['pressqueue_message'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_message'] ) ) : '';
+		$error         = isset( $_GET['pressqueue_error'] ) && is_string( $_GET['pressqueue_error'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_error'] ) ) : '';
+		$detail        = isset( $_GET['pressqueue_detail'] ) && is_string( $_GET['pressqueue_detail'] ) ? sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) : '';
+		$reason        = isset( $_GET['pressqueue_reason'] ) && is_string( $_GET['pressqueue_reason'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_reason'] ) ) : '';
+		$connection_id = isset( $_GET['pressqueue_connection'] ) && is_string( $_GET['pressqueue_connection'] ) ? sanitize_text_field( wp_unslash( $_GET['pressqueue_connection'] ) ) : '';
+		$channel_id    = isset( $_GET['pressqueue_channel'] ) && is_string( $_GET['pressqueue_channel'] ) ? sanitize_text_field( wp_unslash( $_GET['pressqueue_channel'] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		$connections_by_id = array();

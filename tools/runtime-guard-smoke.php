@@ -28,11 +28,13 @@ $GLOBALS['pressqueue_smoke_deactivated']  = array();
 $GLOBALS['pressqueue_smoke_notices']      = array();
 $GLOBALS['pressqueue_smoke_is_multisite'] = 'network' === $scenario;
 $GLOBALS['pressqueue_smoke_is_network_admin'] = 'network' === $scenario;
+$GLOBALS['pressqueue_smoke_can_activate'] = true;
 $GLOBALS['wp_version']                    = 'wordpress' === $scenario ? '6.8.11' : '6.9';
 
 if ( 'network' === $scenario ) {
 	$_GET['action'] = 'activate';
 	$_GET['plugin'] = 'pressqueue/pressqueue.php';
+	$_REQUEST['_wpnonce'] = 'valid-activation-nonce';
 }
 
 if ( ! function_exists( 'add_action' ) ) {
@@ -140,6 +142,30 @@ if ( ! function_exists( 'sanitize_text_field' ) ) {
 	}
 }
 
+if ( ! function_exists( 'map_deep' ) ) {
+	function map_deep( $value, $callback ) {
+		if ( is_array( $value ) ) {
+			foreach ( $value as $key => $item ) {
+				$value[ $key ] = map_deep( $item, $callback );
+			}
+			return $value;
+		}
+		return $callback( $value );
+	}
+}
+
+if ( ! function_exists( 'current_user_can' ) ) {
+	function current_user_can( $capability ) {
+		return 'activate_plugins' === $capability && $GLOBALS['pressqueue_smoke_can_activate'];
+	}
+}
+
+if ( ! function_exists( 'wp_verify_nonce' ) ) {
+	function wp_verify_nonce( $nonce, $action ) {
+		return 'valid-activation-nonce' === $nonce && 'activate-plugin_pressqueue/pressqueue.php' === $action ? 1 : false;
+	}
+}
+
 if ( ! function_exists( 'deactivate_plugins' ) ) {
 	function deactivate_plugins( $plugin ) {
 		$GLOBALS['pressqueue_smoke_deactivated'][] = $plugin;
@@ -193,9 +219,34 @@ try {
 		exit( 1 );
 	}
 
-	if ( ! in_array( 'pressqueue/pressqueue.php', $GLOBALS['pressqueue_smoke_deactivated'], true ) ) {
-		fwrite( STDERR, "The failed activation did not deactivate PressQueue.\n" );
+	if ( array() !== $GLOBALS['pressqueue_smoke_deactivated'] ) {
+		fwrite( STDERR, "The inclusion guard changed activation state before WordPress verified the request.\n" );
 		exit( 1 );
+	}
+
+	$_REQUEST['_wpnonce'] = 'invalid-activation-nonce';
+	if ( null !== pressqueue_get_activation_request_value( 'plugin' ) ) {
+		fwrite( STDERR, "The activation reader accepted an invalid nonce.\n" );
+		exit( 1 );
+	}
+	$_REQUEST['_wpnonce'] = 'valid-activation-nonce';
+	$GLOBALS['pressqueue_smoke_can_activate'] = false;
+	if ( null !== pressqueue_get_activation_request_value( 'plugin' ) ) {
+		fwrite( STDERR, "The activation reader accepted a user without activation permission.\n" );
+		exit( 1 );
+	}
+	$GLOBALS['pressqueue_smoke_can_activate'] = true;
+
+	// WordPress calls the activation hook after its own nonce and capability checks.
+	try {
+		pressqueue_activate( true );
+		fwrite( STDERR, "The activation hook accepted network activation.\n" );
+		exit( 1 );
+	} catch ( RuntimeException $activation_exception ) {
+		if ( $expected[ $scenario ] !== $activation_exception->getMessage() || ! in_array( 'pressqueue/pressqueue.php', $GLOBALS['pressqueue_smoke_deactivated'], true ) ) {
+			fwrite( STDERR, "The activation hook did not refuse and clean up the unsupported activation.\n" );
+			exit( 1 );
+		}
 	}
 
 	fwrite( STDOUT, $scenario . " boundary smoke passed.\n" );

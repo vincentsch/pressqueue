@@ -71,7 +71,7 @@ final class Ui {
 	 */
 	public static function is_pressqueue_screen(): bool {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Page routing is read-only.
-		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 
 		return 'pressqueue' === $page || str_starts_with( $page, 'pressqueue-' );
 	}

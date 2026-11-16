@@ -155,23 +155,22 @@ final class BatchController {
 	 * Handle a preview request.
 	 */
 	public static function handle_preview(): void {
-		AdminPostBoundary::check( 'pressqueue_preview_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_preview_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
 
 		$form = null;
 		try {
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Shared boundary checked above.
-			if ( isset( $_POST['filters_json'] ) ) {
+			if ( isset( $post['filters_json'] ) ) {
 				// Older forms and scripts still post raw filter and limit documents.
 				$batch = ( new BatchPreviewService() )->preview(
-					self::post_text( 'batch_type', 'bulk' ),
-					self::post_json_object( 'filters_json' ),
-					self::post_json_object( 'batch_limits_json' ),
+					self::post_text( $post, 'batch_type', 'bulk' ),
+					self::post_json_object( $post, 'filters_json' ),
+					self::post_json_object( $post, 'batch_limits_json' ),
 					self::current_user_id()
 				);
 				self::redirect( 'batch_previewed', array( 'batch_public_id' => $batch->public_id ) );
 			}
 
-			$form = self::form_from_post();
+			$form = self::form_from_post( $post );
 			if ( array() === self::participating_rules()[ $form['batch_type'] ] ) {
 				throw new DomainException( 'no_rule' );
 			}
@@ -179,7 +178,7 @@ final class BatchController {
 			$documents = self::documents_from_form( $form );
 			$batch     = ( new BatchPreviewService() )->preview( $documents['batch_type'], $documents['filters'], $documents['limits'], self::current_user_id() );
 			self::remember_form( $form, $batch->public_id );
-			self::cancel_replaced_preview( self::post_text( 'replaces_batch_public_id' ), $batch->public_id );
+			self::cancel_replaced_preview( self::post_text( $post, 'replaces_batch_public_id' ), $batch->public_id );
 			self::redirect( 'batch_previewed', array( 'batch_public_id' => $batch->public_id ) );
 		} catch ( Throwable $throwable ) {
 			if ( null !== $form ) {
@@ -215,13 +214,13 @@ final class BatchController {
 	 * Handle a confirmation request.
 	 */
 	public static function handle_confirm(): void {
-		AdminPostBoundary::check( 'pressqueue_confirm_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_confirm_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
 
 		try {
-			$batch = ( new BatchConfirmationService() )->confirm( self::post_text( 'batch_public_id' ), self::post_text( 'preview_snapshot_hash' ), self::current_user_id() );
+			$batch = ( new BatchConfirmationService() )->confirm( self::post_text( $post, 'batch_public_id' ), self::post_text( $post, 'preview_snapshot_hash' ), self::current_user_id() );
 			self::redirect( 'batch_confirmed', array( 'batch_public_id' => $batch->public_id ) );
 		} catch ( Throwable $throwable ) {
-			self::redirect_error( $throwable, self::post_text( 'batch_public_id' ) );
+			self::redirect_error( $throwable, self::post_text( $post, 'batch_public_id' ) );
 		}
 	}
 
@@ -229,14 +228,14 @@ final class BatchController {
 	 * Handle a cancellation request.
 	 */
 	public static function handle_cancel(): void {
-		AdminPostBoundary::check( 'pressqueue_cancel_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_cancel_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
 
 		try {
-			$batch_public_id = self::post_text( 'batch_public_id' );
+			$batch_public_id = self::post_text( $post, 'batch_public_id' );
 			( new BatchCancellationService() )->cancel( $batch_public_id, self::current_user_id() );
 			self::redirect( 'batch_cancelled', array( 'batch_public_id' => $batch_public_id ) );
 		} catch ( Throwable $throwable ) {
-			self::redirect_error( $throwable, self::post_text( 'batch_public_id' ) );
+			self::redirect_error( $throwable, self::post_text( $post, 'batch_public_id' ) );
 		}
 	}
 
@@ -244,10 +243,10 @@ final class BatchController {
 	 * Handle a queue restart request.
 	 */
 	public static function handle_recover(): void {
-		AdminPostBoundary::check( 'pressqueue_recover_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_recover_batch', Capabilities::OPERATE_BATCHES, __( 'You are not allowed to operate PressQueue batches.', 'pressqueue' ) );
 
 		try {
-			$batch_public_id = self::post_text( 'batch_public_id' );
+			$batch_public_id = self::post_text( $post, 'batch_public_id' );
 			$batch           = ( new BatchRepository() )->find_by_public_id( $batch_public_id );
 			if ( null === $batch ) {
 				throw new ValidationException( 'Batch does not exist.' );
@@ -255,7 +254,7 @@ final class BatchController {
 			( new BatchQueueService() )->ensure_queue_action( $batch->public_id, $batch->preview_snapshot_hash );
 			self::redirect( 'batch_recovered', array( 'batch_public_id' => $batch->public_id ) );
 		} catch ( Throwable $throwable ) {
-			self::redirect_error( $throwable, self::post_text( 'batch_public_id' ) );
+			self::redirect_error( $throwable, self::post_text( $post, 'batch_public_id' ) );
 		}
 	}
 
@@ -1860,26 +1859,27 @@ final class BatchController {
 	/**
 	 * Read and sanitize the guided form fields.
 	 *
+	 * @param array<string,mixed> $post Verified, unslashed form data.
 	 * @return array<string,mixed>
 	 */
-	private static function form_from_post(): array {
-		$type = self::post_text( 'batch_type', 'bulk' );
+	private static function form_from_post( array $post ): array {
+		$type = self::post_text( $post, 'batch_type', 'bulk' );
 
 		return array(
-			'author'           => absint( self::post_text( 'author', '0' ) ),
+			'author'           => absint( self::post_text( $post, 'author', '0' ) ),
 			'batch_type'       => in_array( $type, array( 'bulk', 'repost' ), true ) ? $type : 'bulk',
-			'category'         => absint( self::post_text( 'category', '0' ) ),
-			'interval'         => absint( self::post_text( 'interval', (string) self::DEFAULT_INTERVAL ) ),
-			'max_posts'        => (int) self::post_text( 'max_posts', (string) self::DEFAULT_MAX_POSTS ),
-			'post_type'        => sanitize_key( self::post_text( 'post_type', 'post' ) ),
-			'published_after'  => self::post_text( 'published_after' ),
-			'published_before' => self::post_text( 'published_before' ),
-			'repost_min_days'  => self::post_text( 'repost_min_days' ),
-			'start_date'       => self::post_text( 'start_date' ),
-			'start_time'       => self::post_text( 'start_time' ),
-			'tags'             => substr( self::post_text( 'tags' ), 0, 500 ),
-			'timing'           => sanitize_key( self::post_text( 'timing', 'queue_end' ) ),
-			'title_search'     => substr( self::post_text( 'title_search' ), 0, 200 ),
+			'category'         => absint( self::post_text( $post, 'category', '0' ) ),
+			'interval'         => absint( self::post_text( $post, 'interval', (string) self::DEFAULT_INTERVAL ) ),
+			'max_posts'        => (int) self::post_text( $post, 'max_posts', (string) self::DEFAULT_MAX_POSTS ),
+			'post_type'        => sanitize_key( self::post_text( $post, 'post_type', 'post' ) ),
+			'published_after'  => self::post_text( $post, 'published_after' ),
+			'published_before' => self::post_text( $post, 'published_before' ),
+			'repost_min_days'  => self::post_text( $post, 'repost_min_days' ),
+			'start_date'       => self::post_text( $post, 'start_date' ),
+			'start_time'       => self::post_text( $post, 'start_time' ),
+			'tags'             => substr( self::post_text( $post, 'tags' ), 0, 500 ),
+			'timing'           => sanitize_key( self::post_text( $post, 'timing', 'queue_end' ) ),
+			'title_search'     => substr( self::post_text( $post, 'title_search' ), 0, 200 ),
 		);
 	}
 
@@ -2845,12 +2845,12 @@ final class BatchController {
 	/**
 	 * Decode a POST JSON object for the older raw-document form.
 	 *
-	 * @param string $key Key.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
 	 * @return array<string,mixed>
 	 */
-	private static function post_json_object( string $key ): array {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked by caller and JSON is decoded structurally.
-		$raw = isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
+	private static function post_json_object( array $post, string $key ): array {
+		$raw = isset( $post[ $key ] ) ? $post[ $key ] : '';
 		if ( ! is_string( $raw ) ) {
 			throw new ValidationException( 'JSON field is invalid.' );
 		}
@@ -2866,13 +2866,13 @@ final class BatchController {
 	/**
 	 * Return POST text.
 	 *
-	 * @param string $key Key.
-	 * @param string $fallback Fallback.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
+	 * @param string              $fallback Fallback.
 	 * @return string
 	 */
-	private static function post_text( string $key, string $fallback = '' ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers check nonces before reading mutations.
-		$value = isset( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $fallback;
+	private static function post_text( array $post, string $key, string $fallback = '' ): string {
+		$value = isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? sanitize_text_field( $post[ $key ] ) : $fallback;
 
 		return is_string( $value ) ? $value : $fallback;
 	}
@@ -2886,7 +2886,7 @@ final class BatchController {
 	 */
 	private static function query_text( string $key, int $maximum ): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only display query args.
-		$value = isset( $_GET[ $key ] ) ? sanitize_text_field( wp_unslash( $_GET[ $key ] ) ) : '';
+		$value = isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ? sanitize_text_field( wp_unslash( $_GET[ $key ] ) ) : '';
 
 		return strlen( $value ) > $maximum ? substr( $value, 0, $maximum ) : $value;
 	}
@@ -2899,7 +2899,7 @@ final class BatchController {
 	 */
 	private static function query_key( string $key ): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing query arg.
-		return isset( $_GET[ $key ] ) ? sanitize_key( wp_unslash( $_GET[ $key ] ) ) : '';
+		return isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ? sanitize_key( wp_unslash( $_GET[ $key ] ) ) : '';
 	}
 
 	/**

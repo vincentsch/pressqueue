@@ -37,8 +37,8 @@ final class RulesController {
 		self::require_capability();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Routing is read-only.
-		$tab  = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
-		$view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+		$tab  = isset( $_GET['tab'] ) && is_string( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : '';
+		$view = isset( $_GET['view'] ) && is_string( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		if ( 'templates' === $tab ) {
@@ -371,10 +371,10 @@ final class RulesController {
 	 * Handle rule save.
 	 */
 	public static function handle_save_rule(): void {
-		AdminPostBoundary::check( 'pressqueue_save_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_save_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
 		$repository = new RuleRepository();
-		$public_id  = self::post_text( 'rule_public_id' );
+		$public_id  = self::post_text( $post, 'rule_public_id' );
 		$current    = null;
 
 		try {
@@ -387,18 +387,18 @@ final class RulesController {
 			self::redirect( array( 'pressqueue_message' => 'rule_not_found' ) );
 		}
 
-		$effect = null === $current ? ( 'exclude' === self::post_text( 'effect' ) ? 'exclude' : 'include' ) : $current->effect;
+		$effect = null === $current ? ( 'exclude' === self::post_text( $post, 'effect' ) ? 'exclude' : 'include' ) : $current->effect;
 
 		try {
-			$input = RuleEditor::input_from_request( $current );
+			$input = RuleEditor::input_from_request( $post, $current );
 
 			if ( null === $current ) {
 				$rule = $repository->create( $input );
 			} else {
-				$rule = $repository->update( $current->public_id, self::post_int( 'lock_version', 0 ), RuleEditor::changes_for_update( $current, $input ) );
+				$rule = $repository->update( $current->public_id, self::post_int( $post, 'lock_version', 0 ), RuleEditor::changes_for_update( $current, $input ) );
 			}
 		} catch ( \Throwable $throwable ) {
-			RuleEditor::store_draft( $current, $effect, $throwable );
+			RuleEditor::store_draft( $post, $current, $effect, $throwable );
 			$args = null === $current
 				? array(
 					'view'   => 'new',
@@ -412,7 +412,7 @@ final class RulesController {
 		}
 
 		$was_enabled = null !== $current && $current->enabled;
-		$wants_test  = 'test' === self::post_text( 'save_intent' );
+		$wants_test  = 'test' === self::post_text( $post, 'save_intent' );
 
 		if ( $rule->enabled ) {
 			self::redirect(
@@ -442,14 +442,14 @@ final class RulesController {
 	 * A rule whose current version was not tested is tested first; the person then confirms on the test view.
 	 */
 	public static function handle_enable_rule(): void {
-		AdminPostBoundary::check( 'pressqueue_enable_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_enable_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
-		$return_view = self::return_view();
+		$return_view = self::return_view( $post );
 
 		try {
 			$repository = new RuleRepository();
-			$rule       = $repository->find_by_public_id( self::post_text( 'rule_public_id' ) );
-			$lock       = self::post_int( 'lock_version', 0 );
+			$rule       = $repository->find_by_public_id( self::post_text( $post, 'rule_public_id' ) );
+			$lock       = self::post_int( $post, 'lock_version', 0 );
 
 			if ( null === $rule ) {
 				throw new ValidationException( 'Rule does not exist.' );
@@ -466,7 +466,7 @@ final class RulesController {
 			$rule = $repository->enable_after_preview( $rule->public_id, $lock );
 			self::redirect_after_toggle( $rule, $return_view, 'rule_enabled' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( array_merge( self::return_args( $return_view ), array( 'pressqueue_message' => 'rule_error' ) ), SafeOperatorError::redirect_detail( $throwable ) );
+			self::redirect( array_merge( self::return_args( $post, $return_view ), array( 'pressqueue_message' => 'rule_error' ) ), SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -474,15 +474,15 @@ final class RulesController {
 	 * Handle rule disable.
 	 */
 	public static function handle_disable_rule(): void {
-		AdminPostBoundary::check( 'pressqueue_disable_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_disable_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
-		$return_view = self::return_view();
+		$return_view = self::return_view( $post );
 
 		try {
-			$rule = ( new RuleRepository() )->update( self::post_text( 'rule_public_id' ), self::post_int( 'lock_version', 1 ), array( 'enabled' => false ) );
+			$rule = ( new RuleRepository() )->update( self::post_text( $post, 'rule_public_id' ), self::post_int( $post, 'lock_version', 1 ), array( 'enabled' => false ) );
 			self::redirect_after_toggle( $rule, $return_view, 'rule_disabled' );
 		} catch ( \Throwable $throwable ) {
-			self::redirect( array_merge( self::return_args( $return_view ), array( 'pressqueue_message' => 'rule_error' ) ), SafeOperatorError::redirect_detail( $throwable ) );
+			self::redirect( array_merge( self::return_args( $post, $return_view ), array( 'pressqueue_message' => 'rule_error' ) ), SafeOperatorError::redirect_detail( $throwable ) );
 		}
 	}
 
@@ -490,19 +490,19 @@ final class RulesController {
 	 * Handle a one-post test.
 	 */
 	public static function handle_rule_post_preview(): void {
-		AdminPostBoundary::check( 'pressqueue_preview_rule_post', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_preview_rule_post', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
-		$public_id = self::post_text( 'rule_public_id' );
+		$public_id = self::post_text( $post, 'rule_public_id' );
 
 		try {
-			$rule    = self::requested_rule_from_request();
-			$post_id = self::post_int( 'post_id', 0 );
+			$rule    = self::requested_rule_from_request( $post );
+			$post_id = self::post_int( $post, 'post_id', 0 );
 
 			if ( ! RuleTestView::can_preview_post( $post_id ) ) {
 				throw new ValidationException( 'You are not allowed to preview this post.' );
 			}
 
-			RuleTestView::run( $rule, array( $post_id ), self::post_trigger( $rule ), 1, true );
+			RuleTestView::run( $rule, array( $post_id ), self::post_trigger( $post, $rule ), 1, true );
 			self::redirect(
 				array(
 					'view'               => 'test',
@@ -519,15 +519,15 @@ final class RulesController {
 	 * Handle a recent-posts test.
 	 */
 	public static function handle_rule_recent_preview(): void {
-		AdminPostBoundary::check( 'pressqueue_preview_rule_recent', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_preview_rule_recent', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
-		$public_id = self::post_text( 'rule_public_id' );
+		$public_id = self::post_text( $post, 'rule_public_id' );
 
 		try {
-			$rule  = self::requested_rule_from_request();
-			$count = max( 1, min( RuleTestView::MAX_COUNT, self::post_int( 'count', RuleTestView::DEFAULT_COUNT ) ) );
+			$rule  = self::requested_rule_from_request( $post );
+			$count = max( 1, min( RuleTestView::MAX_COUNT, self::post_int( $post, 'count', RuleTestView::DEFAULT_COUNT ) ) );
 
-			RuleTestView::run( $rule, RuleTestView::recent_post_ids( $rule, $count ), self::post_trigger( $rule ), $count, false );
+			RuleTestView::run( $rule, RuleTestView::recent_post_ids( $rule, $count ), self::post_trigger( $post, $rule ), $count, false );
 			self::redirect(
 				array(
 					'view'               => 'test',
@@ -607,12 +607,12 @@ final class RulesController {
 	 * Permanently delete a rule that is switched off.
 	 */
 	public static function handle_delete_rule(): void {
-		AdminPostBoundary::check( 'pressqueue_delete_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_delete_rule', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue rules.', 'pressqueue' ) );
 
-		$public_id = self::post_text( 'rule_public_id' );
+		$public_id = self::post_text( $post, 'rule_public_id' );
 
 		try {
-			( new RuleRepository() )->delete_disabled( $public_id, self::post_int( 'lock_version', 0 ) );
+			( new RuleRepository() )->delete_disabled( $public_id, self::post_int( $post, 'lock_version', 0 ) );
 		} catch ( \Throwable $throwable ) {
 			$messages = array(
 				'Rule must be disabled before it can be deleted.' => 'rule_delete_on',
@@ -675,11 +675,12 @@ final class RulesController {
 	/**
 	 * Return query args for the view a form came from.
 	 *
-	 * @param string $return_view Return view.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $return_view Return view.
 	 * @return array<string,string>
 	 */
-	private static function return_args( string $return_view ): array {
-		$public_id = self::post_text( 'rule_public_id' );
+	private static function return_args( array $post, string $return_view ): array {
+		$public_id = self::post_text( $post, 'rule_public_id' );
 
 		if ( 'list' === $return_view || ! PublicIds::is_valid( $public_id ) ) {
 			return array();
@@ -712,10 +713,11 @@ final class RulesController {
 	/**
 	 * Return the posted return view.
 	 *
+	 * @param array<string,mixed> $post Verified, unslashed form data.
 	 * @return string
 	 */
-	private static function return_view(): string {
-		$view = sanitize_key( self::post_text( 'return_view', 'list' ) );
+	private static function return_view( array $post ): string {
+		$view = sanitize_key( self::post_text( $post, 'return_view', 'list' ) );
 
 		return in_array( $view, self::RETURN_VIEWS, true ) ? $view : 'list';
 	}
@@ -723,11 +725,12 @@ final class RulesController {
 	/**
 	 * Return the posted trigger, or the rule's default.
 	 *
-	 * @param RuleRecord $rule Rule.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param RuleRecord          $rule Rule.
 	 * @return string
 	 */
-	private static function post_trigger( RuleRecord $rule ): string {
-		$trigger = sanitize_key( self::post_text( 'trigger' ) );
+	private static function post_trigger( array $post, RuleRecord $rule ): string {
+		$trigger = sanitize_key( self::post_text( $post, 'trigger' ) );
 
 		return in_array( $trigger, array_keys( Labels::triggers() ), true ) ? $trigger : RuleTestView::default_trigger( $rule );
 	}
@@ -735,16 +738,17 @@ final class RulesController {
 	/**
 	 * Load the posted rule and require that the posted versions are current.
 	 *
+	 * @param array<string,mixed> $post Verified, unslashed form data.
 	 * @return RuleRecord
 	 */
-	private static function requested_rule_from_request(): RuleRecord {
-		$rule = ( new RuleRepository() )->find_by_public_id( self::post_text( 'rule_public_id' ) );
+	private static function requested_rule_from_request( array $post ): RuleRecord {
+		$rule = ( new RuleRepository() )->find_by_public_id( self::post_text( $post, 'rule_public_id' ) );
 
 		if ( null === $rule ) {
 			throw new ValidationException( 'Rule does not exist.' );
 		}
 
-		if ( self::post_int( 'lock_version', 0 ) !== $rule->lock_version || self::post_int( 'rule_version', 0 ) !== $rule->version ) {
+		if ( self::post_int( $post, 'lock_version', 0 ) !== $rule->lock_version || self::post_int( $post, 'rule_version', 0 ) !== $rule->version ) {
 			throw new ValidationException( 'Rule version changed before preview.' );
 		}
 
@@ -775,7 +779,7 @@ final class RulesController {
 	 */
 	public static function rule_from_query(): ?RuleRecord {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing.
-		$public_id = isset( $_GET['rule'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_GET['rule'] ) ) ) : '';
+		$public_id = isset( $_GET['rule'] ) && is_string( $_GET['rule'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_GET['rule'] ) ) ) : '';
 
 		if ( ! PublicIds::is_valid( $public_id ) ) {
 			return null;
@@ -791,7 +795,7 @@ final class RulesController {
 	 */
 	private static function requested_effect(): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing.
-		$effect = isset( $_GET['effect'] ) ? sanitize_key( wp_unslash( $_GET['effect'] ) ) : 'include';
+		$effect = isset( $_GET['effect'] ) && is_string( $_GET['effect'] ) ? sanitize_key( wp_unslash( $_GET['effect'] ) ) : 'include';
 
 		return 'exclude' === $effect ? 'exclude' : 'include';
 	}
@@ -804,9 +808,9 @@ final class RulesController {
 		SettingsController::render_notice();
 
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Notice query args are display-only.
-		$message = isset( $_GET['pressqueue_message'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_message'] ) ) : '';
-		$detail  = isset( $_GET['pressqueue_detail'] ) ? SafeOperatorError::notice_detail( sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) ) : '';
-		$view    = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+		$message = isset( $_GET['pressqueue_message'] ) && is_string( $_GET['pressqueue_message'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_message'] ) ) : '';
+		$detail  = isset( $_GET['pressqueue_detail'] ) && is_string( $_GET['pressqueue_detail'] ) ? SafeOperatorError::notice_detail( sanitize_text_field( wp_unslash( $_GET['pressqueue_detail'] ) ) ) : '';
+		$view    = isset( $_GET['view'] ) && is_string( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		$messages = array(
@@ -947,25 +951,25 @@ final class RulesController {
 	/**
 	 * Return a POST text field.
 	 *
-	 * @param string $key Key.
-	 * @param string $fallback Fallback.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
+	 * @param string              $fallback Fallback.
 	 * @return string
 	 */
-	public static function post_text( string $key, string $fallback = '' ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers check nonces before reading mutations.
-		return isset( $_POST[ $key ] ) && is_string( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $fallback;
+	public static function post_text( array $post, string $key, string $fallback = '' ): string {
+		return isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? sanitize_text_field( $post[ $key ] ) : $fallback;
 	}
 
 	/**
 	 * Return a POST integer field.
 	 *
-	 * @param string $key Key.
-	 * @param int    $fallback Fallback.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
+	 * @param int                 $fallback Fallback.
 	 * @return int
 	 */
-	public static function post_int( string $key, int $fallback ): int {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers check nonces before reading mutations.
-		return isset( $_POST[ $key ] ) && is_string( $_POST[ $key ] ) ? (int) sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $fallback;
+	public static function post_int( array $post, string $key, int $fallback ): int {
+		return isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? (int) sanitize_text_field( $post[ $key ] ) : $fallback;
 	}
 
 	/**

@@ -472,8 +472,8 @@ final class OverviewController {
 	 */
 	private static function render_check_post(): void {
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only search and preview.
-		$search  = isset( $_GET['check'] ) ? sanitize_text_field( wp_unslash( $_GET['check'] ) ) : '';
-		$post_id = isset( $_GET['check_post'] ) ? absint( wp_unslash( $_GET['check_post'] ) ) : 0;
+		$search  = isset( $_GET['check'] ) && is_string( $_GET['check'] ) ? sanitize_text_field( wp_unslash( $_GET['check'] ) ) : '';
+		$post_id = isset( $_GET['check_post'] ) && is_string( $_GET['check_post'] ) ? absint( wp_unslash( $_GET['check_post'] ) ) : 0;
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		echo '<div class="pq-card pq-card--pad pq-stack" id="pq-check">';

@@ -122,7 +122,7 @@ final class AdminScreens {
 	public static function highlight_hidden_pages( $submenu_file, $parent_file = '' ) {
 		unset( $parent_file );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Menu highlighting is read-only.
-		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 		$map  = array(
 			DeliveryDetailController::SLUG => DeliveryListController::SLUG,
 			self::SLUG_DECISIONS           => DeliveryListController::SLUG,
@@ -157,7 +157,7 @@ final class AdminScreens {
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Menu highlighting is read-only.
-		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 
 		return array_key_exists( $page, $hidden ) ? self::SLUG_ROOT : $parent_file;
 	}
@@ -258,10 +258,10 @@ final class AdminScreens {
 	 * Handle post preview against enabled rules.
 	 */
 	public static function handle_post_preview(): void {
-		AdminPostBoundary::check( 'pressqueue_preview_post', Capabilities::VIEW_DECISIONS, __( 'You are not allowed to view PressQueue decisions.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_preview_post', Capabilities::VIEW_DECISIONS, __( 'You are not allowed to view PressQueue decisions.', 'pressqueue' ) );
 
 		// The old preview form now hands over to the overview's "Check a post" card.
-		wp_safe_redirect( Ui::url( Ui::PAGE_OVERVIEW, array( 'check_post' => self::post_int( 'post_id', 0 ) ) ) . '#pq-check' );
+		wp_safe_redirect( Ui::url( Ui::PAGE_OVERVIEW, array( 'check_post' => self::post_int( $post, 'post_id', 0 ) ) ) . '#pq-check' );
 		exit;
 	}
 
@@ -279,12 +279,12 @@ final class AdminScreens {
 	/**
 	 * Return a POST integer field.
 	 *
-	 * @param string $key Key.
-	 * @param int    $fallback Fallback.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
+	 * @param int                 $fallback Fallback.
 	 * @return int
 	 */
-	private static function post_int( string $key, int $fallback ): int {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers check nonces before reading mutations.
-		return isset( $_POST[ $key ] ) ? (int) sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $fallback;
+	private static function post_int( array $post, string $key, int $fallback ): int {
+		return isset( $post[ $key ] ) ? (int) sanitize_text_field( $post[ $key ] ) : $fallback;
 	}
 }

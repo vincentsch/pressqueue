@@ -1138,14 +1138,8 @@ final class DecisionsController {
 	 * @return string
 	 */
 	private static function query_text( string $key, int $maximum ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Decision filters are read-only and validated against fixed lists.
-		$value = isset( $_GET[ $key ] ) ? wp_unslash( $_GET[ $key ] ) : '';
-
-		if ( ! is_string( $value ) ) {
-			return '';
-		}
-
-		$value = trim( $value );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Decision filters are read-only and validated against fixed lists.
+		$value = isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ? sanitize_text_field( wp_unslash( $_GET[ $key ] ) ) : '';
 
 		return strlen( $value ) > $maximum ? substr( $value, 0, $maximum ) : $value;
 	}

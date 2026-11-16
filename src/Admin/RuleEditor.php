@@ -161,30 +161,31 @@ final class RuleEditor {
 	/**
 	 * Build rule repository input from the submitted editor.
 	 *
-	 * @param RuleRecord|null $current Existing rule.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param RuleRecord|null     $current Existing rule.
 	 * @return array<string,mixed>
 	 */
-	public static function input_from_request( ?RuleRecord $current = null ): array {
-		$modern = '2' === RulesController::post_text( 'rule_form' );
+	public static function input_from_request( array $post, ?RuleRecord $current = null ): array {
+		$modern = '2' === RulesController::post_text( $post, 'rule_form' );
 
 		if ( $modern ) {
-			$effect = null === $current ? ( 'exclude' === RulesController::post_text( 'effect' ) ? 'exclude' : 'include' ) : $current->effect;
+			$effect = null === $current ? ( 'exclude' === RulesController::post_text( $post, 'effect' ) ? 'exclude' : 'include' ) : $current->effect;
 		} else {
-			$effect = RulesController::post_text( 'effect', 'include' );
+			$effect = RulesController::post_text( $post, 'effect', 'include' );
 		}
 
-		$allowlist = self::custom_fields_from_request( $current );
+		$allowlist = self::custom_fields_from_request( $post, $current );
 		$input     = array(
-			'condition_tree'         => self::decode_object( self::post_raw( 'condition_tree_json' ), 'conditions' ),
+			'condition_tree'         => self::decode_object( self::post_raw( $post, 'condition_tree_json' ), 'conditions' ),
 			'custom_field_allowlist' => $allowlist,
-			'destination_set'        => self::destinations_from_request( $effect, $modern ),
+			'destination_set'        => self::destinations_from_request( $post, $effect, $modern ),
 			'effect'                 => $effect,
-			'media_policy'           => self::mode_from_request( 'media_policy', $current, $effect, $modern ),
-			'name'                   => RulesController::post_text( 'name' ),
-			'priority'               => isset( $_POST['priority'] ) ? RulesController::post_int( 'priority', 100 ) : ( null === $current ? 100 : $current->priority ), // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Caller checks the nonce.
-			'schedule_policy'        => self::mode_from_request( 'schedule_policy', $current, $effect, $modern ),
-			'template_set'           => self::template_set_from_request( $current, $effect, $modern ),
-			'triggers'               => self::triggers_from_request( $current, $effect, $modern ),
+			'media_policy'           => self::mode_from_request( $post, 'media_policy', $current, $effect, $modern ),
+			'name'                   => RulesController::post_text( $post, 'name' ),
+			'priority'               => isset( $post['priority'] ) ? RulesController::post_int( $post, 'priority', 100 ) : ( null === $current ? 100 : $current->priority ),
+			'schedule_policy'        => self::mode_from_request( $post, 'schedule_policy', $current, $effect, $modern ),
+			'template_set'           => self::template_set_from_request( $post, $current, $effect, $modern ),
+			'triggers'               => self::triggers_from_request( $post, $current, $effect, $modern ),
 		);
 
 		if ( '' === trim( $input['name'] ) ) {
@@ -196,7 +197,7 @@ final class RuleEditor {
 			$input['source_template_version']   = $current->source_template_version;
 		}
 
-		$adopted = strtoupper( RulesController::post_text( 'adopted_template_public_id' ) );
+		$adopted = strtoupper( RulesController::post_text( $post, 'adopted_template_public_id' ) );
 		if ( 'include' === $effect && PublicIds::is_valid( $adopted ) ) {
 			$template = ( new TemplateRepository() )->find_by_public_id( $adopted );
 			if ( null !== $template && $template->enabled && self::same_template_set( $input['template_set'], $template->template_set, $allowlist ) ) {
@@ -228,17 +229,16 @@ final class RuleEditor {
 	/**
 	 * Keep the submitted fields so the editor can show them again with the error.
 	 *
-	 * @param RuleRecord|null $current Existing rule.
-	 * @param string          $effect Effect.
-	 * @param \Throwable      $error Failure.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param RuleRecord|null     $current Existing rule.
+	 * @param string              $effect Effect.
+	 * @param \Throwable          $error Failure.
 	 */
-	public static function store_draft( ?RuleRecord $current, string $effect, \Throwable $error ): void {
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Called from a nonce-checked handler.
-		$when = isset( $_POST['when'] ) && is_array( $_POST['when'] ) ? array_map( 'sanitize_key', wp_unslash( $_POST['when'] ) ) : array();
-		$ids  = isset( $_POST['destination_channel_ids'] ) && is_array( $_POST['destination_channel_ids'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['destination_channel_ids'] ) ) : array();
+	public static function store_draft( array $post, ?RuleRecord $current, string $effect, \Throwable $error ): void {
+		$when = isset( $post['when'] ) && is_array( $post['when'] ) ? array_map( 'sanitize_key', $post['when'] ) : array();
+		$ids  = isset( $post['destination_channel_ids'] ) && is_array( $post['destination_channel_ids'] ) ? array_map( 'sanitize_text_field', $post['destination_channel_ids'] ) : array();
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each value is sanitized below.
-		$variants = isset( $_POST['message_service'] ) && is_array( $_POST['message_service'] ) ? wp_unslash( $_POST['message_service'] ) : array();
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		$variants = isset( $post['message_service'] ) && is_array( $post['message_service'] ) ? $post['message_service'] : array();
 
 		$service_messages = array();
 		foreach ( $variants as $service => $message ) {
@@ -248,20 +248,20 @@ final class RuleEditor {
 		}
 
 		$state = array(
-			'name'                   => RulesController::post_text( 'name' ),
-			'priority'               => RulesController::post_text( 'priority', '100' ),
+			'name'                   => RulesController::post_text( $post, 'name' ),
+			'priority'               => RulesController::post_text( $post, 'priority', '100' ),
 			'when'                   => array_fill_keys( array_values( array_intersect( self::WHEN_CHOICES, $when ) ), true ),
-			'add_immediate'          => '1' === RulesController::post_text( 'when_add_immediate' ),
-			'condition_json'         => self::post_raw( 'condition_tree_json' ),
-			'custom_fields'          => RulesController::post_text( 'custom_fields' ),
+			'add_immediate'          => '1' === RulesController::post_text( $post, 'when_add_immediate' ),
+			'condition_json'         => self::post_raw( $post, 'condition_tree_json' ),
+			'custom_fields'          => RulesController::post_text( $post, 'custom_fields' ),
 			'destinations'           => array_values( array_filter( $ids, array( PublicIds::class, 'is_valid' ) ) ),
-			'message_default'        => wp_strip_all_tags( self::post_raw( 'message_default' ) ),
+			'message_default'        => wp_strip_all_tags( self::post_raw( $post, 'message_default' ) ),
 			'service_messages'       => $service_messages,
-			'template_json'          => self::post_raw( 'template_set_json' ),
-			'template_json_original' => self::post_raw( 'template_set_json_original' ),
-			'schedule'               => sanitize_key( RulesController::post_text( 'schedule_policy_mode' ) ),
-			'media'                  => sanitize_key( RulesController::post_text( 'media_policy_mode' ) ),
-			'adopted_template'       => RulesController::post_text( 'adopted_template_public_id' ),
+			'template_json'          => self::post_raw( $post, 'template_set_json' ),
+			'template_json_original' => self::post_raw( $post, 'template_set_json_original' ),
+			'schedule'               => sanitize_key( RulesController::post_text( $post, 'schedule_policy_mode' ) ),
+			'media'                  => sanitize_key( RulesController::post_text( $post, 'media_policy_mode' ) ),
+			'adopted_template'       => RulesController::post_text( $post, 'adopted_template_public_id' ),
 		);
 
 		if ( 'exclude' === $effect ) {
@@ -703,7 +703,7 @@ final class RuleEditor {
 	 */
 	private static function take_draft( ?RuleRecord $rule, string $effect ): ?array {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only flag.
-		$message = isset( $_GET['pressqueue_message'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_message'] ) ) : '';
+		$message = isset( $_GET['pressqueue_message'] ) && is_string( $_GET['pressqueue_message'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_message'] ) ) : '';
 		if ( 'rule_invalid' !== $message ) {
 			return null;
 		}
@@ -816,23 +816,22 @@ final class RuleEditor {
 	/**
 	 * Read the triggers.
 	 *
-	 * @param RuleRecord|null $current Existing rule.
-	 * @param string          $effect Effect.
-	 * @param bool            $modern Whether the request came from this editor.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param RuleRecord|null     $current Existing rule.
+	 * @param string              $effect Effect.
+	 * @param bool                $modern Whether the request came from this editor.
 	 * @return array<int,string>
 	 */
-	private static function triggers_from_request( ?RuleRecord $current, string $effect, bool $modern ): array {
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Caller checks the nonce.
-		if ( ! $modern || '1' !== RulesController::post_text( 'when_controls_present' ) ) {
+	private static function triggers_from_request( array $post, ?RuleRecord $current, string $effect, bool $modern ): array {
+		if ( ! $modern || '1' !== RulesController::post_text( $post, 'when_controls_present' ) ) {
 			if ( $modern && 'exclude' === $effect ) {
 				return null === $current ? StorageEnums::RULE_TRIGGERS : ( $current->triggers['triggers'] ?? StorageEnums::RULE_TRIGGERS );
 			}
 
-			return isset( $_POST['triggers'] ) && is_array( $_POST['triggers'] ) ? array_values( array_map( 'sanitize_key', wp_unslash( $_POST['triggers'] ) ) ) : array();
+			return isset( $post['triggers'] ) && is_array( $post['triggers'] ) ? array_values( array_map( 'sanitize_key', $post['triggers'] ) ) : array();
 		}
 
-		$when = isset( $_POST['when'] ) && is_array( $_POST['when'] ) ? array_map( 'sanitize_key', wp_unslash( $_POST['when'] ) ) : array();
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		$when = isset( $post['when'] ) && is_array( $post['when'] ) ? array_map( 'sanitize_key', $post['when'] ) : array();
 
 		$current_triggers = null === $current ? array() : ( $current->triggers['triggers'] ?? array() );
 		$triggers         = array();
@@ -843,7 +842,7 @@ final class RuleEditor {
 			if ( array() !== $existing ) {
 				// Keep the stored publish triggers exactly, so saving does not quietly change the rule.
 				$triggers = $existing;
-				if ( ! in_array( 'first_publish', $existing, true ) && '1' === RulesController::post_text( 'when_add_immediate' ) ) {
+				if ( ! in_array( 'first_publish', $existing, true ) && '1' === RulesController::post_text( $post, 'when_add_immediate' ) ) {
 					$triggers[] = 'first_publish';
 				}
 			} else {
@@ -867,13 +866,14 @@ final class RuleEditor {
 	/**
 	 * Read the custom field list.
 	 *
-	 * @param RuleRecord|null $current Existing rule.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param RuleRecord|null     $current Existing rule.
 	 * @return array<int,string>
 	 */
-	private static function custom_fields_from_request( ?RuleRecord $current ): array {
-		if ( '1' === RulesController::post_text( 'custom_fields_present' ) ) {
+	private static function custom_fields_from_request( array $post, ?RuleRecord $current ): array {
+		if ( '1' === RulesController::post_text( $post, 'custom_fields_present' ) ) {
 			$fields = array();
-			foreach ( explode( ',', RulesController::post_text( 'custom_fields' ) ) as $field ) {
+			foreach ( explode( ',', RulesController::post_text( $post, 'custom_fields' ) ) as $field ) {
 				$field = trim( $field );
 				if ( '' !== $field ) {
 					$fields[] = $field;
@@ -888,8 +888,8 @@ final class RuleEditor {
 			}
 		}
 
-		if ( '' !== self::post_raw( 'custom_field_allowlist_json' ) ) {
-			$value = self::decode_json( self::post_raw( 'custom_field_allowlist_json' ), 'custom_fields' );
+		if ( '' !== self::post_raw( $post, 'custom_field_allowlist_json' ) ) {
+			$value = self::decode_json( self::post_raw( $post, 'custom_field_allowlist_json' ), 'custom_fields' );
 			if ( ! is_array( $value ) || ! array_is_list( $value ) ) {
 				RuleFormException::raise( 'custom_fields', __( 'The custom field list must be a JSON list.', 'pressqueue' ) );
 			}
@@ -903,11 +903,12 @@ final class RuleEditor {
 	/**
 	 * Read the destinations.
 	 *
-	 * @param string $effect Effect.
-	 * @param bool   $modern Whether the request came from this editor.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $effect Effect.
+	 * @param bool                $modern Whether the request came from this editor.
 	 * @return array<string,mixed>
 	 */
-	private static function destinations_from_request( string $effect, bool $modern ): array {
+	private static function destinations_from_request( array $post, string $effect, bool $modern ): array {
 		if ( 'exclude' === $effect ) {
 			return array(
 				'schema_version' => 1,
@@ -915,12 +916,11 @@ final class RuleEditor {
 			);
 		}
 
-		if ( '1' !== RulesController::post_text( 'destination_controls_present' ) ) {
-			return self::decode_object( self::post_raw( 'destination_set_json' ), 'where' );
+		if ( '1' !== RulesController::post_text( $post, 'destination_controls_present' ) ) {
+			return self::decode_object( self::post_raw( $post, 'destination_set_json' ), 'where' );
 		}
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Caller checks the nonce; values are type-checked and sanitized below.
-		$ids = isset( $_POST['destination_channel_ids'] ) ? wp_unslash( $_POST['destination_channel_ids'] ) : array();
+		$ids = isset( $post['destination_channel_ids'] ) ? $post['destination_channel_ids'] : array();
 		if ( ! is_array( $ids ) || ! array_is_list( $ids ) ) {
 			RuleFormException::raise( 'where', __( 'Pick the channels again.', 'pressqueue' ) );
 		}
@@ -946,14 +946,15 @@ final class RuleEditor {
 	/**
 	 * Read a schedule or image choice.
 	 *
-	 * @param string          $name Policy name.
-	 * @param RuleRecord|null $current Existing rule.
-	 * @param string          $effect Effect.
-	 * @param bool            $modern Whether the request came from this editor.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $name Policy name.
+	 * @param RuleRecord|null     $current Existing rule.
+	 * @param string              $effect Effect.
+	 * @param bool                $modern Whether the request came from this editor.
 	 * @return array<string,mixed>
 	 */
-	private static function mode_from_request( string $name, ?RuleRecord $current, string $effect, bool $modern ): array {
-		$mode = sanitize_key( RulesController::post_text( $name . '_mode' ) );
+	private static function mode_from_request( array $post, string $name, ?RuleRecord $current, string $effect, bool $modern ): array {
+		$mode = sanitize_key( RulesController::post_text( $post, $name . '_mode' ) );
 
 		if ( '' === $mode && $modern ) {
 			if ( null !== $current ) {
@@ -964,7 +965,7 @@ final class RuleEditor {
 		}
 
 		if ( '' === $mode ) {
-			return self::decode_object( self::post_raw( $name . '_json' ), 'advanced' );
+			return self::decode_object( self::post_raw( $post, $name . '_json' ), 'advanced' );
 		}
 
 		return array(
@@ -976,12 +977,13 @@ final class RuleEditor {
 	/**
 	 * Read the message template set.
 	 *
-	 * @param RuleRecord|null $current Existing rule.
-	 * @param string          $effect Effect.
-	 * @param bool            $modern Whether the request came from this editor.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param RuleRecord|null     $current Existing rule.
+	 * @param string              $effect Effect.
+	 * @param bool                $modern Whether the request came from this editor.
 	 * @return array<string,mixed>
 	 */
-	private static function template_set_from_request( ?RuleRecord $current, string $effect, bool $modern ): array {
+	private static function template_set_from_request( array $post, ?RuleRecord $current, string $effect, bool $modern ): array {
 		if ( $modern && 'exclude' === $effect ) {
 			if ( null !== $current && null !== $current->template_set ) {
 				return $current->template_set;
@@ -993,7 +995,7 @@ final class RuleEditor {
 			);
 		}
 
-		return MessageComposer::template_set_from_request( null === $current || null === $current->template_set ? array() : $current->template_set );
+		return MessageComposer::template_set_from_request( $post, null === $current || null === $current->template_set ? array() : $current->template_set );
 	}
 
 	/**
@@ -1069,12 +1071,12 @@ final class RuleEditor {
 	/**
 	 * Read a raw POST field. Callers decode and validate it structurally.
 	 *
-	 * @param string $key Key.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
 	 * @return string
 	 */
-	private static function post_raw( string $key ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Caller checks the nonce; the value is decoded and validated structurally.
-		$raw = isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
+	private static function post_raw( array $post, string $key ): string {
+		$raw = isset( $post[ $key ] ) ? $post[ $key ] : '';
 
 		return is_string( $raw ) ? $raw : '';
 	}

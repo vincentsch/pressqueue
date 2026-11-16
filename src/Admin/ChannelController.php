@@ -77,13 +77,13 @@ final class ChannelController {
 	 * @param string $nonce_action Nonce action.
 	 */
 	private static function handle_set_enabled( bool $enabled, string $nonce_action ): void {
-		self::mutation_boundary( $nonce_action );
+		$post = self::mutation_boundary( $nonce_action );
 
-		$public_id = self::post_text( 'channel_public_id' );
+		$public_id = self::post_text( $post, 'channel_public_id' );
 		$result    = PublicIds::is_valid( $public_id ) ? array( 'channel' => $public_id ) : array();
 
 		try {
-			$channel = ( new ChannelRepository() )->set_enabled_if_current( $public_id, $enabled, self::post_text( 'updated_at' ) );
+			$channel = ( new ChannelRepository() )->set_enabled_if_current( $public_id, $enabled, self::post_text( $post, 'updated_at' ) );
 			$result  = array(
 				'message' => $enabled ? 'channel_enabled' : 'channel_disabled',
 				'channel' => $channel->public_id,
@@ -99,19 +99,20 @@ final class ChannelController {
 	 * Assert mutation request requirements.
 	 *
 	 * @param string $nonce_action Nonce action.
+	 * @return array<string,mixed> Verified, unslashed form data.
 	 */
-	private static function mutation_boundary( string $nonce_action ): void {
-		AdminPostBoundary::check( $nonce_action, Capabilities::MANAGE_CONNECTIONS, __( 'You are not allowed to manage PressQueue channels.', 'pressqueue' ) );
+	private static function mutation_boundary( string $nonce_action ): array {
+		return AdminPostBoundary::read( $nonce_action, Capabilities::MANAGE_CONNECTIONS, __( 'You are not allowed to manage PressQueue channels.', 'pressqueue' ) );
 	}
 
 	/**
 	 * Return a POST text field.
 	 *
-	 * @param string $key Key.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
 	 * @return string
 	 */
-	private static function post_text( string $key ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked by caller.
-		return isset( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : '';
+	private static function post_text( array $post, string $key ): string {
+		return isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? sanitize_text_field( $post[ $key ] ) : '';
 	}
 }

@@ -4,7 +4,7 @@ Tags: social media, buffer, auto post, share, scheduling
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.1.1
+Stable tag: 0.1.2
 License: MIT
 License URI: https://opensource.org/license/mit
 
@@ -188,6 +188,12 @@ site's keys to WordPress.org.
 6. The overview: recent shares and a quick check of what would happen to any post.
 
 == Changelog ==
+
+= 0.1.2 =
+
+* Verify admin form requests before passing their data to input helpers.
+* Sanitize Activity filters and reject arrays where a URL parameter needs text.
+* Keep the existing activation state when refusing an unsupported network activation request.
 
 = 0.1.1 =
 

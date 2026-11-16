@@ -380,7 +380,7 @@ final class ConditionBuilderController {
 	 */
 	private static function is_rules_screen(): bool {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Page routing is read-only.
-		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 
 		return 'pressqueue-rules' === $page;
 	}

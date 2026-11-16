@@ -245,19 +245,20 @@ final class MessageComposer {
 	/**
 	 * Read a template set from the composer fields, or from the JSON editor when it was changed.
 	 *
+	 * @param array<string,mixed> $post Verified, unslashed form data.
 	 * @param array<string,mixed> $current Current template set, used to keep metadata.
 	 * @return array<string,mixed>
 	 */
-	public static function template_set_from_request( array $current ): array {
-		$json = self::post_raw( 'template_set_json' );
+	public static function template_set_from_request( array $post, array $current ): array {
+		$json = self::post_raw( $post, 'template_set_json' );
 
-		if ( '1' !== self::post_text( 'message_controls_present' ) ) {
+		if ( '1' !== self::post_text( $post, 'message_controls_present' ) ) {
 			return self::decode_object( $json, 'message' );
 		}
 
 		if ( '' !== trim( $json ) ) {
 			$decoded  = self::decode_object( $json, 'advanced' );
-			$original = self::post_raw( 'template_set_json_original' );
+			$original = self::post_raw( $post, 'template_set_json_original' );
 			$before   = null;
 
 			try {
@@ -272,12 +273,11 @@ final class MessageComposer {
 		}
 
 		$set = array(
-			'default_message' => self::post_message( 'message_default' ),
+			'default_message' => self::post_message( $post, 'message_default' ),
 			'schema_version'  => 1,
 		);
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Caller checks the nonce; each value is sanitized below.
-		$variants = isset( $_POST['message_service'] ) ? wp_unslash( $_POST['message_service'] ) : array();
+		$variants = isset( $post['message_service'] ) ? $post['message_service'] : array();
 		if ( is_array( $variants ) ) {
 			$service_messages = array();
 			foreach ( $variants as $service => $message ) {
@@ -357,34 +357,34 @@ final class MessageComposer {
 	/**
 	 * Read a message textarea.
 	 *
-	 * @param string $key Field name.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Field name.
 	 * @return string
 	 */
-	private static function post_message( string $key ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Caller checks the nonce. Tags are stripped here and RuleDocuments normalizes the rest, so percent signs and spacing stay as written.
-		return isset( $_POST[ $key ] ) && is_string( $_POST[ $key ] ) ? trim( wp_strip_all_tags( wp_unslash( $_POST[ $key ] ) ) ) : '';
+	private static function post_message( array $post, string $key ): string {
+		return isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? trim( wp_strip_all_tags( $post[ $key ] ) ) : '';
 	}
 
 	/**
 	 * Read a POST text field.
 	 *
-	 * @param string $key Field name.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Field name.
 	 * @return string
 	 */
-	private static function post_text( string $key ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Caller checks the nonce.
-		return isset( $_POST[ $key ] ) && is_string( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : '';
+	private static function post_text( array $post, string $key ): string {
+		return isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? sanitize_text_field( $post[ $key ] ) : '';
 	}
 
 	/**
 	 * Read a raw JSON POST field. JSON is decoded and validated structurally afterwards.
 	 *
-	 * @param string $key Field name.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Field name.
 	 * @return string
 	 */
-	private static function post_raw( string $key ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Caller checks the nonce; JSON is decoded and validated structurally.
-		$raw = isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
+	private static function post_raw( array $post, string $key ): string {
+		$raw = isset( $post[ $key ] ) ? $post[ $key ] : '';
 
 		return is_string( $raw ) ? $raw : '';
 	}

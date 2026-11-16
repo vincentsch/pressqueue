@@ -52,8 +52,8 @@ final class AdminMutationBoundaryTest extends TestCase {
 	 */
 	public function test_admin_mutations_require_capability( string $controller, string $nonce_action, string $capability, string $message ): void {
 		unset( $capability );
-		$_SERVER['REQUEST_METHOD'] = 'POST';
-		$_REQUEST['_wpnonce']      = 'valid-nonce';
+		$_SERVER['REQUEST_METHOD']                                = 'POST';
+		$_REQUEST['_wpnonce']                                     = 'valid-nonce';
 		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ] = 'valid-nonce';
 
 		$this->expectException( RuntimeException::class );
@@ -73,9 +73,9 @@ final class AdminMutationBoundaryTest extends TestCase {
 	public function test_admin_mutations_require_post_requests( string $controller, string $nonce_action, string $capability, string $message ): void {
 		unset( $message );
 		$GLOBALS['pressqueue_test_current_user_caps'][ $capability ] = true;
-		$_SERVER['REQUEST_METHOD'] = 'GET';
-		$_REQUEST['_wpnonce']      = 'valid-nonce';
-		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ] = 'valid-nonce';
+		$_SERVER['REQUEST_METHOD']                                   = 'GET';
+		$_REQUEST['_wpnonce']                                        = 'valid-nonce';
+		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ]    = 'valid-nonce';
 
 		$this->expectException( RuntimeException::class );
 		$this->expectExceptionMessage( 'PressQueue changes require POST.' );
@@ -94,9 +94,9 @@ final class AdminMutationBoundaryTest extends TestCase {
 	public function test_admin_mutations_require_valid_nonces( string $controller, string $nonce_action, string $capability, string $message ): void {
 		unset( $message );
 		$GLOBALS['pressqueue_test_current_user_caps'][ $capability ] = true;
-		$_SERVER['REQUEST_METHOD'] = 'POST';
-		$_REQUEST['_wpnonce']      = 'stale-nonce';
-		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ] = 'valid-nonce';
+		$_SERVER['REQUEST_METHOD']                                   = 'POST';
+		$_REQUEST['_wpnonce']                                        = 'stale-nonce';
+		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ]    = 'valid-nonce';
 
 		$this->expectException( RuntimeException::class );
 		$this->expectExceptionMessage( 'Nonce check failed.' );
@@ -115,9 +115,9 @@ final class AdminMutationBoundaryTest extends TestCase {
 	public function test_admin_mutations_accept_valid_post_nonces( string $controller, string $nonce_action, string $capability, string $message ): void {
 		unset( $message );
 		$GLOBALS['pressqueue_test_current_user_caps'][ $capability ] = true;
-		$_SERVER['REQUEST_METHOD'] = 'POST';
-		$_REQUEST['_wpnonce']      = 'valid-nonce';
-		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ] = 'valid-nonce';
+		$_SERVER['REQUEST_METHOD']                                   = 'POST';
+		$_REQUEST['_wpnonce']                                        = 'valid-nonce';
+		$GLOBALS['pressqueue_test_valid_nonces'][ $nonce_action ]    = 'valid-nonce';
 
 		$this->invokeMutationBoundary( $controller, $nonce_action );
 
@@ -127,8 +127,8 @@ final class AdminMutationBoundaryTest extends TestCase {
 	/**
 	 * @dataProvider deliveryHandlerBoundaryProvider
 	 *
-	 * @param callable $handler Handler.
-	 * @param string   $nonce_action Nonce action.
+	 * @param callable             $handler Handler.
+	 * @param string               $nonce_action Nonce action.
 	 * @param array<string,string> $post POST fields.
 	 */
 	public function test_delivery_handlers_require_operator_capability( callable $handler, string $nonce_action, array $post ): void {
@@ -146,8 +146,8 @@ final class AdminMutationBoundaryTest extends TestCase {
 	/**
 	 * @dataProvider deliveryHandlerBoundaryProvider
 	 *
-	 * @param callable $handler Handler.
-	 * @param string   $nonce_action Nonce action.
+	 * @param callable             $handler Handler.
+	 * @param string               $nonce_action Nonce action.
 	 * @param array<string,string> $post POST fields.
 	 */
 	public function test_delivery_handlers_require_post_requests( callable $handler, string $nonce_action, array $post ): void {
@@ -166,8 +166,8 @@ final class AdminMutationBoundaryTest extends TestCase {
 	/**
 	 * @dataProvider deliveryHandlerBoundaryProvider
 	 *
-	 * @param callable $handler Handler.
-	 * @param string   $nonce_action Nonce action.
+	 * @param callable             $handler Handler.
+	 * @param string               $nonce_action Nonce action.
 	 * @param array<string,string> $post POST fields.
 	 */
 	public function test_delivery_handlers_require_valid_nonces( callable $handler, string $nonce_action, array $post ): void {
@@ -283,16 +283,16 @@ final class AdminMutationBoundaryTest extends TestCase {
 
 	public function test_confirmation_requires_the_exact_tick(): void {
 		$_POST = array();
-		self::assertFalse( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation' ) );
+		self::assertFalse( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation', array( wp_unslash( $_POST ) ) ) );
 
 		$_POST = array( 'confirm_local_effect' => 'yes' );
-		self::assertFalse( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation' ) );
+		self::assertFalse( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation', array( wp_unslash( $_POST ) ) ) );
 
 		$_POST = array( 'confirm_local_effect' => array( '1' ) );
-		self::assertFalse( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation' ) );
+		self::assertFalse( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation', array( wp_unslash( $_POST ) ) ) );
 
 		$_POST = array( 'confirm_local_effect' => '1' );
-		self::assertTrue( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation' ) );
+		self::assertTrue( $this->invokePrivateStatic( DeliveryActionController::class, 'has_confirmation', array( wp_unslash( $_POST ) ) ) );
 	}
 
 	public function test_confirmed_actions_check_the_tick_after_the_boundary_and_before_any_change(): void {
@@ -301,7 +301,7 @@ final class AdminMutationBoundaryTest extends TestCase {
 		foreach ( array( 'handle_cancel_delivery', 'handle_reconcile_delivery', 'handle_cancel_held_deliveries' ) as $handler ) {
 			self::assertSame( 1, preg_match( '/function ' . $handler . '\(\): void \{(.*?)\n\t\}/s', $source, $matches ), $handler );
 			$body     = $matches[1];
-			$boundary = max( (int) strpos( $body, 'mutation_boundary(' ), (int) strpos( $body, 'AdminPostBoundary::check(' ) );
+			$boundary = max( (int) strpos( $body, 'mutation_boundary(' ), (int) strpos( $body, 'AdminPostBoundary::read(' ) );
 			$tick     = strpos( $body, 'confirmation(' );
 			$change   = false === strpos( $body, '_service()' ) ? strpos( $body, '_batch(' ) : strpos( $body, '_service()' );
 
@@ -319,7 +319,7 @@ final class AdminMutationBoundaryTest extends TestCase {
 
 		$this->expectException( \PressQueue\Storage\ValidationException::class );
 
-		$this->invokePrivateStatic( DeliveryActionController::class, 'post_delivery_public_id' );
+		$this->invokePrivateStatic( DeliveryActionController::class, 'post_delivery_public_id', array( wp_unslash( $_POST ) ) );
 	}
 
 	public function test_raw_reconciliation_post_value_is_not_trimmed_or_truncated(): void {
@@ -327,7 +327,7 @@ final class AdminMutationBoundaryTest extends TestCase {
 			'remote_id' => "\n" . str_repeat( 'A', 200 ),
 		);
 
-		self::assertSame( $_POST['remote_id'], $this->invokePrivateStatic( DeliveryActionController::class, 'post_optional_raw_text', array( 'remote_id' ) ) );
+		self::assertSame( $_POST['remote_id'], $this->invokePrivateStatic( DeliveryActionController::class, 'post_optional_raw_text', array( wp_unslash( $_POST ), 'remote_id' ) ) );
 	}
 
 	/**
@@ -354,17 +354,17 @@ final class AdminMutationBoundaryTest extends TestCase {
 		);
 
 		return array(
-			'connect buffer'    => array( array( ConnectionController::class, 'handle_connect_buffer' ), 'pressqueue_connect_buffer', array( 'api_key' => 'pqfake_unit_key' ) ),
-			'finish connection' => array( array( ConnectionController::class, 'handle_finish_connection' ), 'pressqueue_finish_connection', array_merge( $connection, array( 'remote_organization_id' => 'org' ) ) ),
-			'create connection' => array( array( ConnectionController::class, 'handle_create_connection' ), 'pressqueue_create_connection', array( 'api_key' => 'pqfake_unit_key' ) ),
-			'test connection'   => array( array( ConnectionController::class, 'handle_test_connection' ), 'pressqueue_test_connection', $connection ),
-			'sync connection'   => array( array( ConnectionController::class, 'handle_sync_connection' ), 'pressqueue_sync_connection', $connection ),
-			'rotate connection' => array( array( ConnectionController::class, 'handle_rotate_connection' ), 'pressqueue_rotate_connection', array_merge( $connection, array( 'api_key' => 'pqfake_unit_key' ) ) ),
-			'enable connection' => array( array( ConnectionController::class, 'handle_enable_connection' ), 'pressqueue_enable_connection', $connection ),
+			'connect buffer'     => array( array( ConnectionController::class, 'handle_connect_buffer' ), 'pressqueue_connect_buffer', array( 'api_key' => 'pqfake_unit_key' ) ),
+			'finish connection'  => array( array( ConnectionController::class, 'handle_finish_connection' ), 'pressqueue_finish_connection', array_merge( $connection, array( 'remote_organization_id' => 'org' ) ) ),
+			'create connection'  => array( array( ConnectionController::class, 'handle_create_connection' ), 'pressqueue_create_connection', array( 'api_key' => 'pqfake_unit_key' ) ),
+			'test connection'    => array( array( ConnectionController::class, 'handle_test_connection' ), 'pressqueue_test_connection', $connection ),
+			'sync connection'    => array( array( ConnectionController::class, 'handle_sync_connection' ), 'pressqueue_sync_connection', $connection ),
+			'rotate connection'  => array( array( ConnectionController::class, 'handle_rotate_connection' ), 'pressqueue_rotate_connection', array_merge( $connection, array( 'api_key' => 'pqfake_unit_key' ) ) ),
+			'enable connection'  => array( array( ConnectionController::class, 'handle_enable_connection' ), 'pressqueue_enable_connection', $connection ),
 			'disable connection' => array( array( ConnectionController::class, 'handle_disable_connection' ), 'pressqueue_disable_connection', $connection ),
-			'disconnect'        => array( array( ConnectionController::class, 'handle_disconnect_connection' ), 'pressqueue_disconnect_connection', $connection ),
-			'enable channel'    => array( array( ChannelController::class, 'handle_enable_channel' ), 'pressqueue_enable_channel', $channel ),
-			'disable channel'   => array( array( ChannelController::class, 'handle_disable_channel' ), 'pressqueue_disable_channel', $channel ),
+			'disconnect'         => array( array( ConnectionController::class, 'handle_disconnect_connection' ), 'pressqueue_disconnect_connection', $connection ),
+			'enable channel'     => array( array( ChannelController::class, 'handle_enable_channel' ), 'pressqueue_enable_channel', $channel ),
+			'disable channel'    => array( array( ChannelController::class, 'handle_disable_channel' ), 'pressqueue_disable_channel', $channel ),
 		);
 	}
 
@@ -373,7 +373,7 @@ final class AdminMutationBoundaryTest extends TestCase {
 	 */
 	public static function deliveryHandlerBoundaryProvider(): array {
 		return array(
-			'cancel'    => array(
+			'cancel'      => array(
 				array( DeliveryActionController::class, 'handle_cancel_delivery' ),
 				'pressqueue_cancel_delivery',
 				array(
@@ -381,17 +381,17 @@ final class AdminMutationBoundaryTest extends TestCase {
 					'delivery_public_id'   => '01H00000000000000000000000',
 				),
 			),
-			'resume'    => array(
+			'resume'      => array(
 				array( DeliveryActionController::class, 'handle_resume_delivery' ),
 				'pressqueue_resume_delivery',
 				array( 'delivery_public_id' => '01H00000000000000000000000' ),
 			),
-			'retry'     => array(
+			'retry'       => array(
 				array( DeliveryActionController::class, 'handle_retry_delivery' ),
 				'pressqueue_retry_delivery',
 				array( 'delivery_public_id' => '01H00000000000000000000000' ),
 			),
-			'reconcile' => array(
+			'reconcile'   => array(
 				array( DeliveryActionController::class, 'handle_reconcile_delivery' ),
 				'pressqueue_reconcile_delivery_confirmed_not_accepted',
 				array(
@@ -428,8 +428,8 @@ final class AdminMutationBoundaryTest extends TestCase {
 	/**
 	 * Invoke one private static helper.
 	 *
-	 * @param class-string $controller Controller class.
-	 * @param string       $method_name Method name.
+	 * @param class-string     $controller Controller class.
+	 * @param string           $method_name Method name.
 	 * @param array<int,mixed> $args Arguments.
 	 * @return mixed
 	 */

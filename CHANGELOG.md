@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 (directory review update)
+
+- Read admin form data only after checking the request method, permission and
+  nonce. Input helpers now receive that data directly.
+- Sanitize Activity filters and reject arrays where a URL parameter needs text.
+- Keep the existing activation state when an early runtime check refuses an
+  unsupported network activation request.
+
 ## 0.1.1 (directory review update)
 
 - Updated Action Scheduler to 4.2.0. WordPress 6.9 or newer is now required,

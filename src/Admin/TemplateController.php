@@ -46,7 +46,7 @@ final class TemplateController {
 		self::require_capability();
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing.
-		$requested = isset( $_GET['template'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_GET['template'] ) ) ) : '';
+		$requested = isset( $_GET['template'] ) && is_string( $_GET['template'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_GET['template'] ) ) ) : '';
 
 		if ( 'NEW' === $requested ) {
 			self::render_form( null );
@@ -140,15 +140,15 @@ final class TemplateController {
 	 * Handle template create or update.
 	 */
 	public static function handle_save_template(): void {
-		AdminPostBoundary::check( 'pressqueue_save_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_save_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
 
-		$public_id = self::post_text( 'template_public_id' );
+		$public_id = self::post_text( $post, 'template_public_id' );
 
 		try {
 			$repository = new TemplateRepository();
 			$current    = '' === $public_id ? null : $repository->find_by_public_id( $public_id );
-			$name       = self::post_text( 'name' );
-			$set        = MessageComposer::template_set_from_request( null === $current ? array() : $current->template_set );
+			$name       = self::post_text( $post, 'name' );
+			$set        = MessageComposer::template_set_from_request( $post, null === $current ? array() : $current->template_set );
 
 			if ( null === $current ) {
 				$repository->create( $name, $set );
@@ -157,7 +157,7 @@ final class TemplateController {
 
 			$repository->update(
 				$current->public_id,
-				self::post_int( 'lock_version', 1 ),
+				self::post_int( $post, 'lock_version', 1 ),
 				array(
 					'name'         => $name,
 					'template_set' => $set,
@@ -188,10 +188,10 @@ final class TemplateController {
 	 * Soft-delete a template from selection.
 	 */
 	public static function handle_delete_template(): void {
-		AdminPostBoundary::check( 'pressqueue_delete_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_delete_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
 
 		try {
-			( new TemplateRepository() )->delete_from_selection( self::post_text( 'template_public_id' ), self::post_int( 'lock_version', 1 ) );
+			( new TemplateRepository() )->delete_from_selection( self::post_text( $post, 'template_public_id' ), self::post_int( $post, 'lock_version', 1 ) );
 		} catch ( \Throwable $throwable ) {
 			self::redirect( 'template_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
@@ -203,16 +203,16 @@ final class TemplateController {
 	 * Adopt the latest selected template snapshot into a rule.
 	 */
 	public static function handle_adopt_template(): void {
-		AdminPostBoundary::check( 'pressqueue_adopt_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( 'pressqueue_adopt_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
 
-		$rule_public_id = self::post_text( 'rule_public_id' );
-		$to_editor      = 'edit' === self::post_text( 'return_view' ) && PublicIds::is_valid( $rule_public_id );
+		$rule_public_id = self::post_text( $post, 'rule_public_id' );
+		$to_editor      = 'edit' === self::post_text( $post, 'return_view' ) && PublicIds::is_valid( $rule_public_id );
 
 		try {
 			( new RuleRepository() )->adopt_template_snapshot(
 				$rule_public_id,
-				self::post_int( 'lock_version', 1 ),
-				self::post_text( 'template_public_id' )
+				self::post_int( $post, 'lock_version', 1 ),
+				self::post_text( $post, 'template_public_id' )
 			);
 		} catch ( \Throwable $throwable ) {
 			if ( $to_editor ) {
@@ -345,7 +345,7 @@ final class TemplateController {
 		$messages = isset( $set['service_messages'] ) && is_array( $set['service_messages'] ) ? $set['service_messages'] : array();
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only error key.
-		$error_key = isset( $_GET['pressqueue_form_error'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_form_error'] ) ) : '';
+		$error_key = isset( $_GET['pressqueue_form_error'] ) && is_string( $_GET['pressqueue_form_error'] ) ? sanitize_key( wp_unslash( $_GET['pressqueue_form_error'] ) ) : '';
 		$errors    = array(
 			'name'    => __( 'Give the template a name of up to 191 characters.', 'pressqueue' ),
 			'message' => __( 'Write a message of up to 2,000 characters.', 'pressqueue' ),
@@ -442,10 +442,10 @@ final class TemplateController {
 	 * @param string $message Success message key.
 	 */
 	private static function set_template_enabled( bool $enabled, string $message ): void {
-		AdminPostBoundary::check( $enabled ? 'pressqueue_enable_template' : 'pressqueue_disable_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
+		$post = AdminPostBoundary::read( $enabled ? 'pressqueue_enable_template' : 'pressqueue_disable_template', Capabilities::MANAGE_RULES, __( 'You are not allowed to manage PressQueue reusable templates.', 'pressqueue' ) );
 
 		try {
-			( new TemplateRepository() )->set_enabled( self::post_text( 'template_public_id' ), self::post_int( 'lock_version', 1 ), $enabled );
+			( new TemplateRepository() )->set_enabled( self::post_text( $post, 'template_public_id' ), self::post_int( $post, 'lock_version', 1 ), $enabled );
 		} catch ( \Throwable $throwable ) {
 			self::redirect( 'template_error', SafeOperatorError::redirect_detail( $throwable ) );
 		}
@@ -466,25 +466,25 @@ final class TemplateController {
 	/**
 	 * Return a POST text field.
 	 *
-	 * @param string $key Key.
-	 * @param string $fallback Fallback.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
+	 * @param string              $fallback Fallback.
 	 * @return string
 	 */
-	private static function post_text( string $key, string $fallback = '' ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers check nonces before reading mutations.
-		return isset( $_POST[ $key ] ) && is_string( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $fallback;
+	private static function post_text( array $post, string $key, string $fallback = '' ): string {
+		return isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? sanitize_text_field( $post[ $key ] ) : $fallback;
 	}
 
 	/**
 	 * Return a POST integer field.
 	 *
-	 * @param string $key Key.
-	 * @param int    $fallback Fallback.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
+	 * @param int                 $fallback Fallback.
 	 * @return int
 	 */
-	private static function post_int( string $key, int $fallback ): int {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Callers check nonces before reading mutations.
-		return isset( $_POST[ $key ] ) && is_string( $_POST[ $key ] ) ? (int) sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $fallback;
+	private static function post_int( array $post, string $key, int $fallback ): int {
+		return isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? (int) sanitize_text_field( $post[ $key ] ) : $fallback;
 	}
 
 	/**

@@ -425,7 +425,7 @@ function esc_attr( $text ): string {
  * Parse a URL for tests.
  *
  * @param string $url URL.
- * @param int $component URL component.
+ * @param int    $component URL component.
  * @return mixed
  */
 function wp_parse_url( $url, $component = -1 ) {
@@ -634,6 +634,28 @@ function check_admin_referer( $action = -1, $query_arg = '_wpnonce' ): int {
 }
 
 /**
+ * Verify a nonce without terminating the request.
+ *
+ * @param mixed      $nonce Nonce value.
+ * @param int|string $action Nonce action.
+ * @return int|false
+ */
+function wp_verify_nonce( $nonce, $action = -1 ) {
+	$expected = $GLOBALS['pressqueue_test_valid_nonces'][ (string) $action ] ?? null;
+	return is_string( $nonce ) && is_string( $expected ) && hash_equals( $expected, $nonce ) ? 1 : false;
+}
+
+/**
+ * Terminate a test request with an invalid nonce.
+ *
+ * @param string $action Nonce action.
+ */
+function wp_nonce_ays( $action ): void {
+	unset( $action );
+	wp_die( 'Nonce check failed.' );
+}
+
+/**
  * Deactivation recorder.
  *
  * @param string $plugin Plugin basename.
@@ -718,10 +740,10 @@ function wp_nonce_field( $action = -1, $name = '_wpnonce' ): void {
 /**
  * Render a test submit button.
  *
- * @param string $text Text.
- * @param string $type Type.
- * @param string $name Name.
- * @param bool   $wrap Whether to wrap.
+ * @param string               $text Text.
+ * @param string               $type Type.
+ * @param string               $name Name.
+ * @param bool                 $wrap Whether to wrap.
  * @param array<string,string> $attributes Attributes.
  */
 function submit_button( $text = null, $type = 'primary', $name = 'submit', $wrap = true, $attributes = array() ): void {
@@ -959,7 +981,7 @@ class WP_Post {
 	public int $ID                   = 0;
 	public string $post_type         = 'post';
 	public string $post_status       = 'publish';
-	public string $post_password = '';
+	public string $post_password     = '';
 	public int $post_author          = 1;
 	public string $post_title        = '';
 	public string $post_excerpt      = '';
@@ -989,8 +1011,8 @@ class WP_Post {
  * Minimal WordPress user object.
  */
 class WP_User {
-	public int $ID = 0;
-	public string $user_email = '';
+	public int $ID              = 0;
+	public string $user_email   = '';
 	public string $display_name = '';
 
 	/**

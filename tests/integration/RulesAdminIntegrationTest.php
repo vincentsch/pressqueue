@@ -127,7 +127,7 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 		$before  = $this->storedRow( $rule->public_id );
 
 		$_POST   = $this->editorPost( $rule );
-		$input   = RuleEditor::input_from_request( $rule );
+		$input   = RuleEditor::input_from_request( wp_unslash( $_POST ), $rule );
 		$updated = $rules->update( $rule->public_id, $rule->lock_version, RuleEditor::changes_for_update( $rule, $input ) );
 
 		self::assertSame( array( 'first_publish' ), $input['triggers'] );
@@ -140,24 +140,24 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 		$channel = $this->channel( 'linkedin' );
 
 		$_POST = $this->newRulePost( $channel, array( 'when' => array( 'publish', 'bulk' ) ) );
-		self::assertSame( array( 'first_publish', 'scheduled_publication', 'bulk' ), RuleEditor::input_from_request()['triggers'] );
+		self::assertSame( array( 'first_publish', 'scheduled_publication', 'bulk' ), RuleEditor::input_from_request( wp_unslash( $_POST ) )['triggers'] );
 
 		$rules     = new RuleRepository();
 		$scheduled = $rules->create( array_merge( $this->baseInput( $channel ), array( 'triggers' => array( 'scheduled_publication' ) ) ) );
 
 		$_POST = $this->editorPost( $scheduled );
-		self::assertSame( array( 'scheduled_publication' ), RuleEditor::input_from_request( $scheduled )['triggers'] );
+		self::assertSame( array( 'scheduled_publication' ), RuleEditor::input_from_request( wp_unslash( $_POST ), $scheduled )['triggers'] );
 
 		$_POST['when_add_immediate'] = '1';
-		self::assertSame( array( 'scheduled_publication', 'first_publish' ), RuleEditor::input_from_request( $scheduled )['triggers'] );
+		self::assertSame( array( 'scheduled_publication', 'first_publish' ), RuleEditor::input_from_request( wp_unslash( $_POST ), $scheduled )['triggers'] );
 
 		$_POST         = $this->editorPost( $scheduled );
 		$_POST['when'] = array( 'update' );
-		self::assertSame( array( 'update' ), RuleEditor::input_from_request( $scheduled )['triggers'] );
+		self::assertSame( array( 'update' ), RuleEditor::input_from_request( wp_unslash( $_POST ), $scheduled )['triggers'] );
 
 		unset( $_POST['when'] );
 		try {
-			RuleEditor::input_from_request( $scheduled );
+			RuleEditor::input_from_request( wp_unslash( $_POST ), $scheduled );
 			self::fail( 'A rule without any trigger must be refused.' );
 		} catch ( RuleFormException $exception ) {
 			self::assertSame( 'when', $exception->section );
@@ -182,7 +182,7 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 		self::assertFalse( $rule->has_template_snapshot );
 
 		$_POST   = $this->editorPost( $rule );
-		$updated = $rules->update( $rule->public_id, $rule->lock_version, RuleEditor::changes_for_update( $rule, RuleEditor::input_from_request( $rule ) ) );
+		$updated = $rules->update( $rule->public_id, $rule->lock_version, RuleEditor::changes_for_update( $rule, RuleEditor::input_from_request( wp_unslash( $_POST ), $rule ) ) );
 
 		self::assertSame( $rule->version, $updated->version );
 		self::assertFalse( $updated->has_template_snapshot );
@@ -207,12 +207,12 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 				'adopted_template_public_id' => $template->public_id,
 			)
 		);
-		$input = RuleEditor::input_from_request();
+		$input = RuleEditor::input_from_request( wp_unslash( $_POST ) );
 		self::assertSame( $template->public_id, $input['source_template_public_id'] );
 		self::assertSame( $template->version, $input['source_template_version'] );
 
 		$_POST['message_default'] = 'Changed {{ title }}';
-		self::assertArrayNotHasKey( 'source_template_public_id', RuleEditor::input_from_request() );
+		self::assertArrayNotHasKey( 'source_template_public_id', RuleEditor::input_from_request( wp_unslash( $_POST ) ) );
 
 		$_POST['template_set_json'] = wp_slash(
 			(string) wp_json_encode(
@@ -222,7 +222,7 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 				)
 			)
 		);
-		self::assertSame( 'From JSON {{ title }}', RuleEditor::input_from_request()['template_set']['default_message'] );
+		self::assertSame( 'From JSON {{ title }}', RuleEditor::input_from_request( wp_unslash( $_POST ) )['template_set']['default_message'] );
 	}
 
 	public function test_never_share_editor_keeps_hidden_documents(): void {
@@ -266,7 +266,7 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 				'custom_fields'         => '',
 			)
 		);
-		$input = RuleEditor::input_from_request( $rule );
+		$input = RuleEditor::input_from_request( wp_unslash( $_POST ), $rule );
 
 		self::assertSame( array( 'first_publish', 'update' ), $input['triggers'] );
 		self::assertSame( 'draft', $input['schedule_policy']['mode'] );
@@ -276,20 +276,20 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 	}
 
 	public function test_rule_summary_describes_rules_in_words(): void {
-		$channel  = $this->channel( 'linkedin', 'Larkfield Bakery' );
-		$recipes  = self::factory()->category->create( array( 'name' => 'Recipes' ) );
-		$author   = self::factory()->user->create( array( 'display_name' => 'Mara Lindqvist' ) );
-		$rules    = new RuleRepository();
-		$summary  = new RuleSummary( ( new ChannelRepository() )->find_all() );
-		$input    = $this->baseInput( $channel );
-		$tree     = $this->categoryTree( (int) $recipes );
-		$tree['children'][] = array(
+		$channel                 = $this->channel( 'linkedin', 'Larkfield Bakery' );
+		$recipes                 = self::factory()->category->create( array( 'name' => 'Recipes' ) );
+		$author                  = self::factory()->user->create( array( 'display_name' => 'Mara Lindqvist' ) );
+		$rules                   = new RuleRepository();
+		$summary                 = new RuleSummary( ( new ChannelRepository() )->find_all() );
+		$input                   = $this->baseInput( $channel );
+		$tree                    = $this->categoryTree( (int) $recipes );
+		$tree['children'][]      = array(
 			'type'      => 'condition',
 			'condition' => 'post_type',
 			'operator'  => 'equals',
 			'value'     => 'post',
 		);
-		$tree['children'][] = array(
+		$tree['children'][]      = array(
 			'type'      => 'condition',
 			'condition' => 'author',
 			'operator'  => 'equals',
@@ -304,13 +304,13 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 		self::assertStringContainsString( 'end of the Buffer queue', $sentence );
 		self::assertStringContainsString( 'featured image when there is one', $sentence );
 
-		$nested                            = $this->categoryTree( (int) $recipes );
-		$nested['children'][]              = array(
+		$nested                  = $this->categoryTree( (int) $recipes );
+		$nested['children'][]    = array(
 			'type'     => 'group',
 			'mode'     => 'ANY',
 			'children' => array( $tree['children'][1] ),
 		);
-		$input['condition_tree']           = $nested;
+		$input['condition_tree'] = $nested;
 		self::assertStringContainsString( 'a post matching advanced conditions', wp_strip_all_tags( $summary->sentence( $rules->create( $input ) ) ) );
 
 		$exclusion = $rules->create(
@@ -354,7 +354,7 @@ final class RulesAdminIntegrationTest extends WP_UnitTestCase {
 		);
 		$exclusion = $rules->mark_version_previewed( $exclusion->public_id, $exclusion->lock_version, $exclusion->version );
 		$exclusion = $rules->enable_after_preview( $exclusion->public_id, $exclusion->lock_version );
-		$rule = $rules->create( array_merge( $this->baseInput( $channel ), array( 'condition_tree' => $this->categoryTree( $recipes ) ) ) );
+		$rule      = $rules->create( array_merge( $this->baseInput( $channel ), array( 'condition_tree' => $this->categoryTree( $recipes ) ) ) );
 
 		$result   = RuleTestView::run( $rule, array( $shared, $blocked, $unmatched ), 'first_publish', 3, false );
 		$outcomes = array_column( $result['rows'], 'outcome', 'post_id' );

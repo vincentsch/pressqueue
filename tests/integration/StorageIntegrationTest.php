@@ -48,7 +48,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 	public function test_unicode_reads_and_writes_use_plugin_table_text_charset(): void {
 		$db = Database::from_globals();
 		( new SchemaMigrator( $db ) )->migrate();
-		$label = 'Café 日本語 🐈';
+		$label      = 'Café 日本語 🐈';
 		$connection = ( new ConnectionRepository() )->create_with_credential( 'buffer', $label, '{}', hash( 'sha256', '{}' ) );
 		self::assertSame( $connection->public_id, $db->get_var( 'SELECT public_id FROM `' . $db->table( Schema::CONNECTIONS ) . '` WHERE label = %s', array( $label ) ) );
 	}
@@ -163,7 +163,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 
 		try {
 			$rules = new RuleRepository();
-			$rule  = $rules->create( \PressQueue\Admin\RuleEditor::input_from_request() );
+			$rule  = $rules->create( \PressQueue\Admin\RuleEditor::input_from_request( wp_unslash( $_POST ) ) );
 
 			self::assertFalse( $rule->enabled );
 			self::assertSame( 'draft', $rule->schedule_policy );
@@ -172,7 +172,7 @@ final class StorageIntegrationTest extends WP_UnitTestCase {
 
 			$_POST['effect'] = 'exclude';
 			unset( $_POST['destination_channel_ids'] );
-			$exclusion = $rules->create( \PressQueue\Admin\RuleEditor::input_from_request() );
+			$exclusion = $rules->create( \PressQueue\Admin\RuleEditor::input_from_request( wp_unslash( $_POST ) ) );
 			self::assertSame( 'all', $exclusion->destination_set['scope'] );
 			self::assertSame( 'exclude', $exclusion->effect );
 			self::assertFalse( $exclusion->enabled );

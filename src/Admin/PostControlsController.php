@@ -707,9 +707,7 @@ final class PostControlsController {
 			return;
 		}
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Only identifies the originating form; its nonce is verified below.
-		$form_post_id = isset( $_POST['post_ID'] ) ? max( 0, (int) $_POST['post_ID'] ) : 0;
-		if ( $post_id <= 0 || $form_post_id !== $post_id || isset( self::$classic_saves[ $post_id ] ) ) {
+		if ( $post_id <= 0 || isset( self::$classic_saves[ $post_id ] ) ) {
 			return;
 		}
 
@@ -721,6 +719,16 @@ final class PostControlsController {
 			return;
 		}
 
+		$nonce       = isset( $_POST['pressqueue_controls_nonce'] ) && is_string( $_POST['pressqueue_controls_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['pressqueue_controls_nonce'] ) ) : '';
+		$valid_nonce = wp_verify_nonce( $nonce, 'pressqueue_save_post_controls_' . $post_id );
+
+		// This identifies the form's post only. Other posts saved by the same request
+		// must be skipped; the matching post must pass the terminating check below.
+		$form_post_id = isset( $_POST['post_ID'] ) && ( is_string( $_POST['post_ID'] ) || is_int( $_POST['post_ID'] ) ) ? max( 0, (int) sanitize_text_field( wp_unslash( $_POST['post_ID'] ) ) ) : 0;
+		if ( $form_post_id !== $post_id ) {
+			return;
+		}
+
 		try {
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Request method is normalized on the next line.
 			$method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
@@ -729,7 +737,9 @@ final class PostControlsController {
 			}
 
 			PostControlAuthorization::require_current_user_access( $post_id );
-			check_admin_referer( 'pressqueue_save_post_controls_' . $post_id, 'pressqueue_controls_nonce' );
+			if ( false === $valid_nonce ) {
+				wp_nonce_ays( 'pressqueue_save_post_controls_' . $post_id );
+			}
 
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked above.
 			$input = wp_unslash( $_POST );

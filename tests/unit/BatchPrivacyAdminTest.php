@@ -357,15 +357,15 @@ final class BatchPrivacyAdminTest extends TestCase {
 
 	public function test_turning_on_deletion_needs_the_box_or_the_exact_sentence(): void {
 		$_POST = array( 'acknowledge_uninstall_effect' => '1' );
-		$this->invoke( PrivacyController::class, 'require_acknowledgment', array( 'acknowledge_uninstall_effect', 'confirm_uninstall_effect', PrivacySettings::UNINSTALL_CONFIRMATION, 'uninstall_ack' ) );
+		$this->invoke( PrivacyController::class, 'require_acknowledgment', array( wp_unslash( $_POST ), 'acknowledge_uninstall_effect', 'confirm_uninstall_effect', PrivacySettings::UNINSTALL_CONFIRMATION, 'uninstall_ack' ) );
 
 		$_POST = array( 'confirm_uninstall_effect' => PrivacySettings::UNINSTALL_CONFIRMATION );
-		$this->invoke( PrivacyController::class, 'require_acknowledgment', array( 'acknowledge_uninstall_effect', 'confirm_uninstall_effect', PrivacySettings::UNINSTALL_CONFIRMATION, 'uninstall_ack' ) );
+		$this->invoke( PrivacyController::class, 'require_acknowledgment', array( wp_unslash( $_POST ), 'acknowledge_uninstall_effect', 'confirm_uninstall_effect', PrivacySettings::UNINSTALL_CONFIRMATION, 'uninstall_ack' ) );
 
 		foreach ( array( array(), array( 'acknowledge_uninstall_effect' => 'yes' ), array( 'confirm_uninstall_effect' => 'I understand' ) ) as $post ) {
 			$_POST = $post;
 			try {
-				$this->invoke( PrivacyController::class, 'require_acknowledgment', array( 'acknowledge_uninstall_effect', 'confirm_uninstall_effect', PrivacySettings::UNINSTALL_CONFIRMATION, 'uninstall_ack' ) );
+				$this->invoke( PrivacyController::class, 'require_acknowledgment', array( wp_unslash( $_POST ), 'acknowledge_uninstall_effect', 'confirm_uninstall_effect', PrivacySettings::UNINSTALL_CONFIRMATION, 'uninstall_ack' ) );
 				self::fail( 'Deletion on uninstall must stay an explicit opt-in.' );
 			} catch ( DomainException $exception ) {
 				self::assertSame( 'uninstall_ack', $exception->getMessage() );
@@ -398,7 +398,7 @@ final class BatchPrivacyAdminTest extends TestCase {
 		$this->assertRefused( $handler, 'not allowed' );
 
 		$GLOBALS['pressqueue_test_current_user_caps'][ $capability ] = true;
-		$_SERVER['REQUEST_METHOD']                                    = 'GET';
+		$_SERVER['REQUEST_METHOD']                                   = 'GET';
 		$this->assertRefused( $handler, 'require POST' );
 
 		$_SERVER['REQUEST_METHOD'] = 'POST';

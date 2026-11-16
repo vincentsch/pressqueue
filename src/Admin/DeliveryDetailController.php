@@ -773,14 +773,8 @@ final class DeliveryDetailController {
 	 * @return string
 	 */
 	private static function query_text( string $key, int $maximum ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Delivery detail query args are read-only exact values escaped on output.
-		$value = isset( $_GET[ $key ] ) ? wp_unslash( $_GET[ $key ] ) : '';
-
-		if ( ! is_string( $value ) ) {
-			return '';
-		}
-
-		$value = trim( $value );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Delivery detail query args are read-only; values are sanitized below and escaped on output.
+		$value = isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ? sanitize_text_field( wp_unslash( $_GET[ $key ] ) ) : '';
 
 		return strlen( $value ) > $maximum ? substr( $value, 0, $maximum ) : $value;
 	}

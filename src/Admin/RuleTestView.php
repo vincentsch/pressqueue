@@ -479,7 +479,7 @@ final class RuleTestView {
 	 */
 	private static function render_single_post_search( RuleRecord $rule ): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only search.
-		$search = isset( $_GET['find'] ) ? sanitize_text_field( wp_unslash( $_GET['find'] ) ) : '';
+		$search = isset( $_GET['find'] ) && is_string( $_GET['find'] ) ? sanitize_text_field( wp_unslash( $_GET['find'] ) ) : '';
 
 		echo '<div class="pq-card pq-card--pad pq-stack" id="pq-test-post">';
 		echo '<div><h2>' . esc_html__( 'Test with a specific post', 'pressqueue' ) . '</h2><p class="pq-sub">' . esc_html__( 'Find a post by its title and test the rule with just that post.', 'pressqueue' ) . '</p></div>';

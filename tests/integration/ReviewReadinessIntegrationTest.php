@@ -32,8 +32,8 @@ final class ReviewReadinessIntegrationTest extends PressQueueIntegrationTestCase
 	public function test_icon_allowlist_preserves_the_graphics_without_allowing_active_content(): void {
 		foreach ( array( array( Ui::class, 'logo_svg' ), array( RulesController::class, 'shield_icon' ), array( RulesController::class, 'share_icon' ) ) as $icon ) {
 			$method = new \ReflectionMethod( $icon[0], $icon[1] );
-			$svg = $method->invoke( null );
-			$clean = wp_kses( $svg, Ui::svg_allowed_html() );
+			$svg    = $method->invoke( null );
+			$clean  = wp_kses( $svg, Ui::svg_allowed_html() );
 			self::assertStringContainsString( '<svg ', $clean );
 			self::assertMatchesRegularExpression( '/viewbox="0 0 (?:14 14|16 16)"/i', $clean );
 			self::assertStringContainsString( '<path d="', $clean );
@@ -44,17 +44,17 @@ final class ReviewReadinessIntegrationTest extends PressQueueIntegrationTestCase
 			}
 		}
 		$hostile = '<svg onload="alert(1)"><script>alert(2)</script><image href="javascript:alert(3)" /><path d="M0 0" onclick="alert(4)" /></svg>';
-		$clean = wp_kses( $hostile, Ui::svg_allowed_html() );
+		$clean   = wp_kses( $hostile, Ui::svg_allowed_html() );
 		foreach ( array( 'onload=', 'onclick=', '<script', '<image', 'href=' ) as $unsafe ) {
 			self::assertStringNotContainsString( $unsafe, $clean );
 		}
 	}
 
 	public function test_account_verification_time_keeps_its_datetime_and_escapes_the_name(): void {
-		$connection = ( new \ReflectionClass( ConnectionRecord::class ) )->newInstanceWithoutConstructor();
-		$connection->account = array( 'display_label' => '<script>Account</script>' );
+		$connection                         = ( new \ReflectionClass( ConnectionRecord::class ) )->newInstanceWithoutConstructor();
+		$connection->account                = array( 'display_label' => '<script>Account</script>' );
 		$connection->credential_verified_at = new \DateTimeImmutable( '2026-10-01T12:34:56+00:00' );
-		$connection->connection_status = 'verified';
+		$connection->connection_status      = 'verified';
 		ob_start();
 		( new \ReflectionMethod( ChannelsPage::class, 'render_account_meta' ) )->invoke( null, $connection );
 		$html = (string) ob_get_clean();
@@ -65,18 +65,27 @@ final class ReviewReadinessIntegrationTest extends PressQueueIntegrationTestCase
 	}
 
 	public function test_post_thumbnail_keeps_responsive_attributes_and_removes_active_markup(): void {
-		$id = self::factory()->attachment->create_object( 'image.jpg', 0, array( 'post_mime_type' => 'image/jpeg' ) );
+		$id       = self::factory()->attachment->create_object( 'image.jpg', 0, array( 'post_mime_type' => 'image/jpeg' ) );
 		$downsize = static fn (): array => array( 'https://example.test/image.jpg', 150, 150, true );
-		$image = static fn (): string => '<img src="https://example.test/image.jpg" width="150" height="150" srcset="https://example.test/image.jpg 150w, https://example.test/image-large.jpg 300w" sizes="150px" loading="lazy" decoding="async" onerror="alert(1)" /><script>alert(2)</script>';
+		$image    = static fn (): string => '<img src="https://example.test/image.jpg" width="150" height="150" srcset="https://example.test/image.jpg 150w, https://example.test/image-large.jpg 300w" sizes="150px" loading="lazy" decoding="async" onerror="alert(1)" /><script>alert(2)</script>';
 		add_filter( 'image_downsize', $downsize );
 		add_filter( 'wp_get_attachment_image', $image );
 		ob_start();
 		try {
 			( new \ReflectionMethod( PostControlsController::class, 'render_classic_customize' ) )->invoke(
 				null,
-				array( 'media' => array( 'mode' => 'post_media', 'post_media' => array( 'attachment_ids' => array( $id ) ) ) ),
+				array(
+					'media' => array(
+						'mode'       => 'post_media',
+						'post_media' => array( 'attachment_ids' => array( $id ) ),
+					),
+				),
 				null,
-				array( 'channels' => array(), 'timezone' => 'UTC', 'timezone_label' => 'UTC' )
+				array(
+					'channels'       => array(),
+					'timezone'       => 'UTC',
+					'timezone_label' => 'UTC',
+				)
 			);
 			$html = (string) ob_get_contents();
 		} finally {
@@ -133,11 +142,11 @@ final class ReviewReadinessIntegrationTest extends PressQueueIntegrationTestCase
 			'delivery_public_id'   => 'invalid-before-validation',
 			'remote_id'            => '<script>invalid</script>',
 		);
-		if ( 'missing_nonce' !== $case ) {
+		if ( 'missing_nonce' !== $case && 'missing_nonce_malformed_outcome' !== $case ) {
 			$_POST['_wpnonce'] = 'invalid_nonce' === $case ? 'invalid' : wp_create_nonce( $nonce_action );
 		}
-		$_REQUEST = $_POST;
-		$rows_before = $this->reviewed_table_counts();
+		$_REQUEST        = $_POST;
+		$rows_before     = $this->reviewed_table_counts();
 		$reject_redirect = static function (): void {
 			throw new \RuntimeException( 'The handler reached a redirect before rejecting the request.' );
 		};
@@ -169,9 +178,9 @@ final class ReviewReadinessIntegrationTest extends PressQueueIntegrationTestCase
 	private function reviewed_table_counts(): array {
 		global $wpdb;
 		$counts = array();
-		foreach ( array( Schema::CONNECTIONS, Schema::DELIVERIES ) as $name ) {
-			$table = Database::from_globals()->table( $name );
-			$exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) );
+		foreach ( Schema::table_suffixes() as $name ) {
+			$table           = Database::from_globals()->table( $name );
+			$exists          = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) );
 			$counts[ $name ] = null === $exists ? null : (int) $wpdb->get_var( 'SELECT COUNT(*) FROM `' . $table . '`' );
 		}
 		return $counts;
@@ -187,14 +196,148 @@ final class ReviewReadinessIntegrationTest extends PressQueueIntegrationTestCase
 		}
 		$handlers[] = array( DeliveryActionController::class, 'handle_reconcile_delivery', 'pressqueue_reconcile_delivery_confirmed_remote_id' );
 		$handlers[] = array( AdminScreens::class, 'handle_post_preview', 'pressqueue_preview_post' );
+		foreach ( array( 'save_rule', 'enable_rule', 'disable_rule', 'delete_rule', 'quick_start' ) as $action ) {
+			$nonce      = 'quick_start' === $action ? 'pressqueue_quick_start_rule' : 'pressqueue_' . $action;
+			$handlers[] = array( RulesController::class, 'handle_' . $action, $nonce );
+		}
+		$handlers[] = array( RulesController::class, 'handle_rule_post_preview', 'pressqueue_preview_rule_post' );
+		$handlers[] = array( RulesController::class, 'handle_rule_recent_preview', 'pressqueue_preview_rule_recent' );
+		foreach ( array(
+			'ChannelController'     => array( 'enable_channel', 'disable_channel' ),
+			'TemplateController'    => array( 'save_template', 'enable_template', 'disable_template', 'delete_template', 'adopt_template' ),
+			'PrivacyController'     => array( 'save_settings', 'export', 'run_retention' ),
+			'BatchController'       => array( 'preview', 'confirm', 'cancel', 'recover' ),
+			'SettingsController'    => array( 'save' ),
+			'SocialCardsController' => array( 'save' ),
+		) as $class => $actions ) {
+			foreach ( $actions as $action ) {
+				$nonce = 'pressqueue_' . $action;
+				if ( 'BatchController' === $class ) {
+					$nonce .= '_batch';
+				} elseif ( 'PrivacyController' === $class ) {
+					$nonce = array(
+						'save_settings' => 'pressqueue_save_privacy_settings',
+						'export'        => 'pressqueue_export_data',
+						'run_retention' => 'pressqueue_run_retention',
+					)[ $action ];
+				} elseif ( 'save' === $action ) {
+					$nonce = 'SocialCardsController' === $class ? 'pressqueue_save_social_cards' : 'pressqueue_save_settings';
+				}
+				$handlers[] = array( 'PressQueue\\Admin\\' . $class, 'handle_' . $action, $nonce );
+			}
+		}
 
 		$cases = array();
 		foreach ( $handlers as $handler ) {
 			foreach ( array( 'missing_nonce', 'invalid_nonce', 'unauthorized', 'wrong_method' ) as $case ) {
-				$cases[ $handler[1] . ':' . $case ] = array_merge( $handler, array( $case ) );
+				$cases[ $handler[0] . '::' . $handler[1] . ':' . $case ] = array_merge( $handler, array( $case ) );
 			}
 		}
+		$cases['reconcile_nonce_before_outcome'] = array( DeliveryActionController::class, 'handle_reconcile_delivery', 'pressqueue_reconcile_delivery_confirmed_remote_id', 'missing_nonce_malformed_outcome' );
 		return $cases;
+	}
+
+	public function test_reconciliation_nonce_cannot_authorize_another_outcome(): void {
+		$user = self::factory()->user->create_and_get( array( 'role' => 'subscriber' ) );
+		$user->add_cap( Capabilities::OPERATE_DELIVERIES );
+		wp_set_current_user( $user->ID );
+		$before = array( $_POST, $_REQUEST, $_SERVER['REQUEST_METHOD'] ?? null );
+		try {
+			$_SERVER['REQUEST_METHOD'] = 'POST';
+			$_POST                     = array(
+				'_wpnonce'             => wp_create_nonce( 'pressqueue_reconcile_delivery_cancelled' ),
+				'outcome'              => 'confirmed_remote_id',
+				'confirm_local_effect' => '1',
+			);
+			$_REQUEST                  = $_POST;
+			$counts                    = $this->reviewed_table_counts();
+			try {
+				DeliveryActionController::handle_reconcile_delivery();
+				self::fail( 'A nonce for one outcome authorized another.' );
+			} catch ( \WPDieException $exception ) {
+				self::assertStringContainsString( 'outcome is not supported', $exception->getMessage() );
+				self::assertSame( $counts, $this->reviewed_table_counts() );
+			}
+		} finally {
+			list( $_POST, $_REQUEST, $method ) = $before;
+			if ( null === $method ) {
+				unset( $_SERVER['REQUEST_METHOD'] );
+			} else {
+				$_SERVER['REQUEST_METHOD'] = $method;
+			}
+		}
+	}
+
+	public function test_verified_form_data_is_unslashed_once_and_independent_of_globals(): void {
+		$user = self::factory()->user->create_and_get( array( 'role' => 'subscriber' ) );
+		$user->add_cap( Capabilities::MANAGE_RULES );
+		wp_set_current_user( $user->ID );
+		$before   = array( $_POST, $_REQUEST, $_SERVER['REQUEST_METHOD'] ?? null );
+		$expected = array(
+			'name'                => "O'Reilly \\ books",
+			'condition_tree_json' => '{"value":"a\\\\b"}',
+			'api_key'             => 'opaque+%20/key',
+			'when'                => array( 'publish', 'update' ),
+		);
+		try {
+			$_SERVER['REQUEST_METHOD'] = 'POST';
+			$_POST                     = wp_slash( $expected );
+			$_POST['_wpnonce']         = wp_create_nonce( 'pressqueue_save_rule' );
+			$_REQUEST                  = $_POST;
+			$data                      = \PressQueue\Admin\AdminPostBoundary::read( 'pressqueue_save_rule', Capabilities::MANAGE_RULES, 'not allowed' );
+			unset( $data['_wpnonce'] );
+			self::assertSame( $expected, $data );
+			$_POST['name'] = 'changed global';
+			self::assertSame( "O'Reilly \\ books", RulesController::post_text( $data, 'name' ) );
+		} finally {
+			list( $_POST, $_REQUEST, $method ) = $before;
+			if ( null === $method ) {
+				unset( $_SERVER['REQUEST_METHOD'] );
+			} else {
+				$_SERVER['REQUEST_METHOD'] = $method;
+			}
+		}
+	}
+
+	/** @dataProvider read_only_screens */
+	public function test_read_only_screens_reject_unprivileged_users( string $controller ): void {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		$_GET = array(
+			'delivery_public_id' => '<script>alert(1)</script>',
+			'outcome'            => array( 'shared' ),
+		);
+		try {
+			$controller::render_page();
+			self::fail( 'The screen accepted a user without a view capability.' );
+		} catch ( \WPDieException $exception ) {
+			self::assertStringContainsString( 'not allowed', $exception->getMessage() );
+		} finally {
+			$_GET = array();
+		}
+	}
+
+	/** @dataProvider read_only_screens */
+	public function test_query_readers_sanitize_text_and_reject_arrays( string $controller ): void {
+		$reader = new \ReflectionMethod( $controller, 'query_text' );
+		$reader->setAccessible( true );
+		try {
+			$_GET = array( 'search' => wp_slash( "<b>O'Reilly</b>\n%00 book" ) );
+			self::assertSame( "O'Reilly book", $reader->invoke( null, 'search', 100 ) );
+			$_GET['search'] = array( 'unexpected' );
+			self::assertSame( '', $reader->invoke( null, 'search', 100 ) );
+			$_GET['search'] = '123456';
+			self::assertSame( '123', $reader->invoke( null, 'search', 3 ) );
+		} finally {
+			$_GET = array();
+		}
+	}
+
+	public static function read_only_screens(): array {
+		return array(
+			array( \PressQueue\Admin\DeliveryDetailController::class ),
+			array( \PressQueue\Admin\DeliveryListController::class ),
+			array( \PressQueue\Admin\DecisionsController::class ),
+		);
 	}
 
 	public function test_page_header_keeps_links_and_badges_but_strips_active_markup(): void {
@@ -219,9 +362,9 @@ final class ReviewReadinessIntegrationTest extends PressQueueIntegrationTestCase
 	}
 
 	public function test_font_styles_keep_bundled_urls_and_escape_hostile_url_markup(): void {
-		$previous = $_GET['page'] ?? null;
+		$previous     = $_GET['page'] ?? null;
 		$_GET['page'] = SocialCardsController::SLUG;
-		$filter = static fn ( string $url ): string => str_contains( $url, '/assets/social/fonts/' ) ? $url . '"></style><script>alert(1)</script>' : $url;
+		$filter       = static fn ( string $url ): string => str_contains( $url, '/assets/social/fonts/' ) ? $url . '"></style><script>alert(1)</script>' : $url;
 		add_filter( 'plugins_url', $filter );
 		try {
 			SocialCardsController::enqueue_assets();

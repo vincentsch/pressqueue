@@ -54,7 +54,7 @@ final class DeliveryListController {
 	 */
 	public static function enqueue_assets(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Asset routing is read-only.
-		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 
 		if ( ! in_array( $page, array( self::SLUG, DeliveryDetailController::SLUG, 'pressqueue-decisions' ), true ) || ! defined( 'PRESSQUEUE_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
 			return;
@@ -1074,14 +1074,8 @@ final class DeliveryListController {
 	 * @return string
 	 */
 	private static function query_text( string $key, int $maximum ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Activity filters are read-only exact values escaped on output.
-		$value = isset( $_GET[ $key ] ) ? wp_unslash( $_GET[ $key ] ) : '';
-
-		if ( ! is_string( $value ) ) {
-			return '';
-		}
-
-		$value = trim( $value );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Activity filters are read-only; values are sanitized below and escaped on output.
+		$value = isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ? sanitize_text_field( wp_unslash( $_GET[ $key ] ) ) : '';
 
 		return strlen( $value ) > $maximum ? substr( $value, 0, $maximum ) : $value;
 	}

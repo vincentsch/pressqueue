@@ -113,7 +113,7 @@ final class ConnectionController {
 	 */
 	public static function enqueue_assets(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Page routing is read-only.
-		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		$page = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 
 		if ( self::SLUG !== $page || ! defined( 'PRESSQUEUE_FILE' ) || ! function_exists( 'wp_enqueue_style' ) ) {
 			return;
@@ -172,12 +172,12 @@ final class ConnectionController {
 	 * The key is checked with Buffer before anything is stored, so a rejected key leaves nothing behind.
 	 */
 	public static function handle_connect_buffer(): void {
-		self::mutation_boundary( 'pressqueue_connect_buffer' );
+		$post = self::mutation_boundary( 'pressqueue_connect_buffer' );
 
 		$secret = '';
 		try {
 			$problem = self::credential_storage_problem();
-			$secret  = self::post_secret( 'api_key' );
+			$secret  = self::post_secret( $post, 'api_key' );
 
 			if ( null !== $problem ) {
 				$result = array( 'error' => 'storage_' . $problem );
@@ -205,13 +205,13 @@ final class ConnectionController {
 	 * Finish setting up a saved connection: choose or switch the organization, load channels, and turn it on.
 	 */
 	public static function handle_finish_connection(): void {
-		self::mutation_boundary( 'pressqueue_finish_connection' );
+		$post = self::mutation_boundary( 'pressqueue_finish_connection' );
 
 		$credential = '';
 		$result     = array();
 		try {
 			$repository = new ConnectionRepository();
-			$connection = self::requested_connection( $repository );
+			$connection = self::requested_connection( $post, $repository );
 			$result     = array( 'connection' => $connection->public_id );
 			$credential = self::decrypt_connection_credential( $connection, $repository );
 			$account    = self::fetch_saved_account( $connection, $credential, $repository );
@@ -219,7 +219,7 @@ final class ConnectionController {
 			if ( null !== $connection->remote_account_id && $connection->remote_account_id !== $account->remote_account_id ) {
 				$result['error'] = 'other_account';
 			} else {
-				$organization_id = self::post_text( 'remote_organization_id' );
+				$organization_id = self::post_text( $post, 'remote_organization_id' );
 				if ( '' === $organization_id && null !== $connection->remote_organization_id && $account->has_organization( $connection->remote_organization_id ) ) {
 					$organization_id = $connection->remote_organization_id;
 				}
@@ -245,14 +245,14 @@ final class ConnectionController {
 	 * Handle creating a disabled Buffer connection.
 	 */
 	public static function handle_create_connection(): void {
-		self::mutation_boundary( 'pressqueue_create_connection' );
+		$post = self::mutation_boundary( 'pressqueue_create_connection' );
 
 		try {
-			$secret = self::post_secret( 'api_key' );
+			$secret = self::post_secret( $post, 'api_key' );
 			try {
 				$connection = self::connection_service()->create_disabled_connection(
 					self::PROVIDER,
-					self::post_text( 'label', __( 'Buffer connection', 'pressqueue' ) ),
+					self::post_text( $post, 'label', __( 'Buffer connection', 'pressqueue' ) ),
 					$secret,
 					self::AUTHENTICATION_MODE
 				);
@@ -276,11 +276,11 @@ final class ConnectionController {
 	 * Handle credential test.
 	 */
 	public static function handle_test_connection(): void {
-		self::mutation_boundary( 'pressqueue_test_connection' );
+		$post = self::mutation_boundary( 'pressqueue_test_connection' );
 
 		try {
 			$repository = new ConnectionRepository();
-			$connection = self::requested_connection( $repository );
+			$connection = self::requested_connection( $post, $repository );
 			$credential = self::decrypt_connection_credential( $connection, $repository );
 			try {
 				self::connection_service()->verify_account( $connection, $credential );
@@ -304,16 +304,16 @@ final class ConnectionController {
 	 * Handle organization selection and channel sync ("Refresh channels").
 	 */
 	public static function handle_sync_connection(): void {
-		self::mutation_boundary( 'pressqueue_sync_connection' );
+		$post = self::mutation_boundary( 'pressqueue_sync_connection' );
 
 		$result = array();
 		try {
 			$repository      = new ConnectionRepository();
-			$connection      = self::requested_connection( $repository );
+			$connection      = self::requested_connection( $post, $repository );
 			$result          = array( 'connection' => $connection->public_id );
 			$service         = self::connection_service();
 			$credential      = self::decrypt_connection_credential( $connection, $repository );
-			$organization_id = self::post_text( 'remote_organization_id', (string) $connection->remote_organization_id );
+			$organization_id = self::post_text( $post, 'remote_organization_id', (string) $connection->remote_organization_id );
 
 			try {
 				$account = self::fetch_saved_account( $connection, $credential, $repository );
@@ -335,17 +335,17 @@ final class ConnectionController {
 	 * Handle credential rotation ("Replace API key").
 	 */
 	public static function handle_rotate_connection(): void {
-		self::mutation_boundary( 'pressqueue_rotate_connection' );
+		$post = self::mutation_boundary( 'pressqueue_rotate_connection' );
 
 		$result = array();
 		try {
 			$repository = new ConnectionRepository();
-			$connection = self::requested_connection( $repository );
+			$connection = self::requested_connection( $post, $repository );
 			$result     = array(
 				'connection' => $connection->public_id,
 				'form'       => 'replace',
 			);
-			$result     = array_merge( $result, self::rotate_credential( $repository, $connection ) );
+			$result     = array_merge( $result, self::rotate_credential( $post, $repository, $connection ) );
 		} catch ( \Throwable $throwable ) {
 			$result = array_merge( $result, self::error_result( $throwable ) );
 		}
@@ -360,11 +360,12 @@ final class ConnectionController {
 	/**
 	 * Replace a saved key with a new key for the same Buffer account.
 	 *
+	 * @param array<string,mixed>  $post Verified, unslashed form data.
 	 * @param ConnectionRepository $repository Repository.
 	 * @param ConnectionRecord     $connection Connection.
 	 * @return array<string,string> Redirect result.
 	 */
-	private static function rotate_credential( ConnectionRepository $repository, ConnectionRecord $connection ): array {
+	private static function rotate_credential( array $post, ConnectionRepository $repository, ConnectionRecord $connection ): array {
 		if ( null === $connection->credential_envelope_hash ) {
 			throw new ValidationException( 'Connection has no credential to rotate.' );
 		}
@@ -375,7 +376,7 @@ final class ConnectionController {
 		}
 
 		$service = self::connection_service();
-		$secret  = self::post_secret( 'api_key' );
+		$secret  = self::post_secret( $post, 'api_key' );
 		try {
 			if ( '' === $secret ) {
 				return array( 'error' => 'key_missing' );
@@ -394,10 +395,10 @@ final class ConnectionController {
 			unset( $secret );
 		}
 
-		$expected               = self::post_text( 'credential_rotated_at' );
+		$expected               = self::post_text( $post, 'credential_rotated_at' );
 		$organization_visible   = null !== $connection->remote_organization_id && $account->has_organization( $connection->remote_organization_id );
 		$expected_envelope_hash = $connection->credential_envelope_hash;
-		$reconnect              = '1' === self::post_text( 'reconnect' );
+		$reconnect              = '1' === self::post_text( $post, 'reconnect' );
 
 		$rotated = $repository->replace_credential_if_current( $connection->public_id, $expected, $expected_envelope_hash, $json, $hash, $account->remote_account_id, $account->to_storage_document(), $organization_visible );
 
@@ -426,10 +427,10 @@ final class ConnectionController {
 	 * Handle enabling a connection.
 	 */
 	public static function handle_enable_connection(): void {
-		self::mutation_boundary( 'pressqueue_enable_connection' );
+		$post = self::mutation_boundary( 'pressqueue_enable_connection' );
 
 		try {
-			$connection = ( new ConnectionRepository() )->enable( self::post_text( 'connection_public_id' ) );
+			$connection = ( new ConnectionRepository() )->enable( self::post_text( $post, 'connection_public_id' ) );
 			$result     = array(
 				'message'    => 'connection_enabled',
 				'connection' => $connection->public_id,
@@ -445,10 +446,10 @@ final class ConnectionController {
 	 * Handle disabling a connection.
 	 */
 	public static function handle_disable_connection(): void {
-		self::mutation_boundary( 'pressqueue_disable_connection' );
+		$post = self::mutation_boundary( 'pressqueue_disable_connection' );
 
 		try {
-			$connection = ( new ConnectionRepository() )->disable( self::post_text( 'connection_public_id' ) );
+			$connection = ( new ConnectionRepository() )->disable( self::post_text( $post, 'connection_public_id' ) );
 			$result     = array(
 				'message'    => 'connection_disabled',
 				'connection' => $connection->public_id,
@@ -464,12 +465,12 @@ final class ConnectionController {
 	 * Handle disconnecting a credential.
 	 */
 	public static function handle_disconnect_connection(): void {
-		self::mutation_boundary( 'pressqueue_disconnect_connection' );
+		$post = self::mutation_boundary( 'pressqueue_disconnect_connection' );
 
 		try {
-			$connection = ( new ConnectionRepository() )->disconnect( self::post_text( 'connection_public_id' ) );
+			$connection = ( new ConnectionRepository() )->disconnect( self::post_text( $post, 'connection_public_id' ) );
 			$result     = array(
-				'message'    => 'cancel' === self::post_text( 'intent' ) ? 'setup_cancelled' : 'connection_disconnected',
+				'message'    => 'cancel' === self::post_text( $post, 'intent' ) ? 'setup_cancelled' : 'connection_disconnected',
 				'connection' => $connection->public_id,
 			);
 		} catch ( \Throwable $throwable ) {
@@ -856,11 +857,12 @@ final class ConnectionController {
 	/**
 	 * Load a requested connection.
 	 *
+	 * @param array<string,mixed>  $post Verified, unslashed form data.
 	 * @param ConnectionRepository $repository Repository.
 	 * @return ConnectionRecord
 	 */
-	private static function requested_connection( ConnectionRepository $repository ): ConnectionRecord {
-		$public_id  = self::post_text( 'connection_public_id' );
+	private static function requested_connection( array $post, ConnectionRepository $repository ): ConnectionRecord {
+		$public_id  = self::post_text( $post, 'connection_public_id' );
 		$connection = PublicIds::is_valid( $public_id ) ? $repository->find_by_public_id( $public_id ) : null;
 
 		if ( null === $connection ) {
@@ -920,9 +922,10 @@ final class ConnectionController {
 	 * Assert mutation request requirements.
 	 *
 	 * @param string $nonce_action Nonce action.
+	 * @return array<string,mixed> Verified, unslashed form data.
 	 */
-	private static function mutation_boundary( string $nonce_action ): void {
-		AdminPostBoundary::check( $nonce_action, Capabilities::MANAGE_CONNECTIONS, __( 'You are not allowed to manage PressQueue connections.', 'pressqueue' ) );
+	private static function mutation_boundary( string $nonce_action ): array {
+		return AdminPostBoundary::read( $nonce_action, Capabilities::MANAGE_CONNECTIONS, __( 'You are not allowed to manage PressQueue connections.', 'pressqueue' ) );
 	}
 
 	/**
@@ -937,13 +940,13 @@ final class ConnectionController {
 	/**
 	 * Return a POST text field.
 	 *
-	 * @param string $key Key.
-	 * @param string $fallback Fallback.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
+	 * @param string              $fallback Fallback.
 	 * @return string
 	 */
-	private static function post_text( string $key, string $fallback = '' ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked by caller.
-		$value = isset( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : '';
+	private static function post_text( array $post, string $key, string $fallback = '' ): string {
+		$value = isset( $post[ $key ] ) && is_string( $post[ $key ] ) ? sanitize_text_field( $post[ $key ] ) : '';
 
 		return '' === $value ? $fallback : $value;
 	}
@@ -951,12 +954,12 @@ final class ConnectionController {
 	/**
 	 * Return a POST secret field without text sanitization.
 	 *
-	 * @param string $key Key.
+	 * @param array<string,mixed> $post Verified, unslashed form data.
+	 * @param string              $key Key.
 	 * @return string
 	 */
-	private static function post_secret( string $key ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Provider credentials are opaque and validated by the envelope service.
-		$value = isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
+	private static function post_secret( array $post, string $key ): string {
+		$value = isset( $post[ $key ] ) ? $post[ $key ] : '';
 
 		if ( ! is_string( $value ) ) {
 			throw new ValidationException( 'Credential input is invalid.' );
