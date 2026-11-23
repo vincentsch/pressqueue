@@ -12,7 +12,8 @@ Facebook.
 It is open source and has no Pro version, no license key and no account to
 create. The plugin runs on your own server and talks to Buffer directly.
 
-Website and documentation: [pressqueue.com](https://www.pressqueue.com)
+[Install from WordPress.org](https://wordpress.org/plugins/pressqueue/) |
+[Website and documentation](https://www.pressqueue.com)
 
 ![The PressQueue overview in the WordPress admin](docs/images/overview.png)
 

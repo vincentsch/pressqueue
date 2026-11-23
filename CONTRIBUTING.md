@@ -86,7 +86,7 @@ it in Git or use the account login password. Publishing a GitHub release is
 the release action; ordinary commits and tag pushes do not publish to SVN.
 
 If a run stops after attempting its SVN commit, check the remote tag before
-retrying. Published SVN version tags are never overwritten. The workflow also
+retrying. Published code in SVN version tags is never overwritten. The workflow also
 supports a manual run for an existing stable GitHub release. Old releases made
 before this workflow was added use the local publisher instead.
 
@@ -94,3 +94,12 @@ For a local preview, run `python3 tools/publish-wordpress.py --help`. Without
 `--commit`, it stages the ZIP in a new checkout and prints a receipt. Publishing
 requires `--commit` and `SVN_PASSWORD` in the process environment. Keep the ZIP
 and its recorded hash together; don't rebuild an already tested release.
+
+For a listing-only correction, update `readme.txt` in Git first. WordPress.org
+reads the description from the current stable tag, so copy that readme to both
+SVN `trunk/readme.txt` and `tags/X.Y.Z/readme.txt` in one commit. Keep the plugin
+version and Stable tag unchanged. Check that only those two readme files changed;
+never replace published code or recreate the tag. This regenerates the directory
+ZIP, so record its new checksum and verify that all other files are unchanged.
+The original GitHub release ZIP stays as published. A new code release still
+uses the workflow above and a new version number.
