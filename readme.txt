@@ -1,4 +1,4 @@
-=== PressQueue – Auto Post to LinkedIn and Social Media via Buffer ===
+=== PressQueue ===
 Contributors: webtq
 Tags: buffer, linkedin, auto post, social media, scheduling
 Requires at least: 6.9
