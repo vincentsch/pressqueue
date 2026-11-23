@@ -45,10 +45,11 @@ Website and documentation: [pressqueue.com](https://www.pressqueue.com)
 
 ## Getting started
 
-1. Download `pressqueue.zip` from the
-   [latest release](https://github.com/vincentsch/pressqueue/releases/latest)
-   (not GitHub's "Source code" file) and upload it under **Plugins > Add
-   Plugin > Upload Plugin**. Activate it.
+1. In WordPress, open **Plugins > Add Plugin**, search for **PressQueue**,
+   then install and activate it. You can also download `pressqueue.zip` from the
+   [latest GitHub release](https://github.com/vincentsch/pressqueue/releases/latest)
+   and upload it under **Plugins > Add Plugin > Upload Plugin**. Choose the
+   attached plugin ZIP, not GitHub's "Source code" file.
 2. Open **PressQueue** in the admin menu. The checklist on the Overview takes
    you through connecting Buffer, making a rule and going live.
 
