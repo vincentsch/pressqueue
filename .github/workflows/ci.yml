@@ -42,6 +42,9 @@ jobs:
       - name: Run editor tests
         run: node --test tests/editor/*.test.cjs
 
+      - name: Check release package validation
+        run: python3 -m unittest discover -s tools -p 'test_publish_wordpress.py'
+
       - name: Run PHPCS
         run: composer run lint:phpcs
 

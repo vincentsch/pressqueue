@@ -58,3 +58,39 @@ history out of setup instructions.
 The developer docs cover [provider extensions](docs/developer/provider-extensions.md),
 [WP-CLI](docs/developer/wp-cli.md) and [observation hooks](docs/developer/observation-hooks.md).
 To report a security issue, read [SECURITY.md](SECURITY.md).
+
+## Publishing a release
+
+Work in Git as usual. WordPress.org SVN holds published plugin versions; it is
+not a second development repository.
+
+When a version is ready:
+
+1. Update the plugin version and `readme.txt` Stable tag together. Commit the
+   changes and wait for the full CI workflow to pass on that commit.
+2. Build the installable ZIP with `composer run package:smoke`, then run
+   Plugin Check on that exact ZIP. Keep its checksum and test results.
+3. Tag the tested commit as `vX.Y.Z`. Create a draft GitHub release with
+   `pressqueue.zip` and `pressqueue.zip.sha256` attached. The checksum file
+   contains one line: the SHA-256, two spaces, then `pressqueue.zip`.
+4. Publish the GitHub release. The **Publish to WordPress.org** workflow checks
+   the tag and successful CI run. It verifies the ZIP checksum and compares its
+   source files with the tagged commit, then publishes the package to SVN
+   `trunk` and `tags/X.Y.Z`. Directory images come from `.wordpress-org/`.
+5. Check the workflow result and WordPress.org's listing and download. Directory
+   processing may take time after the SVN commit.
+
+The workflow uses the `SVN_PASSWORD` secret in the `wordpress.org` GitHub
+Actions environment. This is WordPress.org's separate SVN password. Never put
+it in Git or use the account login password. Publishing a GitHub release is
+the release action; ordinary commits and tag pushes do not publish to SVN.
+
+If a run stops after attempting its SVN commit, check the remote tag before
+retrying. Published SVN version tags are never overwritten. The workflow also
+supports a manual run for an existing stable GitHub release. Old releases made
+before this workflow was added use the local publisher instead.
+
+For a local preview, run `python3 tools/publish-wordpress.py --help`. Without
+`--commit`, it stages the ZIP in a new checkout and prints a receipt. Publishing
+requires `--commit` and `SVN_PASSWORD` in the process environment. Keep the ZIP
+and its recorded hash together; don't rebuild an already tested release.

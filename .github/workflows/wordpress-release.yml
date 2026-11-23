@@ -1,0 +1,109 @@
+name: Publish to WordPress.org
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable GitHub release tag, such as v0.1.2
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: wordpress-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'vincentsch/pressqueue'
+    runs-on: ubuntu-24.04
+    environment: wordpress.org
+    steps:
+      - name: Identify the tested release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', tag):
+              raise SystemExit('Use a stable release tag such as v0.1.2.')
+          release = json.loads(subprocess.check_output(['gh', 'release', 'view', tag, '--json', 'isDraft,isPrerelease,assets']))
+          if release['isDraft'] or release['isPrerelease']:
+              raise SystemExit('Only published stable releases can be deployed.')
+          required = {'pressqueue.zip', 'pressqueue.zip.sha256'}
+          if not required.issubset({a['name'] for a in release['assets']}):
+              raise SystemExit('Attach the tested ZIP and its SHA-256 file first.')
+          repo = os.environ['GH_REPO']
+          commit = subprocess.check_output(['gh', 'api', f'repos/{repo}/commits/{tag}', '--jq', '.sha'], text=True).strip()
+          runs = json.loads(subprocess.check_output(['gh', 'run', 'list', '--commit', commit, '--workflow', 'CI', '--json', 'conclusion,status', '--limit', '100']))
+          if not runs or runs[0]['status'] != 'completed' or runs[0]['conclusion'] != 'success':
+              raise SystemExit('The release commit must pass the full CI workflow first.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'tag={tag}\nversion={tag[1:]}\ncommit={commit}\n')
+          PY
+
+      - name: Check out the release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.release.outputs.commit }}
+          persist-credentials: false
+
+      - name: Download the tested release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          gh release download "$RELEASE_TAG" --pattern pressqueue.zip --pattern pressqueue.zip.sha256 --dir "$RUNNER_TEMP/release"
+
+      - name: Verify the package belongs to the release commit
+        id: package
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import importlib.util, os, re
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location('publisher', 'tools/publish-wordpress.py')
+          publisher = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(publisher)
+          directory = Path(os.environ['RUNNER_TEMP']) / 'release'
+          checksum = (directory / 'pressqueue.zip.sha256').read_text().strip()
+          match = re.fullmatch(r'([a-f0-9]{64})\s+\*?pressqueue\.zip', checksum)
+          if not match:
+              raise SystemExit('Expected a SHA-256 entry for pressqueue.zip.')
+          files = publisher.package_files(directory / 'pressqueue.zip', os.environ['RELEASE_VERSION'], match[1])
+          publisher.verify_source(files, os.environ['RELEASE_VERSION'], Path.cwd())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'sha256={match[1]}\n')
+          PY
+
+      - name: Install SVN
+        run: sudo apt-get update && sudo apt-get install -y subversion
+
+      - name: Publish the release and directory assets
+        env:
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_SHA256: ${{ steps.package.outputs.sha256 }}
+        run: |
+          python3 tools/publish-wordpress.py --zip "$RUNNER_TEMP/release/pressqueue.zip" \
+            --version "$RELEASE_VERSION" --sha256 "$RELEASE_SHA256" \
+            --assets .wordpress-org --workspace "$RUNNER_TEMP/wordpress-release" --commit
+
+      - name: Record the publication
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/wordpress-release/receipt.json"; then
+            cat "$RUNNER_TEMP/wordpress-release/receipt.json" >> "$GITHUB_STEP_SUMMARY"
+          fi

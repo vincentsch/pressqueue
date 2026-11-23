@@ -8,6 +8,7 @@
 /vendor/
 node_modules/
 npm-debug.log*
+__pycache__/
 phpcs.xml
 .DS_Store
 Thumbs.db
